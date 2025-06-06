@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{% block page_title %}{% endblock %} - ShowNotes{% endblock %}
+
+{% block content %}
+<header class="bg-gray-800 text-white p-4">
+    <div class="container mx-auto">
+        {% block header %}
+        <h1 class="text-xl">ShowNotes</h1>
+        {% endblock %}
+    </div>
+</header>
+
+<main class="p-4">
+    <div class="container mx-auto">
+        {% block page_content %}{% endblock %}
+    </div>
+</main>
+
+<footer class="bg-gray-200 text-center p-4 mt-8">
+    <div class="container mx-auto">
+        {% block footer %}
+        &copy; 2023 ShowNotes
+        {% endblock %}
+    </div>
+</footer>
+{% endblock %}

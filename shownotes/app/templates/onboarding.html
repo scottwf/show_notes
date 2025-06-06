@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% block page_title %}Onboarding{% endblock %}
+{% block page_content %}
+<h2 class="text-xl font-bold mb-4">Administrator Setup</h2>
+<form method="post" id="onboarding-form" class="space-y-4">
+  <div>
+    <label class="block">Username</label>
+    <input type="text" name="username" class="border p-2 w-full" required>
+  </div>
+  <div>
+    <label class="block">Password</label>
+    <input type="password" name="password" class="border p-2 w-full" required>
+  </div>
+  <div>
+    <label class="block">Radarr URL</label>
+    <input type="text" id="radarr_url" name="radarr_url" class="border p-2 w-full">
+  </div>
+  <div>
+    <label class="block">Radarr API Key</label>
+    <input type="text" id="radarr_api_key" name="radarr_api_key" class="border p-2 w-full">
+    <button type="button" data-service="radarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
+    <span id="radarr_status" class="ml-2"></span>
+  </div>
+  <div>
+    <label class="block">Sonarr URL</label>
+    <input type="text" id="sonarr_url" name="sonarr_url" class="border p-2 w-full">
+  </div>
+  <div>
+    <label class="block">Sonarr API Key</label>
+    <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border p-2 w-full">
+    <button type="button" data-service="sonarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
+    <span id="sonarr_status" class="ml-2"></span>
+  </div>
+  <div>
+    <label class="block">Bazarr URL</label>
+    <input type="text" id="bazarr_url" name="bazarr_url" class="border p-2 w-full">
+  </div>
+  <div>
+    <label class="block">Bazarr API Key</label>
+    <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border p-2 w-full">
+    <button type="button" data-service="bazarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
+    <span id="bazarr_status" class="ml-2"></span>
+  </div>
+  <div>
+    <label class="block">Ollama URL</label>
+    <input type="text" id="ollama_url" name="ollama_url" class="border p-2 w-full">
+    <button type="button" data-service="ollama" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
+    <span id="ollama_status" class="ml-2"></span>
+  </div>
+  <div>
+    <label class="block">Pushover Key</label>
+    <input type="text" name="pushover_key" class="border p-2 w-full">
+  </div>
+  <button type="submit" class="bg-green-600 text-white px-4 py-2">Save</button>
+</form>
+<script>
+function bindTests(){
+ document.querySelectorAll('.test-btn').forEach(btn=>{
+   btn.addEventListener('click',async()=>{
+     const service = btn.dataset.service;
+     const url = document.getElementById(service + '_url').value;
+     const keyField = document.getElementById(service + '_api_key');
+     const apiKey = keyField ? keyField.value : '';
+     const res = await fetch('/test-api', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({service:service, url:url, api_key:apiKey})});
+     const data = await res.json();
+     const status = document.getElementById(service + '_status');
+     if(data.success){
+       status.textContent = 'Success';
+       status.className = 'text-green-600 ml-2';
+     }else{
+       status.textContent = 'Failed';
+       status.className = 'text-red-600 ml-2';
+     }
+   });
+ });
+}
+bindTests();
+</script>
+{% endblock %}
