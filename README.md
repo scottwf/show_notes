@@ -57,7 +57,7 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - Admin Dashboard: Recent LLM queries, API usage summary , JSON route links for IOS Shortcuts, Logs of uploaded or parsed data.
 - Admin Dashboard: view and edit the LLM prompts
 - Admin Dashboard: settings for Radarr, Sonarr, Bazarr, Ollama urls and API keys (https://sonarr.tv/docs/api/, https://radarr.video/docs/api/
-- Admin onboarding: include fields to enter the Radarr, Sonarr, Bazarr, Ollama urls and API keys with a button to dynamically test the connection to each api, instructions to create the plex webhook
+ - Admin onboarding with fields for Radarr, Sonarr, Bazarr and Ollama configuration. Includes dynamic API connection tests and Plex authentication.
 - Users can report file issues with a movie or episode to the adminstator that sends notificaitions to the backend and to https://pushover.net
 - Finalize reusable prompt templates (summary, relationships, arcs, quotes).
 - Add prompt-based regeneration with spoiler limits (e.g., “up to Season 2”).
@@ -187,12 +187,31 @@ The application uses an SQLite database (typically `data/shownotes.db` or `db.sq
 -   **`autocomplete_logs`**: Records when a user selects an autocomplete suggestion.
 
 ### Database Initialization
-- Tables are often created on the fly if not present.
-- An initialization route (`/admin/init-db`) can set up basic tables.
-- A script `scripts/init_db.py` might be available for schema setup and pre-loading data.
+Tables are created automatically the first time you run the database initialization command.
+Run the following to create a fresh SQLite database:
+
+```bash
+FLASK_APP=shownotes.run flask init-db
+```
+
+This command sets up all tables defined in `app/database.py`.
 
 ## Installation & Setup
 
+1. **Install Python dependencies**
+   ```bash
+   pip install flask requests
+   ```
+
+2. **Initialize the SQLite database**
+   ```bash
+   FLASK_APP=shownotes.run flask init-db
+   ```
+
+3. **Run the development server**
+   ```bash
+   python -m shownotes.run
+   ```
 
 ## Development Guide
 
@@ -201,7 +220,7 @@ The application uses an SQLite database (typically `data/shownotes.db` or `db.sq
 -   Character and show summaries can be cached in the database to reduce API calls (see Database section).
 -   Admin tools are available at `/admin` .
 -   `shownotes.service` (for systemd) restarts the app automatically if it crashes.
--   `scripts/init_db.py` might be used for database schema setup.
+-   Run `FLASK_APP=shownotes.run flask init-db` to create the database schema.
 
 ### Prompt Templates
 -   Prompt templates are structured in `app/prompts.py` or `app/prompt_builder.py`.

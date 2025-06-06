@@ -36,6 +36,8 @@ def init_db():
         DROP TABLE IF EXISTS current_watch;
         DROP TABLE IF EXISTS webhook_log;
         DROP TABLE IF EXISTS autocomplete_logs;
+        DROP TABLE IF EXISTS users;
+        DROP TABLE IF EXISTS settings;
 
         CREATE TABLE character_summaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,6 +127,27 @@ def init_db():
             search_term TEXT NOT NULL,
             selected_item TEXT,
             item_type TEXT -- e.g., 'show', 'character'
+        );
+
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            password_hash TEXT,
+            plex_id TEXT,
+            plex_token TEXT,
+            is_admin INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            radarr_url TEXT,
+            radarr_api_key TEXT,
+            sonarr_url TEXT,
+            sonarr_api_key TEXT,
+            bazarr_url TEXT,
+            bazarr_api_key TEXT,
+            ollama_url TEXT,
+            pushover_key TEXT
         );
     """)
     click.echo('Initialized the database with the correct schema.')
