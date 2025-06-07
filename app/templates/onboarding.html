@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block page_title %}Onboarding{% endblock %}
+{% block search_bar %}{% endblock %}
 
 {% block page_content %}
 <div class="max-w-lg mx-auto mt-8 sm:mt-12 mb-8">
@@ -14,9 +15,21 @@
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="password">Password</label>
         <input type="password" id="password" name="password" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
       </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="confirm_password">Confirm Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
+        <p id="password_error" class="mt-1 text-xs text-red-600 dark:text-red-400 hidden">Passwords do not match.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="base_url">Base URL (e.g., http://your-server)</label>
+        <input type="text" id="base_url" name="base_url" placeholder="http://192.168.1.100 or https://example.com" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter your main server address. Service URLs below will be auto-filled with default ports.</p>
+      </div>
 
       <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
-        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Radarr (Optional)</legend>
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Radarr</legend>
+        <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 mb-3 px-2">Manages your movie library and fetches metadata from movie databases.</p>
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr URL</label>
@@ -26,6 +39,9 @@
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_api_key">Radarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input type="text" id="radarr_api_key" name="radarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="radarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
               <button type="button" data-service="radarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
             </div>
             <span id="radarr_status" class="ml-2 text-xs"></span>
@@ -35,6 +51,7 @@
 
       <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
         <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Sonarr (Optional)</legend>
+        <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 mb-3 px-2">Manages your TV show library and fetches metadata from TV databases.</p>
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr URL</label>
@@ -44,6 +61,9 @@
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_api_key">Sonarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="sonarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
               <button type="button" data-service="sonarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
             </div>
             <span id="sonarr_status" class="ml-2 text-xs"></span>
@@ -53,6 +73,7 @@
 
       <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
         <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Bazarr (Optional)</legend>
+        <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 mb-3 px-2">Handles subtitles, adding them to the database for enhanced searching and to provide context for the LLM.</p>
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">Bazarr URL</label>
@@ -62,6 +83,9 @@
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_api_key">Bazarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="bazarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
               <button type="button" data-service="bazarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
             </div>
             <span id="bazarr_status" class="ml-2 text-xs"></span>
@@ -71,6 +95,7 @@
 
       <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
         <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Ollama (Optional)</legend>
+        <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 mb-3 px-2">Provides Large Language Model (LLM) capabilities, allowing you to ask questions about shows and receive summaries.</p>
         <div class="space-y-3">
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">Ollama URL</label>
@@ -83,10 +108,24 @@
         </div>
       </fieldset>
 
-      <div>
-        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_key">Pushover User Key (Optional)</label>
-        <input type="text" id="pushover_key" name="pushover_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-      </div>
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Pushover (Optional)</legend>
+        <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 mb-3 px-2">Enables the application to send notifications to the administrator. <a href="https://pushover.net" target="_blank" class="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-500 underline">Get your keys from pushover.net</a>.</p>
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_user_key">Pushover User Key</label>
+                <input type="text" id="pushover_user_key" name="pushover_user_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_api_token">Pushover API Token</label>
+                <input type="text" id="pushover_api_token" name="pushover_api_token" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+                <button type="button" data-service="pushover" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="pushover_status" class="ml-2 text-xs self-center sm:self-auto"></span>
+        </div>
+      </fieldset>
 
       <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-6 sm:mt-8 flex items-center justify-center">Save Configuration</button>
     </form>
@@ -98,16 +137,26 @@ function bindTests(){
  document.querySelectorAll('.test-btn').forEach(btn=>{
    btn.addEventListener('click',async()=>{
      const service = btn.dataset.service;
-     const urlInput = document.getElementById(service + '_url');
-     const url = urlInput ? urlInput.value : ''; // Ollama might not have a separate API key field
-     const keyField = document.getElementById(service + '_api_key');
-     const apiKey = keyField ? keyField.value : ''; // Not all services (like Ollama) might have an API key
+     let body; // Declare body here
 
-     // For Ollama, the API key might not be applicable or could be part of the URL or headers
-     // This example assumes 'api_key' is relevant if the field exists. Adjust as needed.
-     const body = { service: service, url: url };
-     if (keyField) { // Only add api_key if the field exists
-        body.api_key = apiKey;
+     if (service === 'pushover') {
+         const userKeyInput = document.getElementById('pushover_user_key');
+         const tokenInput = document.getElementById('pushover_api_token');
+         body = {
+             service: service,
+             pushover_user_key: userKeyInput ? userKeyInput.value : '',
+             pushover_api_token: tokenInput ? tokenInput.value : ''
+         };
+     } else {
+         const urlInput = document.getElementById(service + '_url');
+         const url = urlInput ? urlInput.value : '';
+         const keyField = document.getElementById(service + '_api_key');
+         const apiKey = keyField ? keyField.value : '';
+         
+         body = { service: service, url: url };
+         if (keyField) { // Only add api_key if the field exists for non-Pushover services
+            body.api_key = apiKey;
+         }
      }
 
      const status = document.getElementById(service + '_status');
@@ -135,5 +184,108 @@ function bindTests(){
 bindTests();
 // Add defer to the script tag if it's not already there, or ensure it's at the end of body.
 // Since it's in a block, it's fine.
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const baseUrlInput = document.getElementById('base_url');
+    const radarrUrlInput = document.getElementById('radarr_url');
+    const sonarrUrlInput = document.getElementById('sonarr_url');
+    const bazarrUrlInput = document.getElementById('bazarr_url');
+    const ollamaUrlInput = document.getElementById('ollama_url');
+
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirm_password');
+    const passwordErrorMsg = document.getElementById('password_error');
+    const onboardingForm = document.getElementById('onboarding-form');
+
+    const servicePorts = {
+        radarr: '7878',
+        sonarr: '8989',
+        bazarr: '6767',
+        ollama: '11434'
+    };
+
+    function validatePasswords() {
+        if (passwordInput.value !== confirmPasswordInput.value) {
+            passwordErrorMsg.classList.remove('hidden');
+            confirmPasswordInput.classList.add('border-red-500', 'dark:border-red-500');
+            confirmPasswordInput.classList.remove('focus:ring-sky-500', 'focus:border-sky-500');
+            return false;
+        } else {
+            passwordErrorMsg.classList.add('hidden');
+            confirmPasswordInput.classList.remove('border-red-500', 'dark:border-red-500');
+            confirmPasswordInput.classList.add('focus:ring-sky-500', 'focus:border-sky-500');
+            return true;
+        }
+    }
+
+    if (passwordInput && confirmPasswordInput && onboardingForm) {
+        passwordInput.addEventListener('input', validatePasswords);
+        confirmPasswordInput.addEventListener('input', validatePasswords);
+
+        onboardingForm.addEventListener('submit', function(event) {
+            if (!validatePasswords()) {
+                event.preventDefault(); // Prevent form submission
+                // Optionally, scroll to the password error or focus the field
+                confirmPasswordInput.focus();
+            }
+        });
+    }
+
+    if (baseUrlInput) { // Keep existing Base URL functionality
+        baseUrlInput.addEventListener('input', function() {
+            let base = this.value.trim();
+            
+            // Remove trailing slash if present
+            if (base.endsWith('/')) {
+                base = base.slice(0, -1);
+            }
+
+            if (base) { // Only populate if base_url is not empty
+                if (radarrUrlInput) radarrUrlInput.value = `${base}:${servicePorts.radarr}`;
+                if (sonarrUrlInput) sonarrUrlInput.value = `${base}:${servicePorts.sonarr}`;
+                if (bazarrUrlInput) bazarrUrlInput.value = `${base}:${servicePorts.bazarr}`;
+                if (ollamaUrlInput) ollamaUrlInput.value = `${base}:${servicePorts.ollama}`;
+            }
+        });
+
+        // Re-bind tests if they were not bound or if this script runs before the other one
+        // Bind Get Key buttons
+    document.querySelectorAll('.get-key-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const service = btn.dataset.service;
+            const urlInput = document.getElementById(service + '_url');
+            if (urlInput && urlInput.value) {
+                let serviceUrl = urlInput.value.trim();
+                if (serviceUrl.endsWith('/')) {
+                    serviceUrl = serviceUrl.slice(0, -1);
+                }
+                let settingsPath = '';
+                switch (service) {
+                    case 'radarr':
+                    case 'sonarr':
+                    case 'bazarr':
+                        settingsPath = '/settings/general'; // Common path for API key
+                        break;
+                }
+                if (settingsPath) {
+                    window.open(`${serviceUrl}${settingsPath}`, '_blank');
+                }
+            } else {
+                alert('Please enter the URL for ' + service + ' first.');
+            }
+        });
+    });
+
+    // Re-bind tests if they were not bound or if this script runs before the other one
+    if (typeof bindTests === 'function') {
+            bindTests();
+        } else {
+            // Fallback or error if bindTests is not defined from the other script block
+            console.warn('bindTests function not found. Ensure test button script is loaded.');
+        }
+    }
+});
 </script>
 {% endblock %}

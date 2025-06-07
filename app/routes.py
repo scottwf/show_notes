@@ -23,7 +23,7 @@ def admin_exists():
 
 @bp.before_app_request
 def check_onboarding():
-    if not admin_exists() and request.endpoint not in ('main.onboarding', 'static'):
+    if not admin_exists() and request.endpoint not in ('main.onboarding', 'static', 'main.test_api'):
         return redirect(url_for('main.onboarding'))
 
 
@@ -431,30 +431,79 @@ def plex_debug():
 def onboarding():
     if request.method == 'POST':
         db = database.get_db()
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not username or not password or not confirm_password:
+            flash('Username and password fields are required.', 'error')
+            return render_template('onboarding.html')
+
+        if password != confirm_password:
+            flash('Passwords do not match.', 'error')
+            return render_template('onboarding.html')
+
         pw_hash = generate_password_hash(password)
-        db.execute(
-            'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)',
-            (username, pw_hash),
-        )
-        db.execute(
-            'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (
-                request.form.get('radarr_url'),
-                request.form.get('radarr_api_key'),
-                request.form.get('sonarr_url'),
-                request.form.get('sonarr_api_key'),
-                request.form.get('bazarr_url'),
-                request.form.get('bazarr_api_key'),
-                request.form.get('ollama_url'),
-                request.form.get('pushover_key'),
-            ),
-        )
-        db.commit()
-        return redirect(url_for('main.index'))
+        try:
+            db.execute(
+                'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)',
+                (username, pw_hash),
+            )
+            # Ensure settings table has pushover_api_token (or pushover_token) column
+            # The admin_settings route uses 'pushover_token', so we'll align with that.
+            db.execute(
+                'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (
+                    request.form.get('radarr_url'),
+                    request.form.get('radarr_api_key'),
+                    request.form.get('sonarr_url'),
+                    request.form.get('sonarr_api_key'),
+                    request.form.get('bazarr_url'),
+                    request.form.get('bazarr_api_key'),
+                    request.form.get('ollama_url'),
+                    request.form.get('pushover_user_key'), # Changed from pushover_key
+                    request.form.get('pushover_api_token') # New field, maps to pushover_token in DB
+                ),
+            )
+            db.commit()
+            flash('Configuration saved successfully. Welcome!', 'success')
+            return redirect(url_for('main.home')) # Redirect to home or admin_settings
+        except db.IntegrityError as e:
+            db.rollback() # Rollback in case of partial insert before error
+            # This could happen if trying to re-onboard without clearing DB, or other constraint violation
+            flash(f'Database error during setup: {e}. If re-running setup, ensure database is clean.', 'error')
+            return render_template('onboarding.html')
+        except Exception as e:
+            db.rollback()
+            flash(f'An unexpected error occurred: {e}', 'error')
+            return render_template('onboarding.html')
+
     return render_template('onboarding.html')
 
+
+# Helper function for sending Pushover test notification
+def _send_test_pushover(user_key, api_token):
+    if not user_key or not api_token:
+        return False, "User key and API token are required."
+    try:
+        url = "https://api.pushover.net/1/messages.json"
+        payload = {
+            "token": api_token,
+            "user": user_key,
+            "message": "This is a test notification from ShowNotes!",
+            "title": "ShowNotes Test"
+        }
+        r = requests.post(url, data=payload, timeout=5)
+        r.raise_for_status() # Raise an exception for HTTP errors
+        response_data = r.json()
+        if response_data.get("status") == 1:
+            return True, "Test notification sent successfully."
+        else:
+            return False, f"Pushover API error: {response_data.get('errors', ['Unknown error'])[0]}"
+    except requests.exceptions.Timeout:
+        return False, "Connection to Pushover timed out."
+    except requests.exceptions.RequestException as e:
+        return False, f"Failed to send test notification: {str(e)}"
 
 @bp.route('/test-api', methods=['POST'])
 def test_api():
@@ -476,6 +525,14 @@ def test_api():
         elif service == 'ollama':
             r = requests.get(url.rstrip('/') + '/api/tags', timeout=5)
             return jsonify({'success': r.status_code == 200})
+        elif service == 'pushover':
+            user_key = data.get('pushover_user_key')
+            api_token = data.get('pushover_api_token')
+            success, message = _send_test_pushover(user_key, api_token)
+            if success:
+                return jsonify({'success': True, 'message': message})
+            else:
+                return jsonify({'success': False, 'error': message})
         else:
             return jsonify({'success': False, 'error': 'Unknown service'})
     except Exception as e:
@@ -484,24 +541,16 @@ def test_api():
 @bp.route('/test-pushover', methods=['POST'])
 def test_pushover():
     data = request.get_json()
-    token = data.get('token')
-    user_key = data.get('user_key')
-    if not token or not user_key:
-        return jsonify({'success': False, 'error': 'Missing token or user key'}), 400
-
-    payload = {
-        'token': token,
-        'user': user_key,
-        'message': 'Test notification from Show Notes Admin Settings'
-    }
-    try:
-        r = requests.post('https://api.pushover.net/1/messages.json', data=payload, timeout=5)
-        if r.status_code == 200:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': r.text}), 400
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    user_key = data.get('user_key')  # This route expects 'user_key' from its caller
+    api_token = data.get('token')   # This route expects 'token' (for api_token) from its caller
+    
+    success, message = _send_test_pushover(user_key, api_token)
+    if success:
+        return jsonify({'success': True, 'message': message})
+    else:
+        # Determine appropriate status code based on message content if needed, or use a generic one
+        status_code = 400 if "required" in message.lower() or "Pushover API error" in message.lower() else 500
+        return jsonify({'success': False, 'error': message}), status_code
 
 
 
