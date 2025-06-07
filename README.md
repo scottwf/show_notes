@@ -40,6 +40,21 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
   ```bash
   python3 run.py
   ```
+- **Automated Development Server (with Watchdog & Tailwind)**
+
+For a more robust development setup that includes automatic Flask server restarts on Python file changes and simultaneous Tailwind CSS watching, an advanced configuration using `systemd`, `tmux`, and `watchmedo` is available.
+
+This setup provides:
+- Automatic restart of the Flask development server when `.py` files are modified.
+- Continuous Tailwind CSS compilation in watch mode.
+- Both processes managed by a single `systemd` service for easy start/stop/monitoring.
+
+**For detailed setup instructions, please refer to: [`docs/dev-server-watchdog.md`](docs/dev-server-watchdog.md)**
+
+Once configured, you can monitor the live output of both Flask and Tailwind using:
+```bash
+tmux attach -t shownotes
+```
 
 ---
 
@@ -279,4 +294,3 @@ This command sets up all tables defined in `app/database.py`.
 -   A dashboard is under development at `/admin/usage` (or `/admin/api-usage`) to view and export cost breakdowns.
 -   Use `utils.log_openai_usage()` (or similar, function name might vary) to log calls programmatically.
 -   To keep costs low, batch prompts when possible and cache results for repeated queries.
-
