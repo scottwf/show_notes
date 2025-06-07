@@ -1,8 +1,8 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="max-w-xl mx-auto mt-10 p-6 bg-white shadow rounded">
-  <div class="flex justify-between items-center mb-4">
-  <h2 class="text-2xl font-bold mb-2 text-center text-gray-800">
+<div class="max-w-2xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
+  <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+  <h2 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-0 text-center text-slate-800 dark:text-slate-100">
     {% if plex_event and plex_event.event and plex_event.event != 0 %}
       {{ plex_event.event }}
     {% else %}
@@ -11,44 +11,44 @@
   </h2>
   {% if user %}
     <div class="flex items-center space-x-2">
-      <span class="text-gray-600 text-sm">Logged in as <span class="font-semibold">{{ user.username }}</span></span>
+      <span class="text-slate-600 dark:text-slate-300 text-sm">Logged in as <span class="font-semibold">{{ user.username }}</span></span>
       <a href="{{ url_for('main.admin_settings') }}" class="p-2" title="Admin Settings">
-        <svg class="w-6 h-6 text-gray-500 hover:text-gray-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zm7.94-2.34a1.5 1.5 0 0 0 0-2.32l-1.07-.83a1.5 1.5 0 0 1-.38-1.64l.2-1.17a1.5 1.5 0 0 0-1.5-1.77h-1.19a1.5 1.5 0 0 1-1.42-1.02l-.36-1.12a1.5 1.5 0 0 0-2.84 0l-.36 1.12A1.5 1.5 0 0 1 8.12 7.75H6.93a1.5 1.5 0 0 0-1.5 1.77l.2 1.17a1.5 1.5 0 0 1-.38 1.64l-1.07.83a1.5 1.5 0 0 0 0 2.32l1.07.83a1.5 1.5 0 0 1 .38 1.64l-.2 1.17a1.5 1.5 0 0 0 1.5 1.77h1.19a1.5 1.5 0 0 1 1.42 1.02l.36 1.12a1.5 1.5 0 0 0 2.84 0l.36-1.12a1.5 1.5 0 0 1 1.42-1.02h1.19a1.5 1.5 0 0 0 1.5-1.77l-.2-1.17a1.5 1.5 0 0 1 .38-1.64l1.07-.83z"/></svg>
+        <svg class="w-6 h-6 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7zm7.94-2.34a1.5 1.5 0 0 0 0-2.32l-1.07-.83a1.5 1.5 0 0 1-.38-1.64l.2-1.17a1.5 1.5 0 0 0-1.5-1.77h-1.19a1.5 1.5 0 0 1-1.42-1.02l-.36-1.12a1.5 1.5 0 0 0-2.84 0l-.36 1.12A1.5 1.5 0 0 1 8.12 7.75H6.93a1.5 1.5 0 0 0-1.5 1.77l.2 1.17a1.5 1.5 0 0 1-.38 1.64l-1.07.83a1.5 1.5 0 0 0 0 2.32l1.07.83a1.5 1.5 0 0 1 .38 1.64l-.2 1.17a1.5 1.5 0 0 0 1.5 1.77h1.19a1.5 1.5 0 0 1 1.42 1.02l.36 1.12a1.5 1.5 0 0 0 2.84 0l.36-1.12a1.5 1.5 0 0 1 1.42-1.02h1.19a1.5 1.5 0 0 0 1.5-1.77l-.2-1.17a1.5 1.5 0 0 1 .38-1.64l1.07-.83z"/></svg>
       </a>
-      <a href="{{ url_for('main.plex_logout') }}" class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded">Logout</a>
+      <a href="{{ url_for('main.plex_logout') }}" class="px-3 py-1 text-sm bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-md shadow-sm">Logout</a>
     </div>
   {% else %}
-    <a href="{{ url_for('main.login') }}" class="px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold rounded shadow">Sign in with Plex</a>
+    <a href="{{ url_for('main.login') }}" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out text-base">Sign in with Plex</a>
   {% endif %}
 </div>
 
   {% if not user %}
-    <div class="text-gray-700 mb-4">Sign in with Plex to view your recent activity.</div>
+    <div class="text-slate-700 dark:text-slate-300 mb-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-lg text-center">Sign in with Plex to view your recent activity.</div>
   {% endif %}
 
   {% if user and plex_event and plex_event.Metadata %}
-    <div class="bg-white shadow-lg rounded-lg p-6 flex flex-col sm:flex-row items-start gap-6 mb-6">
+    <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6">
       {% if poster_url %}
-        <img class="w-32 h-48 object-cover rounded border border-gray-200" src="{{ poster_url }}" alt="Show poster">
+        <img class="w-24 sm:w-32 h-36 sm:h-48 object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm" src="{{ poster_url }}" alt="Show poster">
       {% endif %}
       <div class="flex-1">
-        <h3 class="text-2xl font-bold text-gray-800 mb-2">{{ plex_event.Metadata.grandparentTitle or plex_event.Metadata.title }}</h3>
+        <h3 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 sm:mb-2">{{ plex_event.Metadata.grandparentTitle or plex_event.Metadata.title }}</h3>
         {% if plex_event.Metadata.type == 'episode' %}
-          <div class="text-lg font-semibold text-gray-700 mb-1">
+          <div class="text-md sm:text-lg font-semibold text-slate-700 dark:text-slate-200 mb-1">
             Season {{ plex_event.Metadata.parentIndex }}, Episode {{ plex_event.Metadata.index }}: {{ plex_event.Metadata.title }}
           </div>
         {% endif %}
         {% if plex_event.Metadata.summary %}
-          <div class="text-gray-700 mb-2">{{ plex_event.Metadata.summary }}</div>
+          <div class="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-2">{{ plex_event.Metadata.summary }}</div>
         {% endif %}
         {% if plex_event.Account %}
-          <div class="text-sm text-gray-500">User: {{ plex_event.Account.title }}</div>
+          <div class="text-sm text-slate-500 dark:text-slate-400">User: {{ plex_event.Account.title }}</div>
         {% endif %}
-        <div class="text-xs text-gray-400 mt-2">(Most recent event received from Plex)</div>
+        <div class="text-xs text-slate-400 dark:text-slate-500 mt-2">(Most recent event received from Plex)</div>
       </div>
     </div>
   {% else %}
-    <div class="bg-white shadow-lg rounded-lg p-6 mb-6 text-gray-600 text-center">
+    <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 mb-6 text-slate-600 dark:text-slate-300 text-center">
       No recent Plex activity found for your account.
     </div>
   {% endif %}
