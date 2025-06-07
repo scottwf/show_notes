@@ -17,7 +17,8 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - Run `npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify` after making changes to templates or Tailwind config.
 
 ### Local Poster Caching
-- Caches Sonarr and Radarr poster images locally in `/app/static/posters` for improved performance and reliability.
+- Caches Sonarr and Radarr poster images locally in `/app/static/poster` for improved performance and reliability.
+- Background images are stored in `/app/static/background` when available.
 - Poster cache is updated via Plex webhook events.
 
 ### Admin Settings UI Improvements

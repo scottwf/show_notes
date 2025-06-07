@@ -156,7 +156,7 @@ def plex_webhook():
             ext = os.path.splitext(poster_url)[-1].split('?')[0]
             if ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
                 ext = '.jpg'
-            poster_path = os.path.join(os.path.dirname(__file__), 'static', 'posters', f'poster_{clean_name}{ext}')
+            poster_path = os.path.join(os.path.dirname(__file__), 'static', 'poster', f'poster_{clean_name}{ext}')
             if not os.path.exists(poster_path):
                 try:
                     resp = requests.get(poster_url, timeout=10)
@@ -367,11 +367,11 @@ def home():
             clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', meta['title'].lower())
         if clean_name:
             # Check for any allowed extension
-            static_dir = os.path.join(os.path.dirname(__file__), 'static', 'posters')
+            static_dir = os.path.join(os.path.dirname(__file__), 'static', 'poster')
             for candidate_ext in ['.jpg', '.jpeg', '.png', '.webp']:
                 candidate_path = os.path.join(static_dir, f'poster_{clean_name}{candidate_ext}')
                 if os.path.exists(candidate_path):
-                    poster_url = url_for('static', filename=f'posters/poster_{clean_name}{candidate_ext}')
+                    poster_url = url_for('static', filename=f'poster/poster_{clean_name}{candidate_ext}')
                     break
         # If not cached, fallback to Sonarr/Radarr/remote
         if not poster_url:
@@ -515,3 +515,82 @@ def login_plex_poll():
         session['plex_token'] = token
         return jsonify({'authorized': True})
     return jsonify({'authorized': False})
+
+# --- Search Endpoint -------------------------------------------------------
+
+@bp.route('/search')
+def search():
+    """Search shows and movies from connected Sonarr and Radarr instances."""
+    query = request.args.get('q', '').strip().lower()
+    if not query:
+        return jsonify([])
+
+    db = database.get_db()
+    settings = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
+    results = []
+
+    def cache_image(url, folder, prefix):
+        if not url:
+            return None
+        ext = os.path.splitext(url)[-1].split('?')[0]
+        if ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
+            ext = '.jpg'
+        safe = re.sub(r'[^a-zA-Z0-9_\-]', '_', prefix.lower())
+        path = os.path.join(os.path.dirname(__file__), 'static', folder, f'{safe}{ext}')
+        if not os.path.exists(path):
+            try:
+                r = requests.get(url, timeout=10)
+                if r.status_code == 200:
+                    with open(path, 'wb') as f:
+                        f.write(r.content)
+            except Exception:
+                return url
+        return url_for('static', filename=f'{folder}/{safe}{ext}')
+
+    # Sonarr shows
+    if settings and settings.get('sonarr_url') and settings.get('sonarr_api_key'):
+        try:
+            r = requests.get(f"{settings['sonarr_url'].rstrip('/')}/api/v3/series", headers={"X-Api-Key": settings['sonarr_api_key']}, timeout=10)
+            if r.status_code == 200:
+                for show in r.json():
+                    if query in show['title'].lower():
+                        poster = None
+                        background = None
+                        for img in show.get('images', []):
+                            if img.get('coverType') == 'poster':
+                                poster = img.get('remoteUrl')
+                            elif img.get('coverType') in ('fanart', 'banner', 'backdrop'):
+                                background = img.get('remoteUrl')
+                        results.append({
+                            'type': 'show',
+                            'title': show['title'],
+                            'poster': cache_image(poster, 'poster', 'poster_' + show['title']),
+                            'background': cache_image(background, 'background', 'bg_' + show['title'])
+                        })
+        except Exception as e:
+            print('Sonarr search error:', e)
+
+    # Radarr movies
+    if settings and settings.get('radarr_url') and settings.get('radarr_api_key'):
+        try:
+            r = requests.get(f"{settings['radarr_url'].rstrip('/')}/api/v3/movie", headers={"X-Api-Key": settings['radarr_api_key']}, timeout=10)
+            if r.status_code == 200:
+                for movie in r.json():
+                    if query in movie['title'].lower():
+                        poster = None
+                        background = None
+                        for img in movie.get('images', []):
+                            if img.get('coverType') == 'poster':
+                                poster = img.get('remoteUrl')
+                            elif img.get('coverType') in ('fanart', 'banner', 'backdrop'):
+                                background = img.get('remoteUrl')
+                        results.append({
+                            'type': 'movie',
+                            'title': movie['title'],
+                            'poster': cache_image(poster, 'poster', 'poster_' + movie['title']),
+                            'background': cache_image(background, 'background', 'bg_' + movie['title'])
+                        })
+        except Exception as e:
+            print('Radarr search error:', e)
+
+    return jsonify(results)
