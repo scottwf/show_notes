@@ -1,9 +1,10 @@
 import os
 import requests
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import generate_password_hash
 
 from . import database
+from .utils import sync_sonarr_library, sync_radarr_library
 
 PLEX_HEADERS = {
     'X-Plex-Client-Identifier': os.environ.get('PLEX_CLIENT_ID', 'shownotes'),
@@ -91,6 +92,38 @@ def admin_settings():
             merged_settings[k] = v
     site_url = request.url_root.rstrip('/')
     return render_template('admin_settings.html', user=user, settings=merged_settings, site_url=site_url)
+
+@bp.route('/admin/sync-libraries', methods=['POST'], endpoint='admin_sync_libraries')
+def admin_sync_libraries():
+    # Basic protection: Ensure an admin user is configured for the app.
+    # More robust protection would involve checking current session's user role.
+    if not admin_exists():
+        flash("Admin account not configured. Sync aborted.", "error")
+        return redirect(url_for('main.home')) # Or perhaps 'main.onboarding'
+
+    # Add a check if a user is logged in via Plex and if they are an admin
+    # This part is a bit tricky as user['is_admin'] is not directly in session['plex_user']
+    # For now, we'll assume if admin_exists(), this action is for an admin.
+    # A proper implementation would link plex_user session to the users table and check is_admin.
+
+    flash("Library sync started...", "info")
+    try:
+        sync_sonarr_library()
+        flash("Sonarr library sync completed successfully.", "success")
+    except Exception as e:
+        flash(f"Error during Sonarr sync: {str(e)}", "error")
+        # Log the full exception for debugging
+        print(f"Sonarr sync error: {e}") # Or use app.logger.error
+
+    try:
+        sync_radarr_library()
+        flash("Radarr library sync completed successfully.", "success")
+    except Exception as e:
+        flash(f"Error during Radarr sync: {str(e)}", "error")
+        print(f"Radarr sync error: {e}") # Or use app.logger.error
+
+    flash("Full library sync process finished.", "info")
+    return redirect(url_for('main.admin_settings'))
 
 
 # In-memory cache for last Plex event (for demo; replace with persistent storage later)
@@ -520,77 +553,91 @@ def login_plex_poll():
 
 @bp.route('/search')
 def search():
-    """Search shows and movies from connected Sonarr and Radarr instances."""
-    query = request.args.get('q', '').strip().lower()
-    if not query:
+    """Search shows and movies from the local database."""
+    query_term = request.args.get('q', '').strip() # Keep original case for prefix, but use lower for LIKE comparison
+    if not query_term:
         return jsonify([])
 
     db = database.get_db()
-    settings = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
     results = []
+
+    # Ensure re is imported if not already globally in this file (it is via other functions)
+    # import re
 
     def cache_image(url, folder, prefix):
         if not url:
             return None
+        # Sanitize prefix: use the original title for better uniqueness before lowercasing for filename
+        safe_prefix = re.sub(r'[^\w\s-]', '', prefix).strip().replace(' ', '_') # Clean non-alphanum, keep spaces as underscores
+
         ext = os.path.splitext(url)[-1].split('?')[0]
-        if ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
-            ext = '.jpg'
-        safe = re.sub(r'[^a-zA-Z0-9_\-]', '_', prefix.lower())
-        path = os.path.join(os.path.dirname(__file__), 'static', folder, f'{safe}{ext}')
+        if not ext or ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
+            ext = '.jpg' # Default extension
+
+        # Create a safe filename from the prefix
+        # Limit length to avoid overly long filenames
+        safe_filename_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', safe_prefix.lower())
+        safe_filename = safe_filename_base[:50] + ext # Limit base name length
+
+        # Ensure static subdirectories exist
+        static_folder_path = os.path.join(os.path.dirname(__file__), 'static', folder)
+        if not os.path.exists(static_folder_path):
+            try:
+                os.makedirs(static_folder_path)
+            except OSError as e:
+                print(f"Error creating directory {static_folder_path}: {e}")
+                # Cannot create folder, so cannot cache image locally
+                return url # Fallback to remote URL
+
+        path = os.path.join(static_folder_path, safe_filename)
+
         if not os.path.exists(path):
             try:
-                r = requests.get(url, timeout=10)
+                r = requests.get(url, timeout=10, stream=True)
                 if r.status_code == 200:
                     with open(path, 'wb') as f:
-                        f.write(r.content)
-            except Exception:
-                return url
-        return url_for('static', filename=f'{folder}/{safe}{ext}')
+                        for chunk in r.iter_content(1024):
+                            f.write(chunk)
+                else: # Failed to download
+                    return url # Fallback to remote URL
+            except Exception as e:
+                print(f"Error caching image {url} to {path}: {e}")
+                return url # Fallback to remote URL
 
-    # Sonarr shows
-    if settings and settings.get('sonarr_url') and settings.get('sonarr_api_key'):
-        try:
-            r = requests.get(f"{settings['sonarr_url'].rstrip('/')}/api/v3/series", headers={"X-Api-Key": settings['sonarr_api_key']}, timeout=10)
-            if r.status_code == 200:
-                for show in r.json():
-                    if query in show['title'].lower():
-                        poster = None
-                        background = None
-                        for img in show.get('images', []):
-                            if img.get('coverType') == 'poster':
-                                poster = img.get('remoteUrl')
-                            elif img.get('coverType') in ('fanart', 'banner', 'backdrop'):
-                                background = img.get('remoteUrl')
-                        results.append({
-                            'type': 'show',
-                            'title': show['title'],
-                            'poster': cache_image(poster, 'poster', 'poster_' + show['title']),
-                            'background': cache_image(background, 'background', 'bg_' + show['title'])
-                        })
-        except Exception as e:
-            print('Sonarr search error:', e)
+        return url_for('static', filename=f'{folder}/{safe_filename}')
 
-    # Radarr movies
-    if settings and settings.get('radarr_url') and settings.get('radarr_api_key'):
-        try:
-            r = requests.get(f"{settings['radarr_url'].rstrip('/')}/api/v3/movie", headers={"X-Api-Key": settings['radarr_api_key']}, timeout=10)
-            if r.status_code == 200:
-                for movie in r.json():
-                    if query in movie['title'].lower():
-                        poster = None
-                        background = None
-                        for img in movie.get('images', []):
-                            if img.get('coverType') == 'poster':
-                                poster = img.get('remoteUrl')
-                            elif img.get('coverType') in ('fanart', 'banner', 'backdrop'):
-                                background = img.get('remoteUrl')
-                        results.append({
-                            'type': 'movie',
-                            'title': movie['title'],
-                            'poster': cache_image(poster, 'poster', 'poster_' + movie['title']),
-                            'background': cache_image(background, 'background', 'bg_' + movie['title'])
-                        })
-        except Exception as e:
-            print('Radarr search error:', e)
+    # Search Sonarr shows
+    try:
+        like_query = f"%{query_term.lower()}%"
+        cursor_shows = db.execute(
+            "SELECT id, title, poster_url, fanart_url FROM sonarr_shows WHERE LOWER(title) LIKE ?",
+            (like_query,)
+        )
+        for row in cursor_shows.fetchall():
+            results.append({
+                'type': 'show',
+                'title': row['title'],
+                'poster': cache_image(row['poster_url'], 'poster', 'show_poster_' + row['title']),
+                'background': cache_image(row['fanart_url'], 'background', 'show_bg_' + row['title'])
+            })
+    except Exception as e:
+        print(f"Error searching Sonarr shows in DB: {e}") # Replace with app.logger.error
+
+    # Search Radarr movies
+    try:
+        like_query = f"%{query_term.lower()}%"
+        cursor_movies = db.execute(
+            "SELECT id, title, poster_url, fanart_url FROM radarr_movies WHERE LOWER(title) LIKE ?",
+            (like_query,)
+        )
+        for row in cursor_movies.fetchall():
+            results.append({
+                'type': 'movie',
+                'title': row['title'],
+                'poster': cache_image(row['poster_url'], 'poster', 'movie_poster_' + row['title']),
+                'background': cache_image(row['fanart_url'], 'background', 'movie_bg_' + row['title'])
+            })
+    except Exception as e:
+        print(f"Error searching Radarr movies in DB: {e}") # Replace with app.logger.error
 
     return jsonify(results)

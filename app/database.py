@@ -38,6 +38,10 @@ def init_db():
         DROP TABLE IF EXISTS autocomplete_logs;
         DROP TABLE IF EXISTS users;
         DROP TABLE IF EXISTS settings;
+        DROP TABLE IF EXISTS sonarr_shows;
+        DROP TABLE IF EXISTS sonarr_seasons;
+        DROP TABLE IF EXISTS sonarr_episodes;
+        DROP TABLE IF EXISTS radarr_movies;
 
         CREATE TABLE character_summaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,6 +153,74 @@ def init_db():
             ollama_url TEXT,
             pushover_key TEXT
         );
+
+        CREATE TABLE sonarr_shows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sonarr_id INTEGER UNIQUE NOT NULL,
+            tvdb_id INTEGER,
+            imdb_id TEXT,
+            title TEXT NOT NULL,
+            year INTEGER,
+            overview TEXT,
+            status TEXT,
+            season_count INTEGER,
+            episode_count INTEGER,
+            episode_file_count INTEGER,
+            poster_url TEXT,
+            fanart_url TEXT,
+            path_on_disk TEXT,
+            last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE sonarr_seasons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            show_id INTEGER NOT NULL,
+            sonarr_season_id INTEGER,
+            season_number INTEGER NOT NULL,
+            episode_count INTEGER,
+            episode_file_count INTEGER,
+            monitored BOOLEAN,
+            statistics TEXT,
+            FOREIGN KEY (show_id) REFERENCES sonarr_shows (id)
+        );
+
+        CREATE TABLE sonarr_episodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            season_id INTEGER NOT NULL,
+            sonarr_show_id INTEGER NOT NULL,
+            sonarr_episode_id INTEGER UNIQUE NOT NULL,
+            episode_number INTEGER NOT NULL,
+            title TEXT,
+            overview TEXT,
+            air_date_utc TEXT,
+            has_file BOOLEAN,
+            monitored BOOLEAN,
+            FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id)
+        );
+
+        CREATE TABLE radarr_movies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            radarr_id INTEGER UNIQUE NOT NULL,
+            tmdb_id INTEGER,
+            imdb_id TEXT,
+            title TEXT NOT NULL,
+            year INTEGER,
+            overview TEXT,
+            status TEXT,
+            poster_url TEXT,
+            fanart_url TEXT,
+            path_on_disk TEXT,
+            has_file BOOLEAN,
+            monitored BOOLEAN,
+            last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id);
+        CREATE INDEX idx_sonarr_shows_title ON sonarr_shows (title);
+        CREATE INDEX idx_radarr_movies_radarr_id ON radarr_movies (radarr_id);
+        CREATE INDEX idx_radarr_movies_title ON radarr_movies (title);
+        CREATE INDEX idx_sonarr_seasons_show_id ON sonarr_seasons (show_id);
+        CREATE INDEX idx_sonarr_episodes_season_id ON sonarr_episodes (season_id);
     """)
     click.echo('Initialized the database with the correct schema.')
 
