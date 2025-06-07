@@ -64,6 +64,12 @@ db.sqlite3
 instance/
 .webassets-cache
 
+# Ignore local database files
+app.db
+show_notes.db
+
+tailadmin-free/
+
 # Scrapy stuff:
 .scrapy
 
