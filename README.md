@@ -132,6 +132,8 @@ shownotes/
 - The `/plex-webhook` route handles incoming POST requests when an episode is watched.
 - Updates `current_watch` table and `webhook_log` table.
 - This data can be used to adjust spoiler levels for summaries.
+- **Plex OAuth login** using PIN-based flow. Credentials are securely stored in the database, not in .env files.
+- **Webhook event display:** Homepage shows the most recent event for the logged-in user, with rich metadata and poster.
 
 ### Sonarr
 - Used to retrieve upcoming episode schedules for a calendar view.

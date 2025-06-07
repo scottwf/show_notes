@@ -1,0 +1,184 @@
+{% extends "layout.html" %}
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin_settings.css') }}">
+{% endblock %}
+{% block page_title %}Admin Settings{% endblock %}
+{% block page_content %}
+<h2 class="text-xl font-bold mb-4">Admin & Service Settings</h2>
+<form method="post" class="space-y-8 max-w-2xl mx-auto">
+  <!-- Service Settings Group -->
+    <!-- Ollama -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-block w-6 h-6"> <!-- Ollama SVG from selfh.st -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><circle fill="#a259e6" cx="12" cy="12" r="10"/><path fill="#fff" d="M12 7v5l4 2z"/></svg>
+        </span>
+        <span class="font-semibold text-lg">Ollama</span>
+        <span id="ollama_status" class="ml-2 text-sm"></span>
+      </div>
+      <div class="text-gray-500 text-xs mb-3">Ollama provides AI-powered features for enhanced automation and recommendations.</div>
+      <label class="block text-sm">URL</label>
+      <input type="text" id="ollama_url" name="ollama_url" value="{{ settings.ollama_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+      <button type="button" data-service="ollama" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
+    </div>
+
+    <!-- Plex OAuth Settings -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8 border border-yellow-300">
+      <h3 class="text-lg font-bold mb-2 text-yellow-700 flex items-center">
+        <svg class="w-5 h-5 mr-2 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+        Plex OAuth Authentication
+      </h3>
+      <div class="text-sm text-yellow-800 mb-4">
+        <p>Set up Plex OAuth to enable user authentication with Plex accounts. You do <strong>not</strong> need to register your app with Plex—just use a unique Client ID for your app. See <a href="https://forums.plex.tv/t/authenticating-with-plex/609370" class="text-blue-600 underline" target="_blank">Plex OAuth Guide</a> for details.</p>
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-semibold mb-1" for="plex_client_id">
+          Plex Client ID
+          <span class="ml-1 text-xs text-gray-500" title="Use any unique string (e.g. 'shownotes-app-1234'). This identifies your app to Plex.">(?)</span>
+        </label>
+        <input type="text" id="plex_client_id" name="plex_client_id" value="{{ settings.plex_client_id or '' }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-yellow-500">
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-semibold mb-1" for="plex_client_secret">
+          Plex Client Secret
+          <span class="ml-1 text-xs text-gray-500" title="Usually not required for basic OAuth flows. Leave blank unless using advanced features. You can generate a random secret for extra security.">(?)</span>
+        </label>
+        <div class="flex gap-2 items-center">
+          <input type="text" id="plex_client_secret" name="plex_client_secret" value="{{ settings.plex_client_secret or '' }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-yellow-500">
+          <button type="button" id="gen-plex-secret" title="Generate a new random secret for Plex OAuth" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 px-3 py-2 rounded font-semibold shadow-sm">Generate Secret</button>
+        </div>
+      </div>
+      <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          var btn = document.getElementById('gen-plex-secret');
+          if (btn) {
+            btn.addEventListener('click', function() {
+              fetch('/admin/gen_plex_secret', {method: 'POST'})
+                .then(r => r.json())
+                .then(data => {
+                  document.getElementById('plex_client_secret').value = data.secret;
+                });
+            });
+          }
+        });
+      </script>
+      <div class="mb-5">
+        <label class="block text-sm font-semibold mb-1" for="plex_redirect_uri">
+          Plex Redirect URI
+          <span class="ml-1 text-xs text-gray-500" title="This must match your OAuth callback URL (e.g. https://yourdomain/callback). This is where Plex will redirect after login.">(?)</span>
+        </label>
+        <input type="text" id="plex_redirect_uri" name="plex_redirect_uri" value="{{ settings.plex_redirect_uri or '' }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-yellow-500">
+      </div>
+    </div>
+
+    <!-- Pushover -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-block w-6 h-6"> <!-- Pushover SVG (unchanged) -->
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="text-indigo-500">
+            <rect x="4" y="4" width="16" height="16" rx="4" stroke-width="2"/>
+            <path stroke-width="2" d="M8 12h8"/>
+          </svg>
+        </span>
+        <span class="font-semibold text-lg">Pushover</span>
+        <span id="pushover_status" class="ml-2 text-sm"></span>
+      </div>
+      <div class="text-gray-500 text-xs mb-3">Pushover sends notifications to your device when important events occur.</div>
+      <label class="block text-sm">API Token</label>
+      <input type="text" id="pushover_token" name="pushover_token" value="{{ settings.pushover_token }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500 mb-2">
+      <div class="flex items-center justify-between mt-2">
+        <label class="block text-sm">User Key</label>
+        <a href="https://pushover.net/" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get your key</a>
+      </div>
+      <input type="text" id="pushover_key" name="pushover_key" value="{{ settings.pushover_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+      <button type="button" id="pushover-test-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Send Test Notification</button>
+    </div>
+
+    <!-- Sonarr, Radarr, Bazarr Grouped Card -->
+    <div class="bg-white rounded-lg shadow p-6 mb-6">
+      <!-- Sonarr -->
+      <div class="mb-8">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-6 h-6"> <!-- Sonarr SVG from selfh.st -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><path fill="#3fa9f5" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path fill="#222" d="M7 12l5 5 5-5z"/></svg>
+          </span>
+          <span class="font-semibold text-lg">Sonarr</span>
+          <span id="sonarr_status" class="ml-2 text-sm"></span>
+        </div>
+        <div class="text-gray-500 text-xs mb-3">Sonarr manages TV show downloads and keeps your TV library up to date automatically.</div>
+        <label class="block text-sm">URL</label>
+        <input type="text" id="sonarr_url" name="sonarr_url" value="{{ settings.sonarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <div class="flex items-center justify-between mt-2">
+          <label class="block text-sm">API Key</label>
+          <a id="sonarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+        </div>
+        <input type="text" id="sonarr_api_key" name="sonarr_api_key" value="{{ settings.sonarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <button type="button" data-service="sonarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
+      </div>
+      <hr class="my-6">
+      <!-- Radarr -->
+      <div class="mb-8">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-6 h-6"> <!-- Radarr SVG from selfh.st -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><path fill="#f5c211" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path fill="#222" d="M7.5 16.5l9-9-1.41-1.41-9 9z"/></svg>
+          </span>
+          <span class="font-semibold text-lg">Radarr</span>
+          <span id="radarr_status" class="ml-2 text-sm"></span>
+        </div>
+        <div class="text-gray-500 text-xs mb-3">Radarr manages movie downloads and organizes your movie library automatically.</div>
+        <label class="block text-sm">URL</label>
+        <input type="text" id="radarr_url" name="radarr_url" value="{{ settings.radarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <div class="flex items-center justify-between mt-2">
+          <label class="block text-sm">API Key</label>
+          <a id="radarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+        </div>
+        <input type="text" id="radarr_api_key" name="radarr_api_key" value="{{ settings.radarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <button type="button" data-service="radarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
+      </div>
+      <hr class="my-6">
+      <!-- Bazarr -->
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-6 h-6"> <!-- Bazarr SVG from selfh.st -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><ellipse fill="#00b894" cx="12" cy="12" rx="10" ry="10"/><path fill="#fff" d="M7 17l5-10 5 10z"/></svg>
+          </span>
+          <span class="font-semibold text-lg">Bazarr</span>
+          <span id="bazarr_status" class="ml-2 text-sm"></span>
+        </div>
+        <div class="text-gray-500 text-xs mb-3">Bazarr adds and manages subtitles for your movies and TV shows automatically.</div>
+        <label class="block text-sm">URL</label>
+        <input type="text" id="bazarr_url" name="bazarr_url" value="{{ settings.bazarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <div class="flex items-center justify-between mt-2">
+          <label class="block text-sm">API Key</label>
+          <a id="bazarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+        </div>
+        <input type="text" id="bazarr_api_key" name="bazarr_api_key" value="{{ settings.bazarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
+        <button type="button" data-service="bazarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
+      </div>
+    </div>
+  <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded shadow mt-8">Save Changes</button>
+</form>
+  
+
+<div class="bg-yellow-50 border-l-4 border-yellow-400 p-6 mt-10 rounded-lg shadow max-w-2xl mx-auto">
+  <div class="flex items-center mb-2">
+    <svg class="w-6 h-6 text-yellow-400 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01"/></svg>
+    <h3 class="font-semibold text-lg text-yellow-800">Plex Webhook Integration</h3>
+  </div>
+  <p class="text-gray-700 mb-4">To enable Plex events in this app, you need to add a webhook in your Plex server settings. Follow these steps:</p>
+  <ol class="list-decimal list-inside mb-4 text-gray-800">
+    <li>Open your <span class="font-semibold">Plex Web App</span> and sign in as an admin.</li>
+    <li>Click the <span class="font-semibold">Settings</span> (wrench icon) in the left sidebar.</li>
+    <li>In the left sidebar, under <span class="font-semibold">Settings</span>, click <span class="font-semibold">Webhooks</span> (you may need to expand <span class="font-semibold">Network</span> or <span class="font-semibold">Advanced</span> to find it).</li>
+    <li>Click <span class="font-semibold">Add Webhook</span>.</li>
+    <li>Paste the following URL into the webhook URL field:</li>
+  </ol>
+  <div class="bg-white border border-yellow-300 rounded px-4 py-3 mb-4 text-sm font-mono text-gray-900 select-all">
+    {{ site_url }}/plex/webhook
+  </div>
+  <p class="text-gray-700">Click <span class="font-semibold">Save</span>. Plex will now send event notifications to this app.</p>
+  <p class="text-xs text-gray-500 mt-2">You can test the webhook by playing or pausing media in Plex and checking this app for activity.</p>
+</div>
+
+<script src="{{ url_for('static', filename='admin_settings.js') }}"></script>
+{% endblock %}

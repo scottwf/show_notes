@@ -1,0 +1,21 @@
+/* Custom CSS for admin_settings.html */
+/* Add any overrides or custom styles here. Tailwind should cover most needs. */
+
+.card-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 1.125rem;
+  margin-bottom: 0.5rem;
+}
+
+.test-btn[disabled] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Add more custom styles as needed */
