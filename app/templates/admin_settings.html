@@ -197,6 +197,24 @@
     </div>
   <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-8 flex items-center justify-center">Save Changes</button>
 </form>
+
+<!-- Library Sync Section -->
+<div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6 mt-8 max-w-2xl mx-auto">
+  <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Library Synchronization</h3>
+  <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">
+    Manually trigger a full synchronization of your Sonarr and Radarr libraries with the local database.
+    This process might take some time depending on the size of your libraries.
+  </p>
+  <form method="POST" action="{{ url_for('main.admin_sync_libraries') }}">
+    <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold flex items-center justify-center">
+      <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581"></path></svg>
+      Sync Sonarr & Radarr Libraries
+    </button>
+  </form>
+  <p class="text-xs text-slate-400 dark:text-slate-500 mt-3">
+    Note: The page will reload after the sync process is initiated and completed. Feedback messages will be displayed at the top.
+  </p>
+</div>
   
 
 <div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-400 dark:border-amber-500 p-4 sm:p-6 mt-10 rounded-r-lg shadow-md max-w-2xl mx-auto">
