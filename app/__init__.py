@@ -3,7 +3,12 @@ from flask import Flask
 from . import database
 
 def create_app(test_config=None):
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(
+        __name__,
+        instance_relative_config=True,
+        static_folder='static',  # best practice: relative to the app package
+        static_url_path='/static'
+    )
     app.config.from_mapping(
         SECRET_KEY='dev', # Replace with a real secret key in production
         DATABASE=os.path.join(app.instance_path, 'shownotes.sqlite3'),

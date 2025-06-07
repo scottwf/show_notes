@@ -1,6 +1,8 @@
 {% extends "layout.html" %}
 {% block head %}
   <link rel="stylesheet" href="{{ url_for('static', filename='admin_settings.css') }}">
+  <script src="{{ url_for('static', filename='admin_settings.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='darkmode.js') }}" defer></script>
 {% endblock %}
 {% block page_title %}Admin Settings{% endblock %}
 {% block page_content %}
@@ -8,11 +10,12 @@
 <form method="post" class="space-y-8 max-w-2xl mx-auto">
   <!-- Service Settings Group -->
     <!-- Ollama -->
-    <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="bg-white dark:bg-gray-800 dark:text-gray-100 rounded-lg shadow p-6 mb-6">
       <div class="flex items-center gap-2 mb-1">
-        <span class="inline-block w-6 h-6"> <!-- Ollama SVG from selfh.st -->
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><circle fill="#a259e6" cx="12" cy="12" r="10"/><path fill="#fff" d="M12 7v5l4 2z"/></svg>
-        </span>
+        <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/ollama-light.png') }}" alt="Ollama logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/ollama-dark.png') }}" alt="Ollama logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
         <span class="font-semibold text-lg">Ollama</span>
         <span id="ollama_status" class="ml-2 text-sm"></span>
       </div>
@@ -23,9 +26,12 @@
     </div>
 
     <!-- Plex OAuth Settings -->
-    <div class="bg-white rounded-lg shadow p-6 mb-8 border border-yellow-300">
+    <div class="bg-white dark:bg-gray-800 dark:text-gray-100 rounded-lg shadow p-6 mb-8 border border-yellow-300">
       <h3 class="text-lg font-bold mb-2 text-yellow-700 flex items-center">
-        <svg class="w-5 h-5 mr-2 text-yellow-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>
+        <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/plex-light.png') }}" alt="Plex logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/plex-dark.png') }}" alt="Plex logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
         Plex OAuth Authentication
       </h3>
       <div class="text-sm text-yellow-800 mb-4">
@@ -72,14 +78,12 @@
     </div>
 
     <!-- Pushover -->
-    <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="bg-white dark:bg-gray-800 dark:text-gray-100 rounded-lg shadow p-6 mb-6">
       <div class="flex items-center gap-2 mb-1">
-        <span class="inline-block w-6 h-6"> <!-- Pushover SVG (unchanged) -->
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="text-indigo-500">
-            <rect x="4" y="4" width="16" height="16" rx="4" stroke-width="2"/>
-            <path stroke-width="2" d="M8 12h8"/>
-          </svg>
-        </span>
+        <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
         <span class="font-semibold text-lg">Pushover</span>
         <span id="pushover_status" class="ml-2 text-sm"></span>
       </div>
@@ -95,22 +99,25 @@
     </div>
 
     <!-- Sonarr, Radarr, Bazarr Grouped Card -->
-    <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="bg-white dark:bg-gray-800 dark:text-gray-100 rounded-lg shadow p-6 mb-6">
       <!-- Sonarr -->
       <div class="mb-8">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="inline-block w-6 h-6"> <!-- Sonarr SVG from selfh.st -->
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><path fill="#3fa9f5" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path fill="#222" d="M7 12l5 5 5-5z"/></svg>
-          </span>
-          <span class="font-semibold text-lg">Sonarr</span>
-          <span id="sonarr_status" class="ml-2 text-sm"></span>
-        </div>
-        <div class="text-gray-500 text-xs mb-3">Sonarr manages TV show downloads and keeps your TV library up to date automatically.</div>
+        <div class="flex items-center gap-4 mb-2">
+  <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
+  <div>
+    <span class="font-semibold text-2xl">Sonarr</span>
+    <div class="text-gray-500 text-xs mt-1">Manages TV show downloads and keeps your TV library up to date automatically.</div>
+    <span id="sonarr_status" class="ml-2 text-sm"></span>
+  </div>
+</div>
         <label class="block text-sm">URL</label>
         <input type="text" id="sonarr_url" name="sonarr_url" value="{{ settings.sonarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <div class="flex items-center justify-between mt-2">
           <label class="block text-sm">API Key</label>
-          <a id="sonarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+          <a id="sonarr_key_link" href="{{ settings.sonarr_url.rstrip('/') }}/settings/general" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
         </div>
         <input type="text" id="sonarr_api_key" name="sonarr_api_key" value="{{ settings.sonarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <button type="button" data-service="sonarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
@@ -118,19 +125,22 @@
       <hr class="my-6">
       <!-- Radarr -->
       <div class="mb-8">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="inline-block w-6 h-6"> <!-- Radarr SVG from selfh.st -->
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><path fill="#f5c211" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path fill="#222" d="M7.5 16.5l9-9-1.41-1.41-9 9z"/></svg>
-          </span>
-          <span class="font-semibold text-lg">Radarr</span>
-          <span id="radarr_status" class="ml-2 text-sm"></span>
-        </div>
-        <div class="text-gray-500 text-xs mb-3">Radarr manages movie downloads and organizes your movie library automatically.</div>
+        <div class="flex items-center gap-4 mb-2">
+  <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
+  <div>
+    <span class="font-semibold text-2xl">Radarr</span>
+    <div class="text-gray-500 text-xs mt-1">Manages movie downloads and organizes your movie library automatically.</div>
+    <span id="radarr_status" class="ml-2 text-sm"></span>
+  </div>
+</div>
         <label class="block text-sm">URL</label>
         <input type="text" id="radarr_url" name="radarr_url" value="{{ settings.radarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <div class="flex items-center justify-between mt-2">
           <label class="block text-sm">API Key</label>
-          <a id="radarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+          <a id="radarr_key_link" href="{{ settings.radarr_url.rstrip('/') }}/settings/general" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
         </div>
         <input type="text" id="radarr_api_key" name="radarr_api_key" value="{{ settings.radarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <button type="button" data-service="radarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>
@@ -138,19 +148,22 @@
       <hr class="my-6">
       <!-- Bazarr -->
       <div>
-        <div class="flex items-center gap-2 mb-1">
-          <span class="inline-block w-6 h-6"> <!-- Bazarr SVG from selfh.st -->
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" fill="currentColor"><ellipse fill="#00b894" cx="12" cy="12" rx="10" ry="10"/><path fill="#fff" d="M7 17l5-10 5 10z"/></svg>
-          </span>
-          <span class="font-semibold text-lg">Bazarr</span>
-          <span id="bazarr_status" class="ml-2 text-sm"></span>
-        </div>
-        <div class="text-gray-500 text-xs mb-3">Bazarr adds and manages subtitles for your movies and TV shows automatically.</div>
+        <div class="flex items-center gap-4 mb-2">
+  <span class="inline-block w-14 h-14 mr-3">
+  <img src="{{ url_for('static', filename='logos/bazarr-light.png') }}" alt="Bazarr logo" class="w-14 h-14 object-contain dark:hidden">
+<img src="{{ url_for('static', filename='logos/bazarr-dark.png') }}" alt="Bazarr logo dark" class="w-14 h-14 object-contain hidden dark:inline">
+</span>
+  <div>
+    <span class="font-semibold text-2xl">Bazarr</span>
+    <div class="text-gray-500 text-xs mt-1">Adds and manages subtitles for your movies and TV shows automatically.</div>
+    <span id="bazarr_status" class="ml-2 text-sm"></span>
+  </div>
+</div>
         <label class="block text-sm">URL</label>
         <input type="text" id="bazarr_url" name="bazarr_url" value="{{ settings.bazarr_url }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <div class="flex items-center justify-between mt-2">
           <label class="block text-sm">API Key</label>
-          <a id="bazarr_key_link" href="#" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
+          <a id="bazarr_key_link" href="{{ settings.bazarr_url.rstrip('/') }}/settings" target="_blank" class="text-blue-500 text-xs hover:underline ml-2">Get API Key</a>
         </div>
         <input type="text" id="bazarr_api_key" name="bazarr_api_key" value="{{ settings.bazarr_api_key }}" class="border rounded-lg p-2 w-full focus:outline-none focus:border-blue-500">
         <button type="button" data-service="bazarr" class="test-btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mt-3">Test</button>

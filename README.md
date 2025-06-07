@@ -8,6 +8,40 @@ ShowNotes is a Flask-based web app that helps users explore TV shows, character 
 
 The purpose of ShowNotes is to be a tool for exploring tv show, season and character summaries, overlap detection, actor insights, and spoiler-aware recaps based on viewing progress. Using a plex webhook the plex users' viewing is imported and stored in a sqlite3 database for each user. Using Jellyseer as inspiration for layout and visual deesign to be usable on a phone and computer. Also use plex autentication to sign in for an administrator and users. 
 
+---
+
+## 🆕 Recent Improvements
+
+### Tailwind CSS & Dark Mode
+- Uses Tailwind CSS for styling, including full dark mode support via the `dark` class on `<html>`.
+- Run `npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify` after making changes to templates or Tailwind config.
+
+### Local Poster Caching
+- Caches Sonarr and Radarr poster images locally in `/app/static/posters` for improved performance and reliability.
+- Poster cache is updated via Plex webhook events.
+
+### Admin Settings UI Improvements
+- API key links for Sonarr, Radarr, and Bazarr now point directly to the user’s configured instance settings page.
+- All service logos (Ollama, Plex, Pushover, Sonarr, Radarr, Bazarr) support both light and dark modes with automatic switching.
+- Dynamic logo switching and theme toggling via a dark mode toggle button.
+
+### Static Asset Serving
+- Static files are served from `/app/static` using Flask’s best practices.
+- All static asset references use `url_for('static', filename=...)`.
+
+### Development Setup
+- **Requirements:** Python 3.x, Node.js (v18+), npm (v9+)
+- **Tailwind Build:**
+  ```bash
+  npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify
+  ```
+- **Run the app:**
+  ```bash
+  python3 run.py
+  ```
+
+---
+
 ## Features
 
 ### Core Functionality

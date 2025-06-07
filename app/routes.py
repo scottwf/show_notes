@@ -140,6 +140,32 @@ def plex_webhook():
             (event_type, user_id, user_name, media_type, show_title, episode_title, season, episode, summary, raw_json)
         )
         db.commit()
+
+        # Poster caching for Sonarr/Radarr
+        import re, os
+        poster_url = None
+        poster_path = None
+        clean_name = None
+        if media_type == 'episode' and show_title:
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', show_title.lower())
+            poster_url = get_sonarr_poster(show_title)
+        elif media_type == 'movie' and show_title:
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', show_title.lower())
+            poster_url = get_radarr_poster(show_title)
+        if poster_url and clean_name:
+            ext = os.path.splitext(poster_url)[-1].split('?')[0]
+            if ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
+                ext = '.jpg'
+            poster_path = os.path.join(os.path.dirname(__file__), 'static', 'posters', f'poster_{clean_name}{ext}')
+            if not os.path.exists(poster_path):
+                try:
+                    resp = requests.get(poster_url, timeout=10)
+                    if resp.status_code == 200:
+                        with open(poster_path, 'wb') as f:
+                            f.write(resp.content)
+                        print(f'Cached poster to {poster_path}')
+                except Exception as e:
+                    print(f'Failed to cache poster: {e}')
         print('Received and logged Plex webhook:', payload)
         return '', 200
     except Exception as e:
@@ -328,20 +354,38 @@ def home():
     else:
         plex_event = None
 
-    # Try Sonarr/Radarr for poster
+    # Try to use local cached poster if available
     if plex_event and plex_event.get('Metadata'):
+        import os, re
         meta = plex_event['Metadata']
+        poster_url = None
+        clean_name = None
+        ext = '.jpg'
         if meta.get('type') == 'episode' and meta.get('grandparentTitle'):
-            poster_url = get_sonarr_poster(meta['grandparentTitle'])
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', meta['grandparentTitle'].lower())
         elif meta.get('type') == 'movie' and meta.get('title'):
-            poster_url = get_radarr_poster(meta['title'])
-        # fallback to Plex poster
+            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', meta['title'].lower())
+        if clean_name:
+            # Check for any allowed extension
+            static_dir = os.path.join(os.path.dirname(__file__), 'static', 'posters')
+            for candidate_ext in ['.jpg', '.jpeg', '.png', '.webp']:
+                candidate_path = os.path.join(static_dir, f'poster_{clean_name}{candidate_ext}')
+                if os.path.exists(candidate_path):
+                    poster_url = url_for('static', filename=f'posters/poster_{clean_name}{candidate_ext}')
+                    break
+        # If not cached, fallback to Sonarr/Radarr/remote
         if not poster_url:
-            thumb = meta.get('grandparentThumb') or meta.get('thumb')
-            if thumb and thumb.startswith('http'):
-                poster_url = thumb
-            elif thumb:
-                poster_url = f"https://shownotes.chitekmedia.club{thumb}"
+            if meta.get('type') == 'episode' and meta.get('grandparentTitle'):
+                poster_url = get_sonarr_poster(meta['grandparentTitle'])
+            elif meta.get('type') == 'movie' and meta.get('title'):
+                poster_url = get_radarr_poster(meta['title'])
+            # fallback to Plex poster
+            if not poster_url:
+                thumb = meta.get('grandparentThumb') or meta.get('thumb')
+                if thumb and thumb.startswith('http'):
+                    poster_url = thumb
+                elif thumb:
+                    poster_url = f"https://shownotes.chitekmedia.club{thumb}"
     print('DEBUG: Passing to template:', {'plex_event': plex_event, 'user': user, 'poster_url': poster_url})
     return render_template('home.html', plex_event=plex_event, user=user, poster_url=poster_url)
 

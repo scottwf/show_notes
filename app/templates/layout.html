@@ -2,22 +2,34 @@
 
 {% block title %}{% block page_title %}{% endblock %} - ShowNotes{% endblock %}
 
+{% block head %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin_settings.css') }}">
+  <script src="{{ url_for('static', filename='darkmode.js') }}" defer></script>
+  {# Only include admin_settings.js if needed (e.g., on admin pages) #}
+  {% block extra_js %}{% endblock %}
+{% endblock %}
+
 {% block content %}
-<header class="bg-gray-800 text-white p-4">
-    <div class="container mx-auto">
-        {% block header %}
-        <h1 class="text-xl">ShowNotes</h1>
-        {% endblock %}
+<header class="bg-gray-800 text-white dark:bg-gray-900 dark:text-gray-100 p-4">
+  <div class="container mx-auto flex items-center justify-between">
+    <div>
+      {% block header %}
+      <h1 class="text-xl">ShowNotes</h1>
+      {% endblock %}
     </div>
+    <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
+      <!-- Icon is set by JS -->
+    </button>
+  </div>
 </header>
 
-<main class="p-4">
+<main class="p-4 bg-white dark:bg-gray-950 min-h-screen">
     <div class="container mx-auto">
         {% block page_content %}{% endblock %}
     </div>
 </main>
 
-<footer class="bg-gray-200 text-center p-4 mt-8">
+<footer class="bg-gray-200 dark:bg-gray-900 dark:text-gray-400 text-center p-4 mt-8">
     <div class="container mx-auto">
         {% block footer %}
         &copy; 2023 ShowNotes
