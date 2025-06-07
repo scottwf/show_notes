@@ -1,79 +1,139 @@
 {% extends "layout.html" %}
 {% block page_title %}Onboarding{% endblock %}
+
 {% block page_content %}
-<h2 class="text-xl font-bold mb-4">Administrator Setup</h2>
-<form method="post" id="onboarding-form" class="space-y-4">
-  <div>
-    <label class="block">Username</label>
-    <input type="text" name="username" class="border p-2 w-full" required>
+<div class="max-w-lg mx-auto mt-8 sm:mt-12 mb-8">
+  <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6 sm:mb-8 text-center">Administrator Setup</h2>
+    <form method="post" id="onboarding-form" class="space-y-5 sm:space-y-6">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="username">Username</label>
+        <input type="text" id="username" name="username" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="password">Password</label>
+        <input type="password" id="password" name="password" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
+      </div>
+
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Radarr (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr URL</label>
+            <input type="text" id="radarr_url" name="radarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_api_key">Radarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="radarr_api_key" name="radarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <button type="button" data-service="radarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="radarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Sonarr (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr URL</label>
+            <input type="text" id="sonarr_url" name="sonarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_api_key">Sonarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <button type="button" data-service="sonarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="sonarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Bazarr (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">Bazarr URL</label>
+            <input type="text" id="bazarr_url" name="bazarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_api_key">Bazarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <button type="button" data-service="bazarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="bazarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Ollama (Optional)</legend>
+        <div class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">Ollama URL</label>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="ollama_url" name="ollama_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+                </div>
+                <span id="ollama_status" class="ml-2 text-xs"></span>
+            </div>
+        </div>
+      </fieldset>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_key">Pushover User Key (Optional)</label>
+        <input type="text" id="pushover_key" name="pushover_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+      </div>
+
+      <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-6 sm:mt-8 flex items-center justify-center">Save Configuration</button>
+    </form>
   </div>
-  <div>
-    <label class="block">Password</label>
-    <input type="password" name="password" class="border p-2 w-full" required>
-  </div>
-  <div>
-    <label class="block">Radarr URL</label>
-    <input type="text" id="radarr_url" name="radarr_url" class="border p-2 w-full">
-  </div>
-  <div>
-    <label class="block">Radarr API Key</label>
-    <input type="text" id="radarr_api_key" name="radarr_api_key" class="border p-2 w-full">
-    <button type="button" data-service="radarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
-    <span id="radarr_status" class="ml-2"></span>
-  </div>
-  <div>
-    <label class="block">Sonarr URL</label>
-    <input type="text" id="sonarr_url" name="sonarr_url" class="border p-2 w-full">
-  </div>
-  <div>
-    <label class="block">Sonarr API Key</label>
-    <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border p-2 w-full">
-    <button type="button" data-service="sonarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
-    <span id="sonarr_status" class="ml-2"></span>
-  </div>
-  <div>
-    <label class="block">Bazarr URL</label>
-    <input type="text" id="bazarr_url" name="bazarr_url" class="border p-2 w-full">
-  </div>
-  <div>
-    <label class="block">Bazarr API Key</label>
-    <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border p-2 w-full">
-    <button type="button" data-service="bazarr" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
-    <span id="bazarr_status" class="ml-2"></span>
-  </div>
-  <div>
-    <label class="block">Ollama URL</label>
-    <input type="text" id="ollama_url" name="ollama_url" class="border p-2 w-full">
-    <button type="button" data-service="ollama" class="test-btn bg-blue-500 text-white px-2 py-1 ml-2">Test</button>
-    <span id="ollama_status" class="ml-2"></span>
-  </div>
-  <div>
-    <label class="block">Pushover Key</label>
-    <input type="text" name="pushover_key" class="border p-2 w-full">
-  </div>
-  <button type="submit" class="bg-green-600 text-white px-4 py-2">Save</button>
-</form>
+</div>
 <script>
+// Script content remains largely the same, just updating status class names in JS
 function bindTests(){
  document.querySelectorAll('.test-btn').forEach(btn=>{
    btn.addEventListener('click',async()=>{
      const service = btn.dataset.service;
-     const url = document.getElementById(service + '_url').value;
+     const urlInput = document.getElementById(service + '_url');
+     const url = urlInput ? urlInput.value : ''; // Ollama might not have a separate API key field
      const keyField = document.getElementById(service + '_api_key');
-     const apiKey = keyField ? keyField.value : '';
-     const res = await fetch('/test-api', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({service:service, url:url, api_key:apiKey})});
-     const data = await res.json();
+     const apiKey = keyField ? keyField.value : ''; // Not all services (like Ollama) might have an API key
+
+     // For Ollama, the API key might not be applicable or could be part of the URL or headers
+     // This example assumes 'api_key' is relevant if the field exists. Adjust as needed.
+     const body = { service: service, url: url };
+     if (keyField) { // Only add api_key if the field exists
+        body.api_key = apiKey;
+     }
+
      const status = document.getElementById(service + '_status');
-     if(data.success){
-       status.textContent = 'Success';
-       status.className = 'text-green-600 ml-2';
-     }else{
-       status.textContent = 'Failed';
-       status.className = 'text-red-600 ml-2';
+     status.textContent = 'Testing...';
+     status.className = 'text-slate-500 dark:text-slate-400 ml-2 text-xs'; // Testing status
+
+     try {
+       const res = await fetch('/test-api', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+       const data = await res.json();
+       if(data.success){
+         status.textContent = 'Success!';
+         status.className = 'text-green-600 dark:text-green-400 ml-2 text-xs font-semibold';
+       }else{
+         status.textContent = `Failed: ${data.message || 'Unknown error'}`;
+         status.className = 'text-red-600 dark:text-red-400 ml-2 text-xs font-semibold';
+       }
+     } catch (error) {
+        status.textContent = 'Failed: Network or server error.';
+        status.className = 'text-red-600 dark:text-red-400 ml-2 text-xs font-semibold';
+        console.error("API test error:", error);
      }
    });
  });
 }
 bindTests();
+// Add defer to the script tag if it's not already there, or ensure it's at the end of body.
+// Since it's in a block, it's fine.
 </script>
 {% endblock %}

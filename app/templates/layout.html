@@ -10,29 +10,30 @@
 {% endblock %}
 
 {% block content %}
-<header class="bg-gray-800 text-white dark:bg-gray-900 dark:text-gray-100 p-4">
+<header class="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 p-4 shadow-md">
   <div class="container mx-auto flex items-center justify-between">
-    <div>
+    <div class="flex items-center space-x-4">
       {% block header %}
-      <h1 class="text-xl">ShowNotes</h1>
+      <h1 class="text-lg sm:text-xl font-semibold">ShowNotes</h1>
       {% endblock %}
+      <a href="{{ url_for('main.admin_settings') }}" class="text-sm font-medium text-slate-700 hover:text-sky-600 dark:text-slate-300 dark:hover:text-sky-400 px-2 py-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Settings</a>
     </div>
-    <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
+    <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors">
       <!-- Icon is set by JS -->
     </button>
   </div>
 </header>
 
-<main class="p-4 bg-white dark:bg-gray-950 min-h-screen">
+<main class="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-[calc(100vh-128px)]">
     <div class="container mx-auto">
         {% block page_content %}{% endblock %}
     </div>
 </main>
 
-<footer class="bg-gray-200 dark:bg-gray-900 dark:text-gray-400 text-center p-4 mt-8">
+<footer class="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-center p-4 mt-auto">
     <div class="container mx-auto">
         {% block footer %}
-        &copy; 2023 ShowNotes
+        <span class="text-sm">&copy; 2024 ShowNotes</span>
         {% endblock %}
     </div>
 </footer>

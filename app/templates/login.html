@@ -1,25 +1,60 @@
 {% extends "layout.html" %}
 {% block page_title %}Login{% endblock %}
+
 {% block page_content %}
-<h2 class="text-xl font-bold mb-4">Login</h2>
-<button id="plex-login" class="bg-blue-500 text-white px-4 py-2">Sign in with Plex</button>
-<p id="login_status" class="mt-2"></p>
-<script>
-document.getElementById('plex-login').addEventListener('click', async () => {
-  const resp = await fetch('/login/plex/start');
-  const data = await resp.json();
-  window.open(data.authUrl, '_blank');
-  async function poll(){
-    const r = await fetch('/login/plex/poll');
-    const p = await r.json();
-    if(p.authorized){
-      document.getElementById('login_status').textContent = 'Logged in!';
-      window.location = '/';
-    } else {
-      setTimeout(poll, 2000);
+<div class="max-w-md mx-auto mt-10 sm:mt-20 p-6 sm:p-8 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
+  <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-8 text-center">Sign In</h2>
+  <button id="plex-login" class="w-full px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base sm:text-lg flex items-center justify-center space-x-2">
+    <!-- Placeholder for Plex icon, ideally an SVG -->
+    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10zm-1.5-6.056V8.056h3v7.906l3.536-3.535.707.707L12 18.414l-5.743-5.743.707-.707L10.5 15.944z"/></svg>
+    <span>Sign in with Plex</span>
+  </button>
+  <p id="login_status" class="mt-6 text-center text-sm text-slate-600 dark:text-slate-300"></p>
+  <script>
+  document.getElementById('plex-login').addEventListener('click', async () => {
+    document.getElementById('login_status').textContent = 'Connecting to Plex...';
+    const resp = await fetch('/login/plex/start');
+    const data = await resp.json();
+    // Open a new window for Plex authentication
+    const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
+
+    async function poll(){
+      if (authWindow && authWindow.closed) {
+        // Window was closed by user before authorization
+        document.getElementById('login_status').textContent = 'Login cancelled or window closed before completion.';
+        return;
+      }
+      try {
+        const r = await fetch('/login/plex/poll');
+        if (!r.ok) {
+          document.getElementById('login_status').textContent = 'Error polling login status. Please try again.';
+          return;
+        }
+        const p = await r.json();
+        if(p.authorized){
+          document.getElementById('login_status').textContent = 'Logged in successfully! Redirecting...';
+          window.location = '/'; // Redirect to home or dashboard
+        } else {
+          // Only set timeout if auth window is still open
+          if (authWindow && !authWindow.closed) {
+            setTimeout(poll, 2000);
+          } else if (!authWindow) {
+            // if window creation failed
+             document.getElementById('login_status').textContent = 'Could not open Plex login window. Please check your popup blocker settings.';
+          }
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+        document.getElementById('login_status').textContent = 'An error occurred. Please try again.';
+      }
     }
-  }
-  poll();
-});
-</script>
+    // Start polling only if window was successfully opened
+    if (authWindow) {
+      setTimeout(poll, 2000); // Initial delay before first poll
+    } else {
+      document.getElementById('login_status').textContent = 'Could not open Plex login window. Please ensure popups are not blocked.';
+    }
+  });
+  </script>
+</div>
 {% endblock %}
