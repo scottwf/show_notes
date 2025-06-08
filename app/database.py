@@ -42,6 +42,7 @@ def init_db():
         DROP TABLE IF EXISTS sonarr_seasons;
         DROP TABLE IF EXISTS sonarr_episodes;
         DROP TABLE IF EXISTS radarr_movies;
+        DROP TABLE IF EXISTS plex_events; /* <-- ADDED DROP HERE */
 
         CREATE TABLE character_summaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,10 +136,11 @@ def init_db():
 
         CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
+            username TEXT UNIQUE, -- Ensure local usernames are unique
             password_hash TEXT,
-            plex_id TEXT,
-            plex_token TEXT,
+            plex_user_id TEXT UNIQUE, -- Store Plex User ID, ensure it's unique if linking
+            plex_username TEXT,     -- Store Plex Username
+            plex_token TEXT,        -- This might be the Plex auth token, consider if it needs to be stored long-term
             is_admin INTEGER DEFAULT 0
         );
 
@@ -151,7 +153,11 @@ def init_db():
             bazarr_url TEXT,
             bazarr_api_key TEXT,
             ollama_url TEXT,
-            pushover_key TEXT
+            pushover_key TEXT,
+            pushover_token TEXT,
+            plex_client_id TEXT,
+            plex_token TEXT,
+            webhook_secret TEXT
         );
 
         CREATE TABLE sonarr_shows (
@@ -179,9 +185,9 @@ def init_db():
             season_number INTEGER NOT NULL,
             episode_count INTEGER,
             episode_file_count INTEGER,
-            monitored BOOLEAN,
             statistics TEXT,
-            FOREIGN KEY (show_id) REFERENCES sonarr_shows (id)
+            FOREIGN KEY (show_id) REFERENCES sonarr_shows (id),
+            UNIQUE (show_id, season_number)
         );
 
         CREATE TABLE sonarr_episodes (
@@ -213,6 +219,22 @@ def init_db():
             has_file BOOLEAN,
             monitored BOOLEAN,
             last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE plex_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT,
+            user_id TEXT,
+            user_name TEXT,
+            media_type TEXT,
+            show_title TEXT,
+            episode_title TEXT,
+            season TEXT,
+            episode TEXT,
+            summary TEXT,
+            raw_json TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            processed INTEGER DEFAULT 0
         );
 
         CREATE INDEX idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id);

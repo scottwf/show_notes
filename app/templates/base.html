@@ -4,11 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ShowNotes{% endblock %}</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     {% block head %}{% endblock %}
 </head>
 <body>
     <div class="container mx-auto px-4">
+
+        {# Add this section to display flashed messages #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flashes my-4">
+            {% for category, message in messages %}
+              <div class="p-4 mb-4 text-sm rounded-lg 
+                          {% if category == 'success' %} bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100 {% endif %}
+                          {% if category == 'error' %} bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 {% endif %}
+                          {% if category == 'info' %} bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 {% endif %}
+                          {% if category == 'warning' %} bg-yellow-100 text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100 {% endif %}
+                          {% if category == 'message' or category is none %} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100 {% endif %}"
+                   role="alert">
+                {{ message }}
+              </div>
+            {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {# End of flashed messages section #}
+
         {% block content %}{% endblock %}
     </div>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

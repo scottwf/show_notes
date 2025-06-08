@@ -1,11 +1,14 @@
-{% extends "layout.html" %}
-{% block head %}
-  {{ super() }}
-  <link rel="stylesheet" href="{{ url_for('static', filename='admin_settings.css') }}">
-  {# darkmode.js is already in layout.html, admin_settings.js is loaded at the end of page_content #}
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Service Settings{% endblock %}
+
+{% block admin_extra_js %}
+  <script src="{{ url_for('static', filename='admin_settings.js') }}"></script>
 {% endblock %}
-{% block page_title %}Admin Settings{% endblock %}
-{% block page_content %}
+
+{% block admin_page_header %}Service Configuration{% endblock %}
+
+{% block admin_page_content %}
 <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6 sm:mb-8 text-center">Admin & Service Settings</h2>
 <form method="post" class="space-y-8 max-w-2xl mx-auto">
   <!-- Service Settings Group -->
@@ -44,23 +47,6 @@
             <span class="ml-1 text-xs text-slate-500 dark:text-slate-400" title="Use any unique string (e.g. 'shownotes-app-1234'). This identifies your app to Plex.">(?)</span>
           </label>
           <input type="text" id="plex_client_id" name="plex_client_id" value="{{ settings.plex_client_id or '' }}" class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="plex_client_secret">
-            Plex Client Secret
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400" title="Usually not required for basic OAuth flows. Leave blank unless using advanced features. You can generate a random secret for extra security.">(?)</span>
-          </label>
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input type="text" id="plex_client_secret" name="plex_client_secret" value="{{ settings.plex_client_secret or '' }}" class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
-            <button type="button" id="gen-plex-secret" title="Generate a new random secret for Plex OAuth" class="w-full sm:w-auto bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-md font-semibold shadow-sm text-sm whitespace-nowrap flex justify-center">Generate Secret</button>
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="plex_redirect_uri">
-            Plex Redirect URI
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400" title="This must match your OAuth callback URL (e.g. https://yourdomain/callback). This is where Plex will redirect after login.">(?)</span>
-          </label>
-          <input type="text" id="plex_redirect_uri" name="plex_redirect_uri" value="{{ settings.plex_redirect_uri or '' }}" class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
         </div>
       </div>
       <script>
@@ -202,15 +188,23 @@
 <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6 mt-8 max-w-2xl mx-auto">
   <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Library Synchronization</h3>
   <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">
-    Manually trigger a full synchronization of your Sonarr and Radarr libraries with the local database.
+    Manually trigger a synchronization of your Sonarr or Radarr libraries with the local database.
     This process might take some time depending on the size of your libraries.
   </p>
-  <form method="POST" action="{{ url_for('main.admin_sync_libraries') }}">
-    <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold flex items-center justify-center">
-      <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581"></path></svg>
-      Sync Sonarr & Radarr Libraries
-    </button>
-  </form>
+  <div class="space-y-4 sm:space-y-0 sm:flex sm:space-x-4">
+    <form method="POST" action="{{ url_for('main.admin_sync_sonarr') }}" class="flex-1">
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold flex items-center justify-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581"></path></svg>
+        Sync Sonarr Library
+      </button>
+    </form>
+    <form method="POST" action="{{ url_for('main.admin_sync_radarr') }}" class="flex-1">
+      <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold flex items-center justify-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581"></path></svg>
+        Sync Radarr Library
+      </button>
+    </form>
+  </div>
   <p class="text-xs text-slate-400 dark:text-slate-500 mt-3">
     Note: The page will reload after the sync process is initiated and completed. Feedback messages will be displayed at the top.
   </p>

@@ -1,7 +1,5 @@
-# show_notes
-Your plex television companion
 # ShowNotes
-
+Your plex television companion
 ## Overview
 
 ShowNotes is a Flask-based web app that helps users explore TV shows, character arcs, and actor overlap between series. It offers spoiler-aware summaries, relationship mapping, chat-style interaction, and integration with metadata sources like local installations of Radarr, Sonarr, Bazarr, Tautulli and Ollama.
@@ -12,14 +10,14 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 
 ## 🆕 Recent Improvements
 
+### Admin Panel & Core Integrations Overhaul
+- **New Admin Panel UI:** Introduced a dedicated admin section (`/admin/dashboard`) with a responsive sidebar and a new dashboard page. The service configuration page (`/admin/settings`) is now part of this new layout.
+- **Plex Integration Enhancements:** Resolved Plex OAuth login/logout flows, session management, and onboarding. Corrected Plex webhook event handling, including database schema updates for `plex_events` and ensuring webhook POSTs are not redirected during onboarding.
+- **Library Sync Refinements:** Fixed `NameError` in library sync by correctly checking admin session status. Separated Sonarr and Radarr library sync functionalities into distinct admin actions with dedicated UI buttons and backend routes (`/admin/sync-sonarr`, `/admin/sync-radarr`).
+
 ### Tailwind CSS & Dark Mode
 - Uses Tailwind CSS for styling, including full dark mode support via the `dark` class on `<html>`.
 - Run `npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify` after making changes to templates or Tailwind config.
-
-### Local Poster Caching
-- Caches Sonarr and Radarr poster images locally in `/app/static/poster` for improved performance and reliability.
-- Background images are stored in `/app/static/background` when available.
-- Poster cache is updated via Plex webhook events.
 
 ### Admin Settings UI Improvements
 - API key links for Sonarr, Radarr, and Bazarr now point directly to the user’s configured instance settings page.
@@ -93,31 +91,10 @@ tmux attach -t shownotes
 - Plex webhook support to adjust spoiler level automatically (partially implemented, needs refinement).
 - UI Enhancements: Dark mode toggle, mobile chat enhancements.
 - User authentication using plex authentication or user/password imported from plex (like Jellyseerr) & personal watch history.
-- Visualize character relationships and timelines.
-- Add actor overlap Venn diagrams.
-- Create spoiler-free recaps (distinct from character summaries).
-- Optimize caching and reduce LLM calls by storing all queries in the db
-- Support multiple spoiler versions of summaries.
-- Autocomplete keyboard navigation in the search bar 
-- Style character summary card to match rest of app (mobile-first polish).
-- Standardize layout across all forms and cards for consistency.
-- Create reusable template block for summary + chat output formatting.
-- Add error messages or fallbacks when summary generation fails.
-- Integrate Sonarr calendar with episode hover previews and filters (premieres, finales, etc.).
-- Admin Dashboard: Recent LLM queries, API usage summary , JSON route links for IOS Shortcuts, Logs of uploaded or parsed data.
-- Admin Dashboard: view and edit the LLM prompts
-- Admin Dashboard: settings for Radarr, Sonarr, Bazarr, Ollama urls and API keys (https://sonarr.tv/docs/api/, https://radarr.video/docs/api/
- - Admin onboarding with fields for Radarr, Sonarr, Bazarr and Ollama configuration. Includes dynamic API connection tests and Plex authentication.
+
+- Admin onboarding with fields for Radarr, Sonarr, Bazarr and Ollama configuration. Includes dynamic API connection tests and Plex authentication. (Initial service settings page available, full admin dashboard and expanded configuration is on the roadmap).
 - Users can report file issues with a movie or episode to the adminstator that sends notificaitions to the backend and to https://pushover.net
-- Finalize reusable prompt templates (summary, relationships, arcs, quotes).
-- Add prompt-based regeneration with spoiler limits (e.g., “up to Season 2”).
-- Add ability to regenerate summaries with new context or version tags.
-- Display poster/banner in “Currently Watching” section.
-- Show calendar with upcoming Sonarr episodes (not completed).
-- Add modals for character previews when clicked from list.
-- Use chat UI libraries to create a messenger-style interface.
-- Add character chat mode: “Chat with [Character]” using limited context (basic version present, needs expansion).
-- Add chat UI for general Q&A about a show, character, or episode with a tv show critic or expert
+
 
 ## Architecture/Tech Stack
 

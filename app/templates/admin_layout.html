@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{% block admin_page_title %}{% endblock %} - Admin Panel - ShowNotes{% endblock %}
+
+{% block head %}
+  {{ super() }} {# Includes Alpine.js from base.html #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin_layout.css') }}"> {# We'll create this later #}
+  <script src="{{ url_for('static', filename='darkmode.js') }}" defer></script>
+  {% block admin_extra_css %}{% endblock %}
+  {% block admin_extra_js %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div x-data="{ sidebarOpen: false }" class="flex h-screen bg-slate-100 dark:bg-slate-900">
+    <!-- Sidebar -->
+    <aside 
+        class="fixed inset-y-0 left-0 z-30 flex flex-col flex-shrink-0 w-64 max-h-screen overflow-y-auto transition-all duration-300 ease-in-out transform bg-slate-800 dark:bg-gray-800 lg:static lg:translate-x-0"
+        :class="{'-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen}"
+    >
+        <!-- Sidebar header -->
+        <div class="flex items-center justify-between h-16 px-4 py-2 bg-slate-900 dark:bg-gray-900">
+            <a href="{{ url_for('main.admin_dashboard') }}" class="text-xl font-semibold text-white hover:text-sky-400">
+                Admin Panel
+            </a>
+            <button @click="sidebarOpen = false" class="text-gray-400 lg:hidden hover:text-white focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Sidebar links -->
+        <nav class="flex-1 px-2 py-4 space-y-2 text-sm text-gray-400">
+            <a href="{{ url_for('main.admin_dashboard') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'main.admin_dashboard' %}bg-slate-700 text-white{% endif %}">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                Dashboard
+            </a>
+            <a href="{{ url_for('main.admin_settings') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'main.admin_settings' %}bg-slate-700 text-white{% endif %}">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Services
+            </a>
+            <!-- Add other admin links here as they are built -->
+            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7l8 5 8-5"></path></svg>
+                Database <span class="ml-auto text-xs">(Soon)</span>
+            </a>
+            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.33 12.048c.29-.28.47-.662.47-1.082a2.083 2.083 0 00-2.083-2.083c-.42 0-.792.174-1.07.456M12 14.5v.01M9.663 9.01L12 11.5l2.337-2.49M12 14.5a2.5 2.5 0 002.5-2.5V9.5a2.5 2.5 0 10-5 0v2.5a2.5 2.5 0 002.5 2.5z"></path></svg>
+                LLM Prompts <span class="ml-auto text-xs">(Soon)</span>
+            </a>
+            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
+                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 016-6h6M21 13.5A4.5 4.5 0 1116.5 9 4.5 4.5 0 0121 13.5z"></path></svg>
+                Users <span class="ml-auto text-xs">(Soon)</span>
+            </a>
+             <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.755 4 3.92C16 12.862 14.713 14 12.995 14c-1.406 0-2.657-.936-3.104-2.186M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17.625V18.5A1.5 1.5 0 0110.5 20h-1A1.5 1.5 0 018 18.5v-.875M12 3.5V2.625A1.5 1.5 0 0010.5 1h-1A1.5 1.5 0 008 2.625V3.5m0 13.125V18.5A1.5 1.5 0 009.5 20h1a1.5 1.5 0 001.5-1.5v-.875M12 3.5V2.625A1.5 1.5 0 0111.5 1h1A1.5 1.5 0 0114 2.625V3.5M4.5 10.5a7.5 7.5 0 1115 0v3a7.5 7.5 0 01-7.5 7.5h-1.5a7.5 7.5 0 01-6-7.5v-3z"></path></svg>
+                Help <span class="ml-auto text-xs">(Soon)</span>
+            </a>
+        </nav>
+
+        <!-- Sidebar footer -->
+        <div class="px-4 py-2 mt-auto text-sm text-gray-500 border-t border-slate-700 dark:border-gray-700">
+            <a href="{{ url_for('main.home') }}" class="hover:text-white">Back to Main Site</a>
+            <button id="darkmode-toggle-admin" title="Toggle light/dark mode" class="ml-auto focus:outline-none p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+                <svg id="theme-toggle-dark-icon-admin" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg id="theme-toggle-light-icon-admin" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="flex flex-col flex-1 w-full overflow-x-hidden overflow-y-auto">
+        <!-- Top bar -->
+        <header class="relative flex items-center justify-between h-16 px-4 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700">
+            <!-- Mobile menu button -->
+            <button @click="sidebarOpen = !sidebarOpen" class="text-gray-500 lg:hidden focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                {% block admin_page_header %}{% endblock %}
+            </div>
+            <div>
+                <!-- Placeholder for potential top-bar actions -->
+            </div>
+        </header>
+
+        <!-- Page content -->
+        <main class="flex-1 p-4 sm:p-6">
+            {# Flash messages are inherited from base.html and will appear at the top of base.html's body #}
+            {% block admin_page_content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+  // Handle dark mode toggle for admin panel specifically if needed, or ensure base darkmode.js works.
+  // This example assumes the darkmode.js from base.html handles it globally.
+  // If you have separate toggles, you'll need to initialize them.
+  document.addEventListener('DOMContentLoaded', () => {
+    const darkmodeToggleAdmin = document.getElementById('darkmode-toggle-admin');
+    const darkIconAdmin = document.getElementById('theme-toggle-dark-icon-admin');
+    const lightIconAdmin = document.getElementById('theme-toggle-light-icon-admin');
+
+    // Function to apply theme (copied from your darkmode.js logic or similar)
+    function applyTheme(isDark) {
+        if (isDark) {
+            document.documentElement.classList.add('dark');
+            if(darkIconAdmin) darkIconAdmin.classList.remove('hidden');
+            if(lightIconAdmin) lightIconAdmin.classList.add('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            if(darkIconAdmin) darkIconAdmin.classList.add('hidden');
+            if(lightIconAdmin) lightIconAdmin.classList.remove('hidden');
+        }
+    }
+
+    // Initialize theme based on localStorage
+    const isDarkMode = localStorage.getItem('color-theme') === 'dark' || 
+                       (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    applyTheme(isDarkMode);
+
+    if (darkmodeToggleAdmin) {
+        darkmodeToggleAdmin.addEventListener('click', () => {
+            const currentIsDark = document.documentElement.classList.contains('dark');
+            applyTheme(!currentIsDark);
+            localStorage.setItem('color-theme', !currentIsDark ? 'dark' : 'light');
+        });
+    }
+  });
+</script>
+{% endblock %}

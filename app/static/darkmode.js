@@ -1,5 +1,8 @@
 // Simple dark mode toggle with localStorage persistence
 (function() {
+  const darkIcon = document.getElementById('theme-toggle-dark-icon');
+  const lightIcon = document.getElementById('theme-toggle-light-icon');
+
   function setDarkMode(on) {
     if (on) {
       document.documentElement.classList.add('dark');
@@ -8,26 +11,46 @@
       document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+    updateIcons(); // Update icons immediately after setting mode
   }
-  function updateSwitch() {
-    const btn = document.getElementById('darkmode-toggle');
-    if (!btn) return;
+
+  function updateIcons() {
+    if (!darkIcon || !lightIcon) return; // SVGs might not be on every page
     if (document.documentElement.classList.contains('dark')) {
-      btn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m8.66-8.66l-.7.7M4.34 4.34l-.7.7M21 12h-1M4 12H3m16.66 4.66l-.7-.7M4.34 19.66l-.7-.7M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>';
+      darkIcon.classList.remove('hidden');
+      lightIcon.classList.add('hidden');
     } else {
-      btn.innerHTML = '<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>';
+      darkIcon.classList.add('hidden');
+      lightIcon.classList.remove('hidden');
     }
   }
+
   document.addEventListener('DOMContentLoaded', function() {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark') setDarkMode(true);
-    else if (saved === 'light') setDarkMode(false);
-    updateSwitch();
+    // Check for SVGs again in DOMContentLoaded as they are part of layout.html
+    // This ensures darkIcon and lightIcon are assigned if script runs before full DOM load.
+    if (!darkIcon) darkIcon = document.getElementById('theme-toggle-dark-icon');
+    if (!lightIcon) lightIcon = document.getElementById('theme-toggle-light-icon');
+
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    if (savedTheme === 'dark') {
+      setDarkMode(true);
+    } else if (savedTheme === 'light') {
+      setDarkMode(false);
+    } else if (prefersDark) {
+      setDarkMode(true); // Prefer OS setting if no localStorage
+    } else {
+      setDarkMode(false); // Default to light if no preference or localStorage
+    }
+    // Initial call to set icons based on loaded theme
+    // updateIcons(); // This is now called within setDarkMode
+
     const btn = document.getElementById('darkmode-toggle');
     if (btn) {
       btn.addEventListener('click', function() {
         setDarkMode(!document.documentElement.classList.contains('dark'));
-        updateSwitch();
+        // updateIcons(); // This is now called within setDarkMode
       });
     }
   });

@@ -1,6 +1,8 @@
 import os
 from flask import Flask
 from . import database
+import logging
+from logging.handlers import RotatingFileHandler
 
 def create_app(test_config=None):
     app = Flask(
@@ -27,6 +29,24 @@ def create_app(test_config=None):
     except OSError:
         # TODO: Add proper logging for this error
         pass
+
+    # Configure logging
+    log_file = '/tmp/shownotes_app.log'
+    # Rotate logs at 10MB, keep 5 backups
+    file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.DEBUG) # Set file handler to DEBUG
+    
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.DEBUG) # Set app logger to DEBUG
+    
+    # Also set root logger to DEBUG to catch other potential logs if needed
+    # Or configure specific loggers like 'werkzeug' if their default level is too high
+    logging.getLogger().setLevel(logging.DEBUG) 
+
+    app.logger.info("ShowNotes application logging configured to /tmp/shownotes_app.log")
 
     database.init_app(app)
 

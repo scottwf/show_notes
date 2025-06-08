@@ -49,6 +49,9 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+
+# Environment variables file - DO NOT COMMIT
+.env
 cover/
 
 # Translations

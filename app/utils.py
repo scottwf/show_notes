@@ -167,12 +167,24 @@ def sync_sonarr_library():
             return
 
         for show_data in all_shows_data:
+            current_sonarr_id_api = None # Initialize to ensure it's defined for logging in except blocks
             try:
-                logger.info(f"Syncing show: {show_data.get('title', 'N/A')} (Sonarr ID: {show_data.get('id', 'N/A')})")
+                current_sonarr_id_api = show_data.get('id')
+                if current_sonarr_id_api is None:
+                    logger.error(f"sync_sonarr_library: Skipping show due to missing Sonarr ID. Data: {show_data.get('title', 'N/A')}")
+                    continue
+                
+                try:
+                    current_sonarr_id = int(current_sonarr_id_api)
+                except ValueError:
+                    logger.error(f"sync_sonarr_library: Sonarr ID '{current_sonarr_id_api}' is not a valid integer. Skipping show: {show_data.get('title', 'N/A')}")
+                    continue
+
+                logger.info(f"Syncing show: {show_data.get('title', 'N/A')} (Sonarr ID: {current_sonarr_id})")
 
                 # Prepare show data
                 show_values = {
-                    "sonarr_id": show_data.get("id"),
+                    "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
                     "imdb_id": show_data.get("imdbId"),
                     "title": show_data.get("title"),
@@ -204,11 +216,16 @@ def sync_sonarr_library():
                     update_setters=", ".join(f"{key} = excluded.{key}" for key in show_values_filtered)
                 )
 
-                cursor = db.execute(sql, tuple(show_values_filtered.values()))
+                params_tuple = tuple(show_values_filtered.values())
+                logger.debug(f"Attempting to sync sonarr_shows for Sonarr ID: {current_sonarr_id}")
+                logger.debug(f"SQL: {sql}")
+                logger.debug(f"PARAMS: {params_tuple}")
+
+                cursor = db.execute(sql, params_tuple)
                 show_db_id = cursor.fetchone()[0]
 
                 if not show_db_id:
-                    logger.error(f"sync_sonarr_library: Failed to insert/update show and get ID for Sonarr ID {show_data.get('id')}")
+                    logger.error(f"sync_sonarr_library: Failed to insert/update show and get ID for Sonarr ID {current_sonarr_id}")
                     db.rollback() # Rollback this show's transaction
                     continue # Skip to next show
 
@@ -265,7 +282,6 @@ def sync_sonarr_library():
                         "season_number": season_number,
                         "episode_count": season_episode_count,
                         "episode_file_count": season_episode_file_count,
-                        "monitored": bool(season_data_api.get("monitored", False)),
                         "statistics": json.dumps(stats_api if stats_api else {"episodeFileCount": season_episode_file_count, "totalEpisodeCount": season_episode_count})
                     }
                     season_values_filtered = {k: v for k, v in season_values.items() if v is not None}
@@ -281,7 +297,11 @@ def sync_sonarr_library():
                         placeholders=", ".join("?" for _ in season_values_filtered),
                         update_setters=", ".join(f"{key} = excluded.{key}" for key in season_values_filtered)
                     )
-                    cursor_season = db.execute(sql_season, tuple(season_values_filtered.values()))
+                    params_season_tuple = tuple(season_values_filtered.values())
+                    logger.debug(f"Attempting to sync sonarr_seasons for show_id {show_db_id}, season {season_number}")
+                    logger.debug(f"SEASON SQL: {sql_season}")
+                    logger.debug(f"SEASON PARAMS: {params_season_tuple}")
+                    cursor_season = db.execute(sql_season, params_season_tuple)
                     season_db_id = cursor_season.fetchone()[0]
 
                     if not season_db_id:
@@ -301,7 +321,6 @@ def sync_sonarr_library():
                             "overview": episode_data.get("overview"),
                             "air_date_utc": episode_data.get("airDateUtc"),
                             "has_file": bool(episode_data.get("hasFile", False)),
-                            "monitored": bool(episode_data.get("monitored", False)),
                         }
                         episode_values_filtered = {k: v for k, v in episode_values.items() if v is not None}
 
@@ -315,8 +334,12 @@ def sync_sonarr_library():
                             placeholders=", ".join("?" for _ in episode_values_filtered),
                             update_setters=", ".join(f"{key} = excluded.{key}" for key in episode_values_filtered)
                         )
+                        params_episode_tuple = tuple(episode_values_filtered.values())
+                        logger.debug(f"Attempting to sync sonarr_episodes for Sonarr Episode ID: {episode_data.get('id')}")
+                        logger.debug(f"EPISODE SQL: {sql_episode}")
+                        logger.debug(f"EPISODE PARAMS: {params_episode_tuple}")
                         try:
-                            db.execute(sql_episode, tuple(episode_values_filtered.values()))
+                            db.execute(sql_episode, params_episode_tuple)
                             episodes_synced_count +=1
                         except sqlite3.IntegrityError as e:
                              logger.error(f"sync_sonarr_library: Integrity error syncing episode Sonarr ID {episode_data.get('id')} for season {season_number}, show {sonarr_show_id}: {e}")
@@ -339,14 +362,13 @@ def sync_sonarr_library():
                     logger.info(f"Syncing season {season_number} for show ID {sonarr_show_id} (Sonarr Show ID: {sonarr_show_id}) from episode data (fallback).")
                     s_episode_count = len(episodes_in_season)
                     s_episode_file_count = sum(1 for ep in episodes_in_season if ep.get("hasFile"))
-                    s_monitored = all(ep.get("monitored", False) for ep in episodes_in_season) # Approximate if all episodes are monitored
+                    # s_monitored = all(ep.get("monitored", False) for ep in episodes_in_season) # Approximate if all episodes are monitored
 
                     season_values_fb = {
                         "show_id": show_db_id,
                         "season_number": season_number,
                         "episode_count": s_episode_count,
                         "episode_file_count": s_episode_file_count,
-                        "monitored": s_monitored,
                         "statistics": json.dumps({"episodeFileCount": s_episode_file_count, "totalEpisodeCount": s_episode_count})
                     }
                     season_values_fb_filtered = {k: v for k, v in season_values_fb.items() if v is not None}
@@ -362,7 +384,11 @@ def sync_sonarr_library():
                         placeholders=", ".join("?" for _ in season_values_fb_filtered),
                         update_setters=", ".join(f"{key} = excluded.{key}" for key in season_values_fb_filtered)
                     )
-                    cursor_season_fb = db.execute(sql_season_fb, tuple(season_values_fb_filtered.values()))
+                    params_season_fb_tuple = tuple(season_values_fb_filtered.values())
+                    logger.debug(f"Attempting to sync sonarr_seasons (fallback) for show_id {show_db_id}, season {season_number}")
+                    logger.debug(f"SEASON FALLBACK SQL: {sql_season_fb}")
+                    logger.debug(f"SEASON FALLBACK PARAMS: {params_season_fb_tuple}")
+                    cursor_season_fb = db.execute(sql_season_fb, params_season_fb_tuple)
                     season_db_id_fb = cursor_season_fb.fetchone()[0]
 
                     if not season_db_id_fb:
@@ -379,7 +405,7 @@ def sync_sonarr_library():
                             "overview": episode_data.get("overview"),
                             "air_date_utc": episode_data.get("airDateUtc"),
                             "has_file": bool(episode_data.get("hasFile", False)),
-                            "monitored": bool(episode_data.get("monitored", False)),
+                            # "monitored": bool(episode_data.get("monitored", False)), # Removed
                         }
                         episode_values_fb_filtered = {k: v for k, v in episode_values_fb.items() if v is not None}
                         sql_episode_fb = """
@@ -392,8 +418,12 @@ def sync_sonarr_library():
                             placeholders=", ".join("?" for _ in episode_values_fb_filtered),
                             update_setters=", ".join(f"{key} = excluded.{key}" for key in episode_values_fb_filtered)
                         )
+                        params_episode_fb_tuple = tuple(episode_values_fb_filtered.values())
+                        logger.debug(f"Attempting to sync sonarr_episodes (fallback) for Sonarr Episode ID: {episode_data.get('id')}")
+                        logger.debug(f"EPISODE FALLBACK SQL: {sql_episode_fb}")
+                        logger.debug(f"EPISODE FALLBACK PARAMS: {params_episode_fb_tuple}")
                         try:
-                            db.execute(sql_episode_fb, tuple(episode_values_fb_filtered.values()))
+                            db.execute(sql_episode_fb, params_episode_fb_tuple)
                             episodes_synced_count += 1
                         except sqlite3.IntegrityError as e:
                             logger.error(f"sync_sonarr_library: Integrity error syncing episode (fallback) Sonarr ID {episode_data.get('id')} for season {season_number}, show {sonarr_show_id}: {e}")
@@ -405,10 +435,10 @@ def sync_sonarr_library():
 
             except sqlite3.Error as e:
                 db.rollback() # Rollback on error for this show
-                logger.error(f"sync_sonarr_library: Database error while syncing show Sonarr ID {show_data.get('id', 'N/A')}: {e}")
+                logger.error(f"sync_sonarr_library: Database error while syncing show Sonarr ID {current_sonarr_id}: {e}")
             except Exception as e:
                 db.rollback() # General exception rollback
-                logger.error(f"sync_sonarr_library: Unexpected error while syncing show Sonarr ID {show_data.get('id', 'N/A')}: {e}", exc_info=True)
+                logger.error(f"sync_sonarr_library: Unexpected error while syncing show Sonarr ID {current_sonarr_id}: {e}", exc_info=True)
 
         logger.info(f"Sonarr library sync finished. Synced {shows_synced_count} shows and {episodes_synced_count} episodes.")
 
@@ -444,7 +474,6 @@ def sync_radarr_library():
                     "fanart_url": next((img['url'] for img in movie_data.get('images', []) if img['coverType'] == 'fanart'), None),
                     "path_on_disk": movie_data.get("path"),
                     "has_file": bool(movie_data.get("hasFile", False)),
-                    "monitored": bool(movie_data.get("monitored", False)),
                 }
                 movie_values_filtered = {k: v for k, v in movie_values.items() if v is not None}
 

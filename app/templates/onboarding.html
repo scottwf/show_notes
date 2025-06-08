@@ -9,7 +9,7 @@
     <form method="post" id="onboarding-form" class="space-y-5 sm:space-y-6">
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="username">Username</label>
-        <input type="text" id="username" name="username" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" required>
+        <input type="text" id="username" name="username" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.username if env_settings else '' }}" required>
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="password">Password</label>
@@ -33,12 +33,12 @@
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr URL</label>
-            <input type="text" id="radarr_url" name="radarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <input type="text" id="radarr_url" name="radarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_url if env_settings else '' }}">
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_api_key">Radarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input type="text" id="radarr_api_key" name="radarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <input type="text" id="radarr_api_key" name="radarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_api_key if env_settings else '' }}">
             </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
               <button type="button" data-service="radarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
@@ -55,12 +55,12 @@
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr URL</label>
-            <input type="text" id="sonarr_url" name="sonarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <input type="text" id="sonarr_url" name="sonarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_url if env_settings else '' }}">
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_api_key">Sonarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_api_key if env_settings else '' }}">
             </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
               <button type="button" data-service="sonarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
@@ -77,12 +77,12 @@
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">Bazarr URL</label>
-            <input type="text" id="bazarr_url" name="bazarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <input type="text" id="bazarr_url" name="bazarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_url if env_settings else '' }}">
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_api_key">Bazarr API Key</label>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_api_key if env_settings else '' }}">
             </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
               <button type="button" data-service="bazarr" class="get-key-btn w-full sm:w-auto flex justify-center bg-slate-500 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Get Key</button>
@@ -100,7 +100,7 @@
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">Ollama URL</label>
                 <div class="flex items-center space-x-2">
-                    <input type="text" id="ollama_url" name="ollama_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    <input type="text" id="ollama_url" name="ollama_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.ollama_url if env_settings else '' }}">
                     <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
                 </div>
                 <span id="ollama_status" class="ml-2 text-xs"></span>
@@ -114,11 +114,11 @@
         <div class="space-y-3">
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_user_key">Pushover User Key</label>
-                <input type="text" id="pushover_user_key" name="pushover_user_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                <input type="text" id="pushover_user_key" name="pushover_user_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.pushover_user_key if env_settings else '' }}">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_api_token">Pushover API Token</label>
-                <input type="text" id="pushover_api_token" name="pushover_api_token" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                <input type="text" id="pushover_api_token" name="pushover_api_token" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.pushover_api_token if env_settings else '' }}">
             </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
                 <button type="button" data-service="pushover" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>

@@ -12,22 +12,62 @@ PLEX_HEADERS = {
     'X-Plex-Version': '0.1',
 }
 
+import sqlite3 # Add this import at the top of the file if not already present, or near other db imports
+
 bp = Blueprint('main', __name__)
 
 
-def admin_exists():
-    db = database.get_db()
-    row = db.execute('SELECT id FROM users WHERE is_admin = 1').fetchone()
-    return row is not None
+def is_onboarding_complete():
+    print("DEBUG: Checking is_onboarding_complete") # New print
+    try:
+        db = database.get_db()
+        admin_user = db.execute('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').fetchone()
+        print(f"DEBUG: is_onboarding_complete: admin_user found: {admin_user is not None}") # New print
+        settings_record = db.execute('SELECT id FROM settings LIMIT 1').fetchone()
+        print(f"DEBUG: is_onboarding_complete: settings_record found: {settings_record is not None}") # New print
+        return admin_user is not None and settings_record is not None
+    except sqlite3.OperationalError as e:
+        # This typically means the table doesn't exist, so onboarding is not complete.
+        print(f"DEBUG: is_onboarding_complete: OperationalError: {e}") # New print
+        return False
 
 
-@bp.before_app_request
+@bp.before_request  # Correct decorator for Blueprints
 def check_onboarding():
-    if not admin_exists() and request.endpoint not in ('main.onboarding', 'static', 'main.test_api'):
-        return redirect(url_for('main.onboarding'))
+    # Determine the list of endpoints exempt from the onboarding check
+    # These typically include onboarding itself, static files, and the entire auth flow.
+    exempt_endpoints = [
+        'main.onboarding',
+        'static',
+        'main.test_api', # Assuming this is for Pushover/API tests during onboarding
+        'main.login',             # Plex login initiation
+        'main.plex_callback',     # Plex callback URL
+        'main.login_plex_start',  # Your custom route that starts Plex OAuth
+        'main.login_plex_poll',   # Your custom route that polls Plex PIN
+        'main.plex_logout',       # Allow logout even if onboarding isn't done
+        'main.plex_webhook'       # Allow Plex webhook to be processed regardless of onboarding state
+    ]
+    
+    # If onboarding is not complete and the current request is not for an exempt endpoint,
+    # redirect to the onboarding page.
+    if not is_onboarding_complete() and request.endpoint not in exempt_endpoints:
+        # Also, ensure we are not already on the onboarding page to prevent redirect loops
+        # though request.endpoint check should cover this for 'main.onboarding'.
+        if request.path != url_for('main.onboarding'): # Extra safety for path
+            flash('Initial setup required. Please complete the onboarding process.', 'info')
+            return redirect(url_for('main.onboarding'))
 
 
-@bp.route('/admin/settings', methods=['GET', 'POST'], strict_slashes=False)
+@bp.route('/admin/dashboard', methods=['GET'], endpoint='admin_dashboard')
+def admin_dashboard():
+    if not session.get('is_admin', False):
+        flash('You must be an administrator to view this page.', 'error')
+        return redirect(url_for('main.home'))
+    # Add any data fetching for the dashboard here later
+    return render_template('admin_dashboard.html')
+
+
+@bp.route('/admin/settings', methods=['GET', 'POST'], endpoint='admin_settings')
 def admin_settings():
     db = database.get_db()
     # Get admin user (first admin found)
@@ -35,6 +75,7 @@ def admin_settings():
     # Get settings (first row)
     settings = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
     if request.method == 'POST':
+        print(f"DEBUG: Session at start of onboarding POST: {list(session.items())}")
         # Update admin user
         username = request.form.get('username')
         password = request.form.get('password')
@@ -50,7 +91,7 @@ def admin_settings():
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
             ollama_url=?, pushover_key=?, pushover_token=?,
-            plex_client_id=?, plex_client_secret=?, plex_redirect_uri=?
+            plex_client_id=?
             WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
@@ -62,9 +103,7 @@ def admin_settings():
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
             request.form.get('plex_client_id'),
-            request.form.get('plex_client_secret'),
-            request.form.get('plex_redirect_uri'),
-            settings['id'] if settings else 1
+            settings['id'] if settings else 1 # Values for plex_client_secret and plex_redirect_uri removed
         ))
         db.commit()
         # Reload updated info
@@ -93,36 +132,34 @@ def admin_settings():
     site_url = request.url_root.rstrip('/')
     return render_template('admin_settings.html', user=user, settings=merged_settings, site_url=site_url)
 
-@bp.route('/admin/sync-libraries', methods=['POST'], endpoint='admin_sync_libraries')
-def admin_sync_libraries():
-    # Basic protection: Ensure an admin user is configured for the app.
-    # More robust protection would involve checking current session's user role.
-    if not admin_exists():
-        flash("Admin account not configured. Sync aborted.", "error")
-        return redirect(url_for('main.home')) # Or perhaps 'main.onboarding'
+@bp.route('/admin/sync-sonarr', methods=['POST'], endpoint='admin_sync_sonarr')
+def admin_sync_sonarr():
+    if not session.get('is_admin', False):
+        flash("You must be an administrator to perform this action.", "error")
+        return redirect(url_for('main.home'))
 
-    # Add a check if a user is logged in via Plex and if they are an admin
-    # This part is a bit tricky as user['is_admin'] is not directly in session['plex_user']
-    # For now, we'll assume if admin_exists(), this action is for an admin.
-    # A proper implementation would link plex_user session to the users table and check is_admin.
-
-    flash("Library sync started...", "info")
+    flash("Sonarr library sync started...", "info")
     try:
         sync_sonarr_library()
         flash("Sonarr library sync completed successfully.", "success")
     except Exception as e:
         flash(f"Error during Sonarr sync: {str(e)}", "error")
-        # Log the full exception for debugging
-        print(f"Sonarr sync error: {e}") # Or use app.logger.error
+        print(f"Sonarr sync error: {e}") # Or use current_app.logger.error
+    return redirect(url_for('main.admin_settings'))
 
+@bp.route('/admin/sync-radarr', methods=['POST'], endpoint='admin_sync_radarr')
+def admin_sync_radarr():
+    if not session.get('is_admin', False):
+        flash("You must be an administrator to perform this action.", "error")
+        return redirect(url_for('main.home'))
+
+    flash("Radarr library sync started...", "info")
     try:
         sync_radarr_library()
         flash("Radarr library sync completed successfully.", "success")
     except Exception as e:
         flash(f"Error during Radarr sync: {str(e)}", "error")
-        print(f"Radarr sync error: {e}") # Or use app.logger.error
-
-    flash("Full library sync process finished.", "info")
+        print(f"Radarr sync error: {e}") # Or use current_app.logger.error
     return redirect(url_for('main.admin_settings'))
 
 
@@ -215,8 +252,8 @@ import os
 def get_plex_oauth_settings():
     from .database import get_setting
     client_id = get_setting('plex_client_id') or os.environ.get('PLEX_CLIENT_ID', 'YOUR_PLEX_CLIENT_ID')
-    client_secret = get_setting('plex_client_secret') or os.environ.get('PLEX_CLIENT_SECRET', 'YOUR_PLEX_CLIENT_SECRET')
-    redirect_uri = get_setting('plex_redirect_uri') or os.environ.get('PLEX_REDIRECT_URI', 'https://shownotes.chitekmedia.club/callback')
+    client_secret = None # Plex PIN auth typically doesn't use a client secret for this flow
+    redirect_uri = os.environ.get('PLEX_REDIRECT_URI', 'https://shownotes.chitekmedia.club/callback') # Get from env or default
     return client_id, client_secret, redirect_uri
 
 @bp.route('/login')
@@ -283,11 +320,18 @@ def callback():
             'X-Plex-Token': auth_token,
             'Accept': 'application/json',
         }
-        r = requests.get('https://plex.tv/users/account', headers=headers)
+        r = requests.get('https://plex.tv/api/v2/user', headers=headers) # Changed endpoint
         if r.status_code == 200:
-            user_info = r.json().get('user', {})
-    except Exception:
-        pass
+            user_info = r.json() # The response IS the user object
+            if not user_info:
+                print(f"DEBUG: Plex /api/v2/user response was empty or not valid. Full JSON: {user_info}")
+                user_info = {} # Ensure user_info is a dict
+        else:
+            print(f"DEBUG: Failed to fetch from plex.tv/api/v2/user. Status: {r.status_code}, Response: {r.text}")
+            user_info = {} # Ensure user_info is a dict to prevent downstream errors
+    except Exception as e:
+        print(f"DEBUG: Exception during plex.tv/users/account request: {e}")
+        user_info = {} # Ensure user_info is a dict
     # Try to get the best username and user id: username, then title, then email, then Account.title/id from last_plex_event
     username = None
     user_id = None
@@ -304,18 +348,42 @@ def callback():
                 user_id = last_plex_event['Account'].get('id', user_id)
     if not username:
         username = 'plex_user'
-    print('DEBUG: Plex user_info used for login:', user_info)
-    session['plex_user'] = {
-        'username': username,
-        'id': user_id,
-        'auth_token': auth_token,
-    }
-    flash(f'Logged in as Plex user: {session["plex_user"]["username"]}')
+    print('DEBUG: Plex user_info from API:', user_info)
+    session['plex_token'] = auth_token
+    session['user_id'] = user_id # This is Plex User ID
+    session['username'] = username # This is Plex Username
+    session['is_admin'] = False # Default to not admin
+    session['db_user_id'] = None # Local DB user ID
+    print(f"DEBUG: Session set in /callback: user_id={session.get('user_id')}, username={session.get('username')}")
+
+    if user_id:
+        db = database.get_db()
+        # Check if this Plex user is linked to a local admin user
+        user_record = db.execute(
+            'SELECT id, username, is_admin FROM users WHERE plex_user_id = ?',
+            (user_id,)
+        ).fetchone()
+
+        if user_record:
+            session['db_user_id'] = user_record['id']
+            # session['username'] = user_record['username'] # Optionally override Plex username with local one if desired
+            if user_record['is_admin']:
+                session['is_admin'] = True
+            flash(f'Welcome back, {user_record["username"]}! Admin status: {session["is_admin"]}.')
+        else:
+            # Optional: Create a non-admin user record if you want all Plex users to have one
+            # For now, just flash a generic welcome for non-linked Plex users
+            flash(f'Logged in as Plex user: {username}.')
+    else:
+        flash('Plex login successful, but could not retrieve Plex User ID.', 'warning')
+
     return redirect(url_for('main.home'))
 
 @bp.route('/logout', endpoint='plex_logout')
 def logout():
+    print("DEBUG: Entered /logout function") # New print
     session.clear()
+    print(f"DEBUG: Session after clear in /logout: {list(session.items())}")
     flash('Logged out.')
     return redirect(url_for('main.home'))
 
@@ -362,22 +430,23 @@ def get_radarr_poster(movie_title):
 
 @bp.route('/')
 def home():
-    user = session.get('plex_user')
-    print('DEBUG: user in session:', user)
+    print(f"DEBUG: Session at start of /home: {list(session.items())}")
     db = database.get_db()
     plex_event = None
     poster_url = None
 
-    # Determine user id or username from session
-    session_user_id = user.get('id') if user else None
-    session_username = user.get('username') if user else None
+    # Get user details from session
+    s_user_id = session.get('user_id') # This is Plex account ID (integer or string)
+    s_username = session.get('username') # This is Plex account title (string)
+    s_is_admin = session.get('is_admin', False)
+
+    print(f"DEBUG: Home - session user_id: {s_user_id}, username: {s_username}, is_admin: {s_is_admin}")
 
     # Try to get the most recent event for the logged-in user
     row = None
-    if session_user_id:
-        row = db.execute('SELECT * FROM plex_events WHERE user_id=? ORDER BY timestamp DESC, id DESC LIMIT 1', (session_user_id,)).fetchone()
-    if not row and session_username:
-        row = db.execute('SELECT * FROM plex_events WHERE user_name=? ORDER BY timestamp DESC, id DESC LIMIT 1', (session_username,)).fetchone()
+    if s_user_id: # Plex user_id is the primary key for linking events
+        row = db.execute('SELECT * FROM plex_events WHERE user_id=? ORDER BY timestamp DESC, id DESC LIMIT 1', (str(s_user_id),)).fetchone()
+    
     if row:
         import json as pyjson
         try:
@@ -419,17 +488,60 @@ def home():
                     poster_url = thumb
                 elif thumb:
                     poster_url = f"https://shownotes.chitekmedia.club{thumb}"
-    print('DEBUG: Passing to template:', {'plex_event': plex_event, 'user': user, 'poster_url': poster_url})
-    return render_template('home.html', plex_event=plex_event, user=user, poster_url=poster_url)
+    print(f"DEBUG: Passing to template: plex_event defined: {plex_event is not None}, username: {s_username}, is_admin: {s_is_admin}, poster_url defined: {poster_url is not None}")
+    return render_template('home.html', 
+                           plex_event=plex_event, 
+                           username=s_username, 
+                           is_admin=s_is_admin, 
+                           poster_url=poster_url)
 
 @bp.route('/plex/debug')
 def plex_debug():
     from flask import jsonify
     return jsonify(last_plex_event)
 
+import os # Ensure os is imported if not already at the top of the file
+
 @bp.route('/onboarding', methods=['GET', 'POST'])
 def onboarding():
+    # Prepare a dictionary to hold values from .env for pre-filling the form
+    env_settings = {}
+    if request.method == 'GET':
+        env_settings = {
+            'username': os.environ.get('ADMIN_USERNAME', ''), # Optional: prefill admin username
+            'radarr_url': os.environ.get('RADARR_URL', ''),
+            'radarr_api_key': os.environ.get('RADARR_API_KEY', ''),
+            'sonarr_url': os.environ.get('SONARR_URL', ''),
+            'sonarr_api_key': os.environ.get('SONARR_API_KEY', ''),
+            'bazarr_url': os.environ.get('BAZARR_URL', ''),
+            'bazarr_api_key': os.environ.get('BAZARR_API_KEY', ''),
+            'ollama_url': os.environ.get('OLLAMA_API_URL', os.environ.get('OLLAMA_URL', 'http://localhost:11434')),
+            'pushover_user_key': os.environ.get('PUSHOVER_USER_KEY', ''),
+            'pushover_api_token': os.environ.get('PUSHOVER_API_TOKEN', ''),
+            'plex_client_id': os.environ.get('PLEX_CLIENT_ID', '')
+            # webhook_secret is generated, so not pre-filled from .env
+        }
+        # Ensure we pass these to render_template, along with any other necessary context
+        return render_template('onboarding.html', env_settings=env_settings)
+
+    # POST request logic follows
     if request.method == 'POST':
+        print(f"DEBUG: Session at start of onboarding POST: {list(session.items())}")
+        # Helper dict for re-rendering form with current values or .env fallbacks
+        form_or_env_data = {
+            'username': request.form.get('username', os.environ.get('ADMIN_USERNAME', '')),
+            'radarr_url': request.form.get('radarr_url', os.environ.get('RADARR_URL', '')),
+            'radarr_api_key': request.form.get('radarr_api_key', os.environ.get('RADARR_API_KEY', '')),
+            'sonarr_url': request.form.get('sonarr_url', os.environ.get('SONARR_URL', '')),
+            'sonarr_api_key': request.form.get('sonarr_api_key', os.environ.get('SONARR_API_KEY', '')),
+            'bazarr_url': request.form.get('bazarr_url', os.environ.get('BAZARR_URL', '')),
+            'bazarr_api_key': request.form.get('bazarr_api_key', os.environ.get('BAZARR_API_KEY', '')),
+            'ollama_url': request.form.get('ollama_url', os.environ.get('OLLAMA_API_URL', os.environ.get('OLLAMA_URL', 'http://localhost:11434'))),
+            'pushover_user_key': request.form.get('pushover_user_key', os.environ.get('PUSHOVER_USER_KEY', '')),
+            'pushover_api_token': request.form.get('pushover_api_token', os.environ.get('PUSHOVER_API_TOKEN', '')),
+            'plex_client_id': request.form.get('plex_client_id', os.environ.get('PLEX_CLIENT_ID', ''))
+        }
+
         db = database.get_db()
         username = request.form.get('username')
         password = request.form.get('password')
@@ -437,22 +549,40 @@ def onboarding():
 
         if not username or not password or not confirm_password:
             flash('Username and password fields are required.', 'error')
-            return render_template('onboarding.html')
+            return render_template('onboarding.html', env_settings=form_or_env_data)
 
         if password != confirm_password:
             flash('Passwords do not match.', 'error')
-            return render_template('onboarding.html')
+            return render_template('onboarding.html', env_settings=form_or_env_data)
 
         pw_hash = generate_password_hash(password)
         try:
-            db.execute(
+            # Create the local admin user
+            cursor = db.execute(
                 'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)',
                 (username, pw_hash),
             )
-            # Ensure settings table has pushover_api_token (or pushover_token) column
-            # The admin_settings route uses 'pushover_token', so we'll align with that.
+            db.commit() # Commit user creation first to get lastrowid if needed
+            local_admin_user_id = cursor.lastrowid
+
+            # If Plex user is in session, link it to this local admin user
+            plex_user_id_in_session = session.get('user_id') # Corrected session key
+            plex_username_in_session = session.get('username') # Plex username
+
+            if local_admin_user_id and plex_user_id_in_session and plex_username_in_session:
+                db.execute(
+                    'UPDATE users SET plex_user_id = ?, plex_username = ? WHERE id = ?',
+                    (plex_user_id_in_session, plex_username_in_session, local_admin_user_id)
+                )
+                db.commit()
+                flash(f'Admin account created and linked to Plex user {plex_username_in_session}.', 'info')
+
+            # Populate settings table (ensure it's empty or handle updates appropriately)
+            # For simplicity, we assume it's the first setup, so we clear and insert.
+            # A more robust solution would check if a settings row exists and update it.
+            db.execute('DELETE FROM settings') # Clear any existing settings row
             db.execute(
-                'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, webhook_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     request.form.get('radarr_url'),
                     request.form.get('radarr_api_key'),
@@ -461,22 +591,24 @@ def onboarding():
                     request.form.get('bazarr_url'),
                     request.form.get('bazarr_api_key'),
                     request.form.get('ollama_url'),
-                    request.form.get('pushover_user_key'), # Changed from pushover_key
-                    request.form.get('pushover_api_token') # New field, maps to pushover_token in DB
+                    request.form.get('pushover_user_key'),
+                    request.form.get('pushover_api_token'),
+                    request.form.get('plex_client_id', os.environ.get('PLEX_CLIENT_ID')), # Keep fallback for POST
+                    session.get('webhook_secret') # Store generated webhook secret
                 ),
             )
             db.commit()
-            flash('Configuration saved successfully. Welcome!', 'success')
-            return redirect(url_for('main.home')) # Redirect to home or admin_settings
-        except db.IntegrityError as e:
-            db.rollback() # Rollback in case of partial insert before error
-            # This could happen if trying to re-onboard without clearing DB, or other constraint violation
-            flash(f'Database error during setup: {e}. If re-running setup, ensure database is clean.', 'error')
-            return render_template('onboarding.html')
+            session['is_admin'] = True
+            flash('Onboarding complete! You are now logged in as admin.', 'success')
+            return redirect(url_for('main.home'))
         except Exception as e:
             db.rollback()
-            flash(f'An unexpected error occurred: {e}', 'error')
-            return render_template('onboarding.html')
+            flash(f'An error occurred during onboarding: {e}', 'error')
+            return render_template('onboarding.html', env_settings=form_or_env_data) # Re-render page with error
+            # On POST error, we might want to repopulate from form, or re-fetch from env if fields are cleared.
+            # The 'form_or_env_data' dictionary defined at the start of the POST block
+            # already handles prioritizing form data and falling back to .env values.
+            return render_template('onboarding.html', env_settings=form_or_env_data)
 
     return render_template('onboarding.html')
 
