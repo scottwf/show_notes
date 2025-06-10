@@ -43,6 +43,7 @@ def init_db():
         DROP TABLE IF EXISTS sonarr_episodes;
         DROP TABLE IF EXISTS radarr_movies;
         DROP TABLE IF EXISTS plex_events; /* <-- ADDED DROP HERE */
+        DROP TABLE IF EXISTS service_status;
 
         CREATE TABLE character_summaries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,6 +236,16 @@ def init_db():
             raw_json TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             processed INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE service_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_name TEXT NOT NULL,
+            status TEXT CHECK(status IN ('online', 'degraded', 'offline', 'unknown')) NOT NULL DEFAULT 'unknown',
+            last_checked DATETIME,
+            response_time INTEGER,
+            version TEXT,
+            details TEXT
         );
 
         CREATE INDEX idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id);

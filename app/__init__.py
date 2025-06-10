@@ -53,8 +53,43 @@ def create_app(test_config=None):
     from . import routes
     app.register_blueprint(routes.bp)
 
+    from .routes.admin_api import admin_api_bp
+    app.register_blueprint(admin_api_bp)
+
+    from .routes.admin import admin_bp
+    app.register_blueprint(admin_bp)
+
     # Add other blueprints here (if any)
     # from .auth import auth as auth_blueprint
     # app.register_blueprint(auth_blueprint)
+
+    # Initialize and start APScheduler
+    # Make sure this is done only once, typically when the app is created, not for every request.
+    # The standard Flask development server (werkzeug) might run create_app twice when reloading.
+    # Consider if app.scheduler attribute check or similar is needed if issues arise with duplicate schedulers.
+    if not hasattr(app, 'scheduler'): # Ensure scheduler is initialized only once
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from app.scheduler import check_all_services_status
+        import atexit
+
+        app.scheduler = AsyncIOScheduler(timezone="UTC") # Use UTC for timezone consistency
+        app.scheduler.add_job(
+            check_all_services_status,
+            'interval',
+            minutes=5, # Interval for checking services
+            id='check_services_job',
+            args=[app], # Pass the Flask app instance
+            misfire_grace_time=60 # Allow job to run 60s late if scheduler was busy
+        )
+        try:
+            app.scheduler.start()
+            app.logger.info("APScheduler started for service status checks.")
+
+            # Register shutdown hook
+            atexit.register(lambda: app.scheduler.shutdown())
+            app.logger.info("APScheduler shutdown hook registered.")
+        except Exception as e:
+            app.logger.error(f"Failed to start APScheduler: {e}", exc_info=True)
+
 
     return app

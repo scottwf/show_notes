@@ -78,6 +78,16 @@ CREATE TABLE IF NOT EXISTS radarr_movies (
     has_file BOOLEAN,
     last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS service_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    service_name TEXT NOT NULL,
+    status TEXT CHECK(status IN ('online', 'degraded', 'offline', 'unknown')) NOT NULL DEFAULT 'unknown',
+    last_checked DATETIME,
+    response_time INTEGER,
+    version TEXT,
+    details TEXT
+);
 '''
 
 def upgrade():

@@ -21,6 +21,7 @@
         </span>
         <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Ollama</span>
         <span id="ollama_status" class="ml-auto text-sm text-slate-600 dark:text-slate-300"></span>
+        <!-- Note: Ollama test button is not part of this specific subtask's scope for new JS -->
       </div>
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Ollama provides AI-powered features for enhanced automation and recommendations.</p>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">URL</label>
@@ -36,6 +37,7 @@
           <img src="{{ url_for('static', filename='logos/plex-dark.png') }}" alt="Plex logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <h3 class="text-xl font-bold text-yellow-700 dark:text-yellow-400">Plex OAuth Authentication</h3>
+        <span id="test-result-plex" class="ml-auto text-sm"></span>
       </div>
       <div class="text-sm text-yellow-800 dark:text-yellow-300 mb-4">
         <p>Set up Plex OAuth to enable user authentication with Plex accounts. You do <strong>not</strong> need to register your app with Plex—just use a unique Client ID for your app. See <a href="https://forums.plex.tv/t/authenticating-with-plex/609370" class="text-sky-600 dark:text-sky-400 underline" target="_blank">Plex OAuth Guide</a> for details.</p>
@@ -48,7 +50,10 @@
           </label>
           <input type="text" id="plex_client_id" name="plex_client_id" value="{{ settings.plex_client_id or '' }}" class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
         </div>
+        <!-- Plex URL and Token are usually taken from the main settings table, not directly here with Client ID -->
+        <!-- Assuming plex_url and plex_token are configured elsewhere and test button will use them -->
       </div>
+      <button type="button" class="test-connection-btn bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-sm mt-3" data-service-name="plex">Test Plex Connection</button>
       <script>
         document.addEventListener('DOMContentLoaded', function() {
           var btn = document.getElementById('gen-plex-secret');
@@ -103,7 +108,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Sonarr</span>
-            <span id="sonarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="test-result-sonarr" class="ml-2 text-sm"></span> <!-- Updated ID -->
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages TV show downloads and keeps your TV library up to date automatically.</p>
@@ -120,7 +125,7 @@
             <input type="text" id="sonarr_api_key" name="sonarr_api_key" value="{{ settings.sonarr_api_key }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
         </div>
-        <button type="button" data-service="sonarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
+        <button type="button" data-service-name="sonarr" class="test-connection-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test Sonarr</button> <!-- Updated class, data attribute, and text -->
       </div>
       <hr class="my-6 border-slate-300 dark:border-slate-700">
       <!-- Radarr -->
@@ -132,7 +137,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Radarr</span>
-            <span id="radarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="test-result-radarr" class="ml-2 text-sm"></span> <!-- Updated ID -->
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages movie downloads and organizes your movie library automatically.</p>
@@ -149,7 +154,7 @@
             <input type="text" id="radarr_api_key" name="radarr_api_key" value="{{ settings.radarr_api_key }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
         </div>
-        <button type="button" data-service="radarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
+        <button type="button" data-service-name="radarr" class="test-connection-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test Radarr</button> <!-- Updated class, data attribute, and text -->
       </div>
       <hr class="my-6 border-slate-300 dark:border-slate-700">
       <!-- Bazarr -->
@@ -161,7 +166,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Bazarr</span>
-            <span id="bazarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="test-result-bazarr" class="ml-2 text-sm"></span> <!-- Updated ID -->
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Adds and manages subtitles for your movies and TV shows automatically.</p>
@@ -178,7 +183,7 @@
             <input type="text" id="bazarr_api_key" name="bazarr_api_key" value="{{ settings.bazarr_api_key }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
         </div>
-        <button type="button" data-service="bazarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
+        <button type="button" data-service-name="bazarr" class="test-connection-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test Bazarr</button> <!-- Updated class, data attribute, and text -->
       </div>
     </div>
   <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-8 flex items-center justify-center">Save Changes</button>
@@ -232,4 +237,63 @@
 </div>
 
 <script src="{{ url_for('static', filename='admin_settings.js') }}" defer></script>
+
+<script>
+// New JavaScript for test-connection-btn
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.test-connection-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const serviceName = this.dataset.serviceName;
+            const resultSpan = document.getElementById('test-result-' + serviceName);
+
+            if (!resultSpan) {
+                console.error('Result span not found for service:', serviceName);
+                return;
+            }
+
+            resultSpan.textContent = 'Testing...';
+            resultSpan.style.color = 'inherit'; // Reset color
+            this.disabled = true;
+
+            fetch('/admin/api/services/test/' + serviceName, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // TODO: Add CSRF token header if application uses Flask-WTF or similar
+                    // Example: 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    // Try to parse error from response body for more specific feedback
+                    return response.json().then(errData => {
+                        throw new Error(errData.error || `HTTP error ${response.status}`);
+                    }).catch(() => {
+                        // Fallback if response is not JSON or no specific error message
+                        throw new Error(`HTTP error ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'online') {
+                    resultSpan.textContent = 'Success! Status: ' + data.status + (data.version && data.version !== 'N/A' ? ', Version: ' + data.version : '');
+                    resultSpan.style.color = 'green';
+                } else {
+                    resultSpan.textContent = 'Failed. Status: ' + data.status + (data.details && data.details.error ? ' Error: ' + data.details.error : '');
+                    resultSpan.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                console.error('Error testing service ' + serviceName + ':', error);
+                resultSpan.textContent = 'Error: ' + error.message;
+                resultSpan.style.color = 'red';
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    });
+});
+</script>
 {% endblock %}

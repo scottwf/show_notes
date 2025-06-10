@@ -91,8 +91,8 @@ tmux attach -t shownotes
 - Plex webhook support to adjust spoiler level automatically (partially implemented, needs refinement).
 - UI Enhancements: Dark mode toggle, mobile chat enhancements.
 - User authentication using plex authentication or user/password imported from plex (like Jellyseerr) & personal watch history.
-
 - Admin onboarding with fields for Radarr, Sonarr, Bazarr and Ollama configuration. Includes dynamic API connection tests and Plex authentication. (Initial service settings page available, full admin dashboard and expanded configuration is on the roadmap).
+- **Services Status Dashboard:** An admin panel page (`/admin/services-status`) to monitor the real-time status, version, and response time of connected services like Plex, Sonarr, Radarr, and Bazarr. Includes periodic background checks and manual test functionality. (Implemented, pending testing)
 - Users can report file issues with a movie or episode to the adminstator that sends notificaitions to the backend and to https://pushover.net
 
 

@@ -1,0 +1,150 @@
+{% extends "admin_layout.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div id="services-status-container" class="p-4">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold dark:text-white">Services Status Dashboard</h1>
+        <button id="manual-refresh-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Refresh Now
+        </button>
+    </div>
+
+    <div id="service-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- Service cards will be rendered here by JavaScript -->
+    </div>
+</div>
+
+<style>
+    .status-online { color: #22c55e; /* green-500 */ } /* Tailwind green-500 */
+    .status-offline { color: #ef4444; /* red-500 */ } /* Tailwind red-500 */
+    .status-degraded { color: #f97316; /* orange-500 */ } /* Tailwind orange-500 */
+    .status-unknown { color: #6b7280; /* gray-500 */ } /* Tailwind gray-500 */
+
+    .service-card p {
+        margin-bottom: 0.5rem;
+    }
+    .service-card pre {
+        white-space: pre-wrap;       /* Since CSS 2.1 */
+        white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+        white-space: -pre-wrap;      /* Opera 4-6 */
+        white-space: -o-pre-wrap;    /* Opera 7 */
+        word-wrap: break-word;       /* Internet Explorer 5.5+ */
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const serviceCardsGrid = document.getElementById('service-cards-grid');
+        const manualRefreshBtn = document.getElementById('manual-refresh-btn');
+
+        async function fetchServiceStatuses() {
+            try {
+                const response = await fetch('/admin/api/services/status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                renderServiceCards(data);
+            } catch (error) {
+                console.error("Error fetching service statuses:", error);
+                serviceCardsGrid.innerHTML = `<p class="text-red-500">Failed to load service statuses. Check console for errors.</p>`;
+            }
+        }
+
+        function renderServiceCards(servicesData) {
+            serviceCardsGrid.innerHTML = ''; // Clear existing cards
+
+            if (!servicesData || servicesData.length === 0) {
+                serviceCardsGrid.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No service statuses available at the moment.</p>';
+                return;
+            }
+
+            servicesData.forEach(service => {
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 service-card flex flex-col justify-between';
+
+                const statusClass = `status-${service.status ? service.status.toLowerCase() : 'unknown'}`;
+                const detailsString = service.details ? JSON.stringify(service.details, null, 2) : 'No details available';
+                const lastCheckedDate = service.last_checked ? new Date(service.last_checked).toLocaleString() : 'N/A';
+
+                // Basic sanitization for display (more robust solution needed for production if details can contain user-input HTML)
+                const escapeHtml = (unsafe) => {
+                    if (unsafe === null || typeof unsafe === 'undefined') return '';
+                    return String(unsafe).replace(/[&<"'>]/g, function (match) {
+                        return {
+                            '&': '&amp;',
+                            '<': '&lt;',
+                            '>': '&gt;',
+                            '"': '&quot;',
+                            "'": '&#39;'
+                        }[match];
+                    });
+                };
+
+                card.innerHTML = `
+                    <div>
+                        <h3 class="text-xl font-semibold mb-2 dark:text-white">${escapeHtml(service.service_name)}</h3>
+                        <p class="dark:text-gray-300">Status: <span class="font-bold ${statusClass}">${escapeHtml(service.status)}</span></p>
+                        <p class="dark:text-gray-300">Version: ${escapeHtml(service.version)}</p>
+                        <p class="dark:text-gray-300">Response Time: ${escapeHtml(service.response_time)} ms</p>
+                        <p class="dark:text-gray-300">Last Checked: ${escapeHtml(lastCheckedDate)}</p>
+                        <div class="mt-2">
+                             <h4 class="font-semibold dark:text-gray-200">Details:</h4>
+                            <pre class="text-xs mt-1 p-2 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 rounded overflow-auto max-h-32">${escapeHtml(detailsString)}</pre>
+                        </div>
+                        <!-- Placeholder for Chart.js canvas -->
+                        <!-- <canvas id="chart-${escapeHtml(service.service_name)}" class="mt-2" height="100"></canvas> -->
+                    </div>
+                    <button class="test-service-btn mt-3 bg-green-500 hover:bg-green-700 text-white py-1 px-3 rounded self-start" data-service-name="${escapeHtml(service.service_name)}">
+                        Test Now
+                    </button>
+                `;
+                serviceCardsGrid.appendChild(card);
+            });
+
+            // Add event listeners to newly created "Test Now" buttons
+            document.querySelectorAll('.test-service-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const serviceName = this.dataset.serviceName;
+                    testService(serviceName, this);
+                });
+            });
+        }
+
+        async function testService(serviceName, buttonElement) {
+            buttonElement.disabled = true;
+            buttonElement.textContent = 'Testing...';
+            try {
+                const response = await fetch(`/admin/api/services/test/${serviceName}`, { method: 'POST' });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Test failed: ${errorData.error || response.statusText}`);
+                }
+                // const result = await response.json(); // result might be useful for specific feedback
+                // console.log(`Test result for ${serviceName}:`, result);
+                // Use flash a success message or a more sophisticated notification system
+                // For now, just log and refresh
+                console.info(`Test for ${serviceName} completed. Refreshing statuses...`);
+            } catch (error) {
+                console.error(`Error testing service ${serviceName}:`, error);
+                // Use flash an error message
+                alert(`Failed to test ${serviceName}: ${error.message}`);
+            } finally {
+                buttonElement.disabled = false;
+                buttonElement.textContent = 'Test Now';
+                fetchServiceStatuses(); // Refresh all statuses after test
+            }
+        }
+
+        if (manualRefreshBtn) {
+            manualRefreshBtn.addEventListener('click', fetchServiceStatuses);
+        }
+
+        // Initial fetch and start polling
+        fetchServiceStatuses();
+        setInterval(fetchServiceStatuses, 30000); // Poll every 30 seconds
+    });
+</script>
+{% endblock %}

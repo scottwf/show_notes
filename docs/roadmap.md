@@ -35,7 +35,8 @@ This document outlines the planned features and development stages for the ShowN
     - [ ] Show recent user logins.
     - [ ] Implement a notification system for important alerts or errors.
 - [ ] **Services Page Enhancements:**
-    - [ ] Add visual connection status indicators (e.g., green/red lights) for configured services (Sonarr, Radarr, Plex, etc.).
+    - [x] **Services Status Dashboard:** Implemented a dashboard to monitor the status of connected services (Plex, Sonarr, Radarr, Bazarr), including response time, version, and last checked time. Allows manual testing of services and includes background checks. (Implemented, pending testing)
+    - [ ] Add visual connection status indicators (e.g., green/red lights) for configured services (Sonarr, Radarr, Plex, etc.) on the settings page. <!-- This item can remain for settings page specific indicators -->
     - [ ] Allow full configuration of service URLs, ports, and API keys directly from this page (expanding current capabilities).
 - [ ] **Database Management Page:**
     - [ ] Provide UI controls for manual library synchronization (Sonarr, Radarr, potentially others like Bazarr later).
