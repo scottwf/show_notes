@@ -4,12 +4,27 @@
 
 {% block page_content %}
 <div class="max-w-lg mx-auto mt-8 sm:mt-12 mb-8">
+  {% if not plex_user_in_session %}
+  <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8 text-center">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6 sm:mb-8">Step 1: Sign in with Plex</h2>
+    <p class="text-slate-600 dark:text-slate-300 mb-6">
+      To begin setting up your Show Notes application, you first need to authenticate with your Plex account. This will allow the application to link your Plex activity.
+    </p>
+    <a href="{{ url_for('main.login') }}" class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 dark:ring-offset-slate-800">
+      Sign in with Plex
+    </a>
+    <p class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+      You will be redirected to Plex.tv to authorize this application.
+    </p>
+  </div>
+  {% else %}
   <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8">
-    <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6 sm:mb-8 text-center">Administrator Setup</h2>
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">Step 2: Administrator Setup</h2>
+    <p class="text-center text-sm text-slate-600 dark:text-slate-300 mb-6 sm:mb-8">Signed in as Plex user: <strong class="text-orange-500">{{ plex_username }}</strong></p>
     <form method="post" id="onboarding-form" class="space-y-5 sm:space-y-6">
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="username">Username</label>
-        <input type="text" id="username" name="username" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.username if env_settings else '' }}" required>
+        <input type="text" id="username" name="username" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ plex_username if plex_username else env_settings.username if env_settings else '' }}" required>
       </div>
       <div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="password">Password</label>
@@ -130,6 +145,7 @@
       <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-6 sm:mt-8 flex items-center justify-center">Save Configuration</button>
     </form>
   </div>
+  {% endif %}
 </div>
 <script>
 // Script content remains largely the same, just updating status class names in JS

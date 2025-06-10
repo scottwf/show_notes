@@ -8,6 +8,73 @@ from . import database
 
 logger = logging.getLogger(__name__)
 
+# --- Connection Test Functions --- 
+
+def _test_service_connection(service_name, url_setting_name, api_key_setting_name=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None):
+    """Generic helper to test service connection."""
+    service_url = None
+    api_key = None
+
+    with current_app.app_context():
+        service_url = database.get_setting(url_setting_name)
+        if api_key_setting_name:
+            api_key = database.get_setting(api_key_setting_name)
+
+    if not service_url:
+        logger.info(f"_test_service_connection: {service_name} URL ('{url_setting_name}') not configured.")
+        return False
+    
+    if api_key_setting_name and not api_key:
+        logger.info(f"_test_service_connection: {service_name} API key ('{api_key_setting_name}') not configured, but required.")
+        return False
+
+    full_endpoint_url = f"{service_url.rstrip('/')}{endpoint}"
+    headers = headers_extra or {}
+    if api_key:
+        # Common header for *arr services, Bazarr might differ slightly if it uses Bearer token etc.
+        # For now, assuming X-Api-Key is common for those needing a key here.
+        if service_name in ["Sonarr", "Radarr", "Bazarr"]:
+             headers["X-Api-Key"] = api_key
+        # Ollama does not use an API key for basic status checks.
+
+    try:
+        logger.debug(f"Testing {service_name} connection to {full_endpoint_url} with method {method}")
+        response = requests.request(method, full_endpoint_url, headers=headers, params=params, timeout=5)
+        if response.status_code == expected_status:
+            logger.info(f"_test_service_connection: {service_name} connection successful to {full_endpoint_url}.")
+            return True
+        else:
+            logger.warning(f"_test_service_connection: {service_name} connection test to {full_endpoint_url} failed with status {response.status_code}. Response: {response.text[:200]}")
+            return False
+    except requests.exceptions.Timeout:
+        logger.error(f"_test_service_connection: Timeout connecting to {service_name} at {full_endpoint_url}")
+        return False
+    except requests.exceptions.ConnectionError:
+        logger.error(f"_test_service_connection: Connection error for {service_name} at {full_endpoint_url}")
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"_test_service_connection: Generic error for {service_name} at {full_endpoint_url}: {e}")
+        return False
+
+def test_sonarr_connection():
+    return _test_service_connection("Sonarr", 'sonarr_url', 'sonarr_api_key', '/api/v3/system/status')
+
+def test_radarr_connection():
+    return _test_service_connection("Radarr", 'radarr_url', 'radarr_api_key', '/api/v3/system/status')
+
+def test_bazarr_connection():
+    # Bazarr's API might be at /api/system/status or just /api/status. Let's try /api/system/status first.
+    # It also might require authentication differently, but X-Api-Key is a common pattern.
+    return _test_service_connection("Bazarr", 'bazarr_url', 'bazarr_api_key', '/api/system/status')
+
+def test_ollama_connection():
+    # Ollama usually doesn't require an API key for basic checks like listing tags or root ping.
+    # A GET to the root or /api/tags should work if the server is up.
+    return _test_service_connection("Ollama", 'ollama_url', endpoint='/api/tags') # /api/ps or just / might also work
+
+# --- End Connection Test Functions --- 
+
+
 def get_all_sonarr_shows():
     """
     Fetches all series from Sonarr's API.
@@ -160,6 +227,13 @@ def sync_sonarr_library():
     # App context for API calls and initial DB setup
     with current_app.app_context():
         db = database.get_db()
+        
+        settings_row = db.execute('SELECT sonarr_url FROM settings LIMIT 1').fetchone()
+        sonarr_base_url = settings_row['sonarr_url'].rstrip('/') if settings_row and 'sonarr_url' in settings_row and settings_row['sonarr_url'] else None
+        if not sonarr_base_url:
+            logger.warning("sync_sonarr_library: Sonarr URL not found in settings. Cannot form absolute image URLs if they are relative.")
+            # sonarr_base_url will be None, and logic below will handle it by not prepending.
+
         all_shows_data = get_all_sonarr_shows()
 
         if not all_shows_data:
@@ -183,6 +257,17 @@ def sync_sonarr_library():
                 logger.info(f"Syncing show: {show_data.get('title', 'N/A')} (Sonarr ID: {current_sonarr_id})")
 
                 # Prepare show data
+                raw_poster_url = next((img.get('url') for img in show_data.get('images', []) if img.get('coverType') == 'poster'), None)
+                raw_fanart_url = next((img.get('url') for img in show_data.get('images', []) if img.get('coverType') == 'fanart'), None)
+
+                final_poster_url = raw_poster_url # Default to original
+                if sonarr_base_url and raw_poster_url and raw_poster_url.startswith('/'):
+                    final_poster_url = f"{sonarr_base_url}{raw_poster_url}"
+                
+                final_fanart_url = raw_fanart_url # Default to original
+                if sonarr_base_url and raw_fanart_url and raw_fanart_url.startswith('/'):
+                    final_fanart_url = f"{sonarr_base_url}{raw_fanart_url}"
+
                 show_values = {
                     "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
@@ -194,8 +279,8 @@ def sync_sonarr_library():
                     "season_count": len(show_data.get("seasons", [])), # More reliable than show_data.get("seasonCount") sometimes
                     "episode_count": show_data.get("episodeCount"),
                     "episode_file_count": show_data.get("episodeFileCount"),
-                    "poster_url": next((img['url'] for img in show_data.get('images', []) if img['coverType'] == 'poster'), None),
-                    "fanart_url": next((img['url'] for img in show_data.get('images', []) if img['coverType'] == 'fanart'), None),
+                    "poster_url": final_poster_url,
+                    "fanart_url": final_fanart_url,
                     "path_on_disk": show_data.get("path"),
                 }
 
@@ -452,6 +537,12 @@ def sync_radarr_library():
 
     with current_app.app_context():
         db = database.get_db()
+
+        settings_row = db.execute('SELECT radarr_url FROM settings LIMIT 1').fetchone()
+        radarr_base_url = settings_row['radarr_url'].rstrip('/') if settings_row and 'radarr_url' in settings_row and settings_row['radarr_url'] else None
+        if not radarr_base_url:
+            logger.warning("sync_radarr_library: Radarr URL not found in settings. Cannot form absolute image URLs if they are relative.")
+
         all_movies_data = get_all_radarr_movies()
 
         if not all_movies_data:
@@ -462,6 +553,17 @@ def sync_radarr_library():
             try:
                 logger.info(f"Syncing movie: {movie_data.get('title', 'N/A')} (Radarr ID: {movie_data.get('id', 'N/A')})")
 
+                raw_poster_url = next((img.get('url') for img in movie_data.get('images', []) if img.get('coverType') == 'poster'), None)
+                raw_fanart_url = next((img.get('url') for img in movie_data.get('images', []) if img.get('coverType') == 'fanart'), None)
+
+                final_poster_url = raw_poster_url # Default to original
+                if radarr_base_url and raw_poster_url and raw_poster_url.startswith('/'):
+                    final_poster_url = f"{radarr_base_url}{raw_poster_url}"
+                
+                final_fanart_url = raw_fanart_url # Default to original
+                if radarr_base_url and raw_fanart_url and raw_fanart_url.startswith('/'):
+                    final_fanart_url = f"{radarr_base_url}{raw_fanart_url}"
+                
                 movie_values = {
                     "radarr_id": movie_data.get("id"),
                     "tmdb_id": movie_data.get("tmdbId"),
@@ -470,8 +572,8 @@ def sync_radarr_library():
                     "year": movie_data.get("year"),
                     "overview": movie_data.get("overview"),
                     "status": movie_data.get("status"),
-                    "poster_url": next((img['url'] for img in movie_data.get('images', []) if img['coverType'] == 'poster'), None),
-                    "fanart_url": next((img['url'] for img in movie_data.get('images', []) if img['coverType'] == 'fanart'), None),
+                    "poster_url": final_poster_url,
+                    "fanart_url": final_fanart_url,
                     "path_on_disk": movie_data.get("path"),
                     "has_file": bool(movie_data.get("hasFile", False)),
                 }

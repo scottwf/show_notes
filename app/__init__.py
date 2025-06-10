@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from . import database
+import sqlite3
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -49,6 +50,31 @@ def create_app(test_config=None):
     app.logger.info("ShowNotes application logging configured to /tmp/shownotes_app.log")
 
     database.init_app(app)
+
+    # Initialize the database if tables are missing
+    with app.app_context():
+        db = database.get_db()
+        needs_init = False
+        try:
+            # Check schema version
+            db_version = db.execute('SELECT version FROM schema_version WHERE id = 1').fetchone()
+            if not db_version or db_version['version'] < database.CURRENT_SCHEMA_VERSION:
+                app.logger.warning(f"Database schema is out of date (DB version: {db_version['version'] if db_version else 'None'}, Code version: {database.CURRENT_SCHEMA_VERSION}). Re-initializing.")
+                needs_init = True
+            else:
+                app.logger.info(f"Database schema is up to date (version {db_version['version']}).")
+        except sqlite3.OperationalError as e:
+            # This likely means the schema_version table itself doesn't exist.
+            if 'no such table' in str(e).lower():
+                app.logger.warning(f"Database version table not found (error: {e}). Assuming new or old database. Re-initializing.")
+                needs_init = True
+            else:
+                app.logger.error(f"An unexpected database error occurred during startup check: {e}", exc_info=True)
+                raise # For other DB errors, it's better to fail fast
+
+        if needs_init:
+            database.init_db()
+            app.logger.info(f"Database successfully initialized/updated at {app.config['DATABASE']}.")
 
     from . import routes
     app.register_blueprint(routes.bp)

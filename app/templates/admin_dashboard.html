@@ -15,19 +15,19 @@
         <!-- Placeholder for stats cards -->
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
             <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Total Users</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">--</p>
+            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ user_count if user_count is not none else '--' }}</p>
         </div>
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
             <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Plex Events Logged</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">--</p>
+            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ plex_event_count if plex_event_count is not none else '--' }}</p>
         </div>
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
             <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Movies in Radarr</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">--</p>
+            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ movie_count if movie_count is not none else '--' }}</p>
         </div>
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
             <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Shows in Sonarr</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">--</p>
+            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ show_count if show_count is not none else '--' }}</p>
         </div>
     </div>
 </div>

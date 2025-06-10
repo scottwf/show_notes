@@ -18,6 +18,9 @@ function setApiKeyLinks() {
 document.addEventListener('DOMContentLoaded', function() {
   console.log('[DEBUG] DOMContentLoaded fired');
   setApiKeyLinks();
+  bindTests(); // Bind the test button handlers
+
+  // Add listeners to update API key helper links on URL change
   if (document.getElementById('radarr_url'))
     document.getElementById('radarr_url').addEventListener('input', setApiKeyLinks);
   if (document.getElementById('sonarr_url'))
@@ -31,6 +34,15 @@ function updateBtnState(btn, state) {
   // Do nothing: keep button text and color unchanged, always enabled
 }
 
+// Updates the status dot color and title for a given service
+function updateStatusDot(service, success) {
+  const dot = document.getElementById(`${service}_status_dot`);
+  if (dot) {
+    dot.classList.remove('text-green-500', 'text-red-500');
+    dot.classList.add(success ? 'text-green-500' : 'text-red-500');
+    dot.title = success ? 'Connected' : 'Not Connected/Error';
+  }
+}
 
 function bindTests() {
   const testBtns = document.querySelectorAll('.test-btn');
@@ -51,12 +63,7 @@ function bindTests() {
       } else if (service === 'ollama') {
         url = document.getElementById('ollama_url').value;
       }
-      updateBtnState(btn, 'testing');
-      const statusElem = document.getElementById(service + '_status');
-      if (statusElem) {
-        statusElem.textContent = 'Testing...';
-        statusElem.className = 'ml-2 text-sm text-gray-600';
-      }
+      
       fetch('/test-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,18 +71,10 @@ function bindTests() {
       })
       .then(res => res.json())
       .then(data => {
-        updateBtnState(btn, data.success ? 'success' : 'fail');
-        if (statusElem) {
-          statusElem.textContent = data.success ? 'Success!' : 'Failed';
-          statusElem.className = data.success ? 'ml-2 text-sm text-green-600' : 'ml-2 text-sm text-red-600';
-        }
+        updateStatusDot(service, data.success);
       })
       .catch(() => {
-        updateBtnState(btn, 'fail');
-        if (statusElem) {
-          statusElem.textContent = 'Error';
-          statusElem.className = 'ml-2 text-sm text-red-600';
-        }
+        updateStatusDot(service, false);
       });
     });
   });

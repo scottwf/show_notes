@@ -1,10 +1,11 @@
 import os
+import json
 import requests
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash, current_app
 from werkzeug.security import generate_password_hash
 
 from . import database
-from .utils import sync_sonarr_library, sync_radarr_library
+from .utils import sync_sonarr_library, sync_radarr_library, test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection
 
 PLEX_HEADERS = {
     'X-Plex-Client-Identifier': os.environ.get('PLEX_CLIENT_ID', 'shownotes'),
@@ -63,8 +64,16 @@ def admin_dashboard():
     if not session.get('is_admin', False):
         flash('You must be an administrator to view this page.', 'error')
         return redirect(url_for('main.home'))
-    # Add any data fetching for the dashboard here later
-    return render_template('admin_dashboard.html')
+    db = database.get_db()
+    movie_count = db.execute('SELECT COUNT(*) FROM radarr_movies').fetchone()[0]
+    show_count = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0]
+    user_count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    plex_event_count = db.execute('SELECT COUNT(*) FROM plex_events').fetchone()[0]
+    return render_template('admin_dashboard.html', 
+                           movie_count=movie_count, 
+                           show_count=show_count, 
+                           user_count=user_count,
+                           plex_event_count=plex_event_count)
 
 
 @bp.route('/admin/settings', methods=['GET', 'POST'], endpoint='admin_settings')
@@ -129,8 +138,26 @@ def admin_settings():
     for k, v in defaults.items():
         if not merged_settings.get(k):
             merged_settings[k] = v
-    site_url = request.url_root.rstrip('/')
-    return render_template('admin_settings.html', user=user, settings=merged_settings, site_url=site_url)
+    site_url = request.url_root.rstrip('/') # Restore site_url
+    plex_webhook_url = url_for('main.plex_webhook', _external=True) # Define plex_webhook_url
+
+    # Perform connection tests
+    sonarr_status = test_sonarr_connection()
+    radarr_status = test_radarr_connection()
+    bazarr_status = test_bazarr_connection()
+    ollama_status = test_ollama_connection()
+
+    return render_template(
+        'admin_settings.html',
+        user=user,                # Pass user object
+        settings=merged_settings, # Pass the merged settings (defaults + DB)
+        site_url=site_url,        # Pass site_url
+        plex_webhook_url=plex_webhook_url,
+        sonarr_status=sonarr_status,
+        radarr_status=radarr_status,
+        bazarr_status=bazarr_status,
+        ollama_status=ollama_status
+    )
 
 @bp.route('/admin/sync-sonarr', methods=['POST'], endpoint='admin_sync_sonarr')
 def admin_sync_sonarr():
@@ -191,25 +218,32 @@ def plex_webhook():
         last_plex_event = payload
         # Extract fields for DB
         event_type = payload.get('event')
+        event_type = payload.get('event')
+        raw_json_payload = pyjson.dumps(payload) # Store the entire payload
+        client_ip = request.remote_addr
+
+        if event_type == 'media.play':
+            # Insert into DB only if it's a 'media.play' (start) event
+            db = database.get_db()
+            db.execute('''INSERT INTO plex_events (event_type, metadata, client_ip)
+                          VALUES (?, ?, ?)''',
+                       (event_type, raw_json_payload, client_ip))
+            db.commit()
+            print(f'Logged Plex media.play event: {payload}') # Added print for confirmation
+        else:
+            print(f'Skipped Plex event (not media.play): {event_type}') # Added print for skipped events
+
+        # For poster caching and other logic, we still need to parse details from the payload
         account = payload.get('Account', {})
-        user_id = account.get('id')
-        user_name = account.get('title')
-        metadata = payload.get('Metadata', {})
-        media_type = metadata.get('type')
-        show_title = metadata.get('grandparentTitle') if media_type == 'episode' else metadata.get('title')
-        episode_title = metadata.get('title') if media_type == 'episode' else None
-        season = metadata.get('parentIndex') if media_type == 'episode' else None
-        episode = metadata.get('index') if media_type == 'episode' else None
-        summary = metadata.get('summary')
-        raw_json = pyjson.dumps(payload)
-        # Insert into DB
-        db = database.get_db()
-        db.execute('''INSERT INTO plex_events \
-            (event_type, user_id, user_name, media_type, show_title, episode_title, season, episode, summary, raw_json) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (event_type, user_id, user_name, media_type, show_title, episode_title, season, episode, summary, raw_json)
-        )
-        db.commit()
+        # user_id = account.get('id') # Not directly inserted, but useful if other logic needs it
+        # user_name = account.get('title') # Not directly inserted
+        metadata_dict = payload.get('Metadata', {}) # Renamed to avoid conflict with column name
+        media_type = metadata_dict.get('type')
+        show_title = metadata_dict.get('grandparentTitle') if media_type == 'episode' else metadata_dict.get('title')
+        # episode_title = metadata_dict.get('title') if media_type == 'episode' else None # Not used by poster logic below
+        # season = metadata_dict.get('parentIndex') if media_type == 'episode' else None # Not used
+        # episode = metadata_dict.get('index') if media_type == 'episode' else None # Not used
+        # summary = metadata_dict.get('summary') # Not used
 
         # Poster caching for Sonarr/Radarr
         import re, os
@@ -442,15 +476,46 @@ def home():
 
     print(f"DEBUG: Home - session user_id: {s_user_id}, username: {s_username}, is_admin: {s_is_admin}")
 
-    # Try to get the most recent event for the logged-in user
-    row = None
-    if s_user_id: # Plex user_id is the primary key for linking events
-        row = db.execute('SELECT * FROM plex_events WHERE user_id=? ORDER BY timestamp DESC, id DESC LIMIT 1', (str(s_user_id),)).fetchone()
+    # Try to get the most recent event and then filter by user if available
+    latest_event_row = db.execute('SELECT * FROM plex_events ORDER BY timestamp DESC, id DESC LIMIT 1').fetchone()
+    
+    row = None # Initialize row to None, it will be set if the event matches the logged-in user
+    if latest_event_row and s_user_id:
+        try:
+            metadata_json = latest_event_row['metadata']
+            if metadata_json:
+                metadata = json.loads(metadata_json)
+                # Plex webhook structures vary; common patterns for user ID:
+                # Check Account.id (integer)
+                plex_event_user_id_int = metadata.get('Account', {}).get('id')
+                # Check User.id (integer, less common but possible in some payloads)
+                plex_event_user_id_user_int = metadata.get('User', {}).get('id')
+
+                # Compare with session user ID (ensure types match, e.g., both int or both str)
+                # Session s_user_id is often an int from Plex OAuth
+                if (plex_event_user_id_int is not None and plex_event_user_id_int == s_user_id) or \
+                   (plex_event_user_id_user_int is not None and plex_event_user_id_user_int == s_user_id):
+                    row = latest_event_row # This event is for the current user
+                else:
+                    # Log if an event was found but didn't match the user, for debugging
+                    current_app.logger.debug(f"Latest Plex event (ID: {latest_event_row['id']}) user ID ({plex_event_user_id_int or plex_event_user_id_user_int}) does not match session user ID ({s_user_id}).")
+            else:
+                current_app.logger.debug(f"Latest Plex event (ID: {latest_event_row['id']}) has no metadata to check user.")
+
+        except json.JSONDecodeError:
+            current_app.logger.error(f"Failed to parse metadata JSON for plex_event id {latest_event_row['id']}")
+        except Exception as e:
+            current_app.logger.error(f"Error processing plex_event metadata for event ID {latest_event_row.get('id', 'N/A')}: {e}", exc_info=True)
+    elif latest_event_row and not s_user_id:
+        # Logic for when no user is logged in but an event exists (e.g., show latest global event or nothing)
+        # For now, we are not setting 'row', so no event will be shown unless a user is logged in and matches.
+        current_app.logger.debug("No user in session; not attempting to match latest Plex event.")
+    else:
+        current_app.logger.debug("No Plex events found in the database or no user in session.")
     
     if row:
-        import json as pyjson
         try:
-            plex_event = pyjson.loads(row['raw_json']) if row['raw_json'] else dict(row)
+            plex_event = json.loads(row['metadata']) if row['metadata'] else dict(row)
         except Exception:
             plex_event = dict(row)
     else:
@@ -522,7 +587,13 @@ def onboarding():
             # webhook_secret is generated, so not pre-filled from .env
         }
         # Ensure we pass these to render_template, along with any other necessary context
-        return render_template('onboarding.html', env_settings=env_settings)
+        plex_user_in_session = bool(session.get('user_id'))
+        plex_username = session.get('username')
+        # Ensure we pass these to render_template, along with any other necessary context
+        return render_template('onboarding.html', 
+                               env_settings=env_settings, 
+                               plex_user_in_session=plex_user_in_session, 
+                               plex_username=plex_username)
 
     # POST request logic follows
     if request.method == 'POST':

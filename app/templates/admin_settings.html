@@ -3,7 +3,7 @@
 {% block admin_page_title %}Service Settings{% endblock %}
 
 {% block admin_extra_js %}
-  <script src="{{ url_for('static', filename='admin_settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='admin_settings.js') }}?v=3"></script>
 {% endblock %}
 
 {% block admin_page_header %}Service Configuration{% endblock %}
@@ -20,7 +20,7 @@
           <img src="{{ url_for('static', filename='logos/ollama-dark.png') }}" alt="Ollama logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Ollama</span>
-        <span id="ollama_status" class="ml-auto text-sm text-slate-600 dark:text-slate-300"></span>
+        <span id="ollama_status_dot" class="ml-2 {% if ollama_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if ollama_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
       </div>
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Ollama provides AI-powered features for enhanced automation and recommendations.</p>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">URL</label>
@@ -103,7 +103,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Sonarr</span>
-            <span id="sonarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="sonarr_status_dot" class="ml-2 {% if sonarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if sonarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages TV show downloads and keeps your TV library up to date automatically.</p>
@@ -132,7 +132,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Radarr</span>
-            <span id="radarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="radarr_status_dot" class="ml-2 {% if radarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if radarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages movie downloads and organizes your movie library automatically.</p>
@@ -161,7 +161,7 @@
           </span>
           <div>
             <span class="font-semibold text-xl sm:text-2xl text-slate-800 dark:text-slate-100">Bazarr</span>
-            <span id="bazarr_status" class="ml-2 text-sm text-slate-600 dark:text-slate-300"></span>
+            <span id="bazarr_status_dot" class="ml-2 {% if bazarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if bazarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
           </div>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Adds and manages subtitles for your movies and TV shows automatically.</p>
