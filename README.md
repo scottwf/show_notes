@@ -10,19 +10,18 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 
 ## 🆕 Recent Improvements
 
-### Admin Panel & Core Integrations Overhaul
-- **New Admin Panel UI:** Introduced a dedicated admin section (`/admin/dashboard`) with a responsive sidebar and a new dashboard page. The service configuration page (`/admin/settings`) is now part of this new layout.
-- **Plex Integration Enhancements:** Resolved Plex OAuth login/logout flows, session management, and onboarding. Corrected Plex webhook event handling, including database schema updates for `plex_events` and ensuring webhook POSTs are not redirected during onboarding.
-- **Library Sync Refinements:** Fixed `NameError` in library sync by correctly checking admin session status. Separated Sonarr and Radarr library sync functionalities into distinct admin actions with dedicated UI buttons and backend routes (`/admin/sync-sonarr`, `/admin/sync-radarr`).
+### Admin Panel & Service Management
+- **Dynamic Service Status:** The admin services page (`/admin/settings`) now features real-time status indicators.
+  - On page load, dots are colored green or red based on an initial connection test.
+  - Clicking the "Test" button for any service triggers a live API check and updates the dot color instantly without a page reload.
+- **New Admin Panel UI:** Introduced a dedicated admin section (`/admin/dashboard`) with a responsive sidebar and a new dashboard page. The service configuration page is now part of this new layout.
+- **Library Sync Refinements:** Separated Sonarr and Radarr library sync functionalities into distinct admin actions with dedicated UI buttons and backend routes (`/admin/sync-sonarr`, `/admin/sync-radarr`).
+- **Plex Integration:** Resolved Plex OAuth login/logout flows, session management, and webhook handling.
 
-### Tailwind CSS & Dark Mode
-- Uses Tailwind CSS for styling, including full dark mode support via the `dark` class on `<html>`.
-- Run `npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify` after making changes to templates or Tailwind config.
-
-### Admin Settings UI Improvements
-- API key links for Sonarr, Radarr, and Bazarr now point directly to the user’s configured instance settings page.
-- All service logos (Ollama, Plex, Pushover, Sonarr, Radarr, Bazarr) support both light and dark modes with automatic switching.
-- Dynamic logo switching and theme toggling via a dark mode toggle button.
+### UI & Styling
+- **Tailwind CSS & Dark Mode:** The entire application uses Tailwind CSS for styling, including full dark mode support.
+- **Dynamic Logos:** All service logos on the admin page support both light and dark modes with automatic switching.
+- **API Key Links:** Links for Sonarr, Radarr, and Bazarr now point directly to the relevant settings page within those applications.
 
 ### Static Asset Serving
 - Static files are served from `/app/static` using Flask’s best practices.
@@ -32,7 +31,7 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - **Requirements:** Python 3.x, Node.js (v18+), npm (v9+)
 - **Tailwind Build:**
   ```bash
-  npx tailwindcss -i ./app/static/input.css -o ./app/static/admin_settings.css --minify
+  npx tailwindcss -i ./app/static/input.css -o ./app/static/css/style.css --watch
   ```
 - **Run the app:**
   ```bash

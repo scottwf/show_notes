@@ -3,6 +3,7 @@
 This document outlines the planned features and development stages for the ShowNotes application.
 
 ## Completed
+- [x] **Dynamic Service Status Indicators:** Added visual connection status indicators (green/red dots) for configured services that update in real-time via JavaScript.
 - [x] Plex OAuth login (PIN-based, DB-stored credentials), logout, session management, and onboarding fixes.
 - [x] Show most recent Plex event for logged-in user on homepage (Plex Webhook processing fixes and schema updates).
 - [x] Integrate Sonarr/Radarr APIs for reliable poster/metadata display.
@@ -35,7 +36,6 @@ This document outlines the planned features and development stages for the ShowN
     - [ ] Show recent user logins.
     - [ ] Implement a notification system for important alerts or errors.
 - [ ] **Services Page Enhancements:**
-    - [ ] Add visual connection status indicators (e.g., green/red lights) for configured services (Sonarr, Radarr, Plex, etc.).
     - [ ] Allow full configuration of service URLs, ports, and API keys directly from this page (expanding current capabilities).
 - [ ] **Database Management Page:**
     - [ ] Provide UI controls for manual library synchronization (Sonarr, Radarr, potentially others like Bazarr later).
