@@ -66,9 +66,11 @@ def create_app(test_config=None):
     # Define a simple User class for Flask-Login
     # In a real app, this would likely be a more complex model (e.g., from SQLAlchemy)
     class User:
-        def __init__(self, id, username):
+        # Basic User model for Flask-Login
+        def __init__(self, id, username, is_admin=False):
             self.id = id
             self.username = username
+            self.is_admin = bool(is_admin) # Ensure it's a boolean
             self.is_authenticated = True
             self.is_active = True
             self.is_anonymous = False
@@ -85,7 +87,7 @@ def create_app(test_config=None):
                 'SELECT * FROM users WHERE id = ?', (user_id,)
             ).fetchone()
             if user_data:
-                return User(id=user_data['id'], username=user_data['username'])
+                return User(id=user_data['id'], username=user_data['username'], is_admin=user_data['is_admin'])
         except Exception as e:
             # Log the error if the database query fails (e.g., table not yet created)
             app.logger.error(f"Error loading user {user_id} from database: {e}")
