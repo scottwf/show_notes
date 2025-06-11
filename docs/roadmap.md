@@ -16,6 +16,11 @@ This document outlines the planned features and development stages for the ShowN
 - [x] Tailwind CSS integration & Dark Mode.
 - [x] Basic HTML templates and routes.
 - [x] Initial documentation setup.
+- [x] **Admin Tasks Page:** Created a dedicated page (`/admin/tasks`) for managing Sonarr and Radarr library synchronization.
+- [x] **Sync Operation Feedback:** Implemented flash messages to inform users of the number of items processed after Sonarr/Radarr sync.
+- [x] **Admin UI Consistency:** Standardized styling for sidebar navigation links (e.g., 'Tasks' link) to match other admin links.
+- [x] **Task Button Styling:** Restyled Sonarr/Radarr sync buttons on the `/admin/tasks` page for better visual consistency.
+- [x] **Logo Display Fixes:** Corrected display of Sonarr and Radarr logos on the `/admin/tasks` page for proper visibility in both light and dark modes.
 
 ## Next Steps
 - [ ] **Pre-cache Media Assets:** Implement image caching (posters, fanart) during Sonarr/Radarr library synchronization to improve performance and local availability for search and display. (Currently, search uses on-demand caching).

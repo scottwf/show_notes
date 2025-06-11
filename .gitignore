@@ -48,6 +48,14 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
+
+# ShowNotes specific image cache
+app/static/img_cache/posters/
+app/static/img_cache/backgrounds/
+app/static/img_cache/generic/
+app/static/poster/
+app/static/poster_cache/
+app/static/background/
 .pytest_cache/
 
 # Environment variables file - DO NOT COMMIT

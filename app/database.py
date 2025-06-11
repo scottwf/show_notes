@@ -63,6 +63,7 @@ def init_db():
             DROP TABLE IF EXISTS sonarr_episodes;
             DROP TABLE IF EXISTS radarr_movies;
             DROP TABLE IF EXISTS plex_events;
+            DROP TABLE IF EXISTS plex_activity_log;
             DROP TABLE IF EXISTS schema_version;
 
             CREATE TABLE character_summaries (
@@ -254,6 +255,26 @@ def init_db():
                 metadata TEXT,
                 processed BOOLEAN DEFAULT 0,
                 client_ip TEXT
+            );
+
+            CREATE TABLE plex_activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                plex_username TEXT,
+                player_title TEXT,
+                player_uuid TEXT,
+                session_key TEXT,
+                rating_key TEXT,
+                parent_rating_key TEXT,
+                grandparent_rating_key TEXT,
+                media_type TEXT,
+                title TEXT,
+                show_title TEXT,
+                season_episode TEXT,
+                view_offset_ms INTEGER,
+                duration_ms INTEGER,
+                event_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                raw_payload TEXT
             );
 
             CREATE INDEX idx_users_username ON users (username);

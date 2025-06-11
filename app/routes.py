@@ -5,6 +5,10 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from werkzeug.security import generate_password_hash
 import urllib.parse
 
+from flask_login import login_required, current_user, login_user
+from functools import wraps
+from flask import abort
+
 from . import database, utils
 from .utils import sync_sonarr_library, sync_radarr_library, test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection, get_sonarr_poster, get_radarr_poster
 
@@ -17,6 +21,17 @@ PLEX_HEADERS = {
 import sqlite3 # Add this import at the top of the file if not already present, or near other db imports
 
 bp = Blueprint('main', __name__)
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not getattr(current_user, 'is_admin', False):
+            current_app.logger.warning(f"Admin access denied for user {current_user.username if current_user.is_authenticated else 'Anonymous'} to {request.endpoint}")
+            flash('You must be an administrator to access this page.', 'danger')
+            abort(403) # Forbidden
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 
 def is_onboarding_complete():
@@ -75,6 +90,13 @@ def admin_dashboard():
                            show_count=show_count, 
                            user_count=user_count,
                            plex_event_count=plex_event_count)
+
+
+@bp.route('/admin/tasks')
+@login_required
+@admin_required
+def admin_tasks():
+    return render_template('admin_tasks.html', title='Admin Tasks')
 
 
 @bp.route('/admin/settings', methods=['GET', 'POST'], endpoint='admin_settings')
@@ -168,12 +190,12 @@ def admin_sync_sonarr():
 
     flash("Sonarr library sync started...", "info")
     try:
-        sync_sonarr_library()
-        flash("Sonarr library sync completed successfully.", "success")
+        count = sync_sonarr_library()
+        flash(f"Sonarr library sync completed successfully. {count} shows processed.", "success")
     except Exception as e:
         flash(f"Error during Sonarr sync: {str(e)}", "error")
-        print(f"Sonarr sync error: {e}") # Or use current_app.logger.error
-    return redirect(url_for('main.admin_settings'))
+        current_app.logger.error(f"Sonarr sync error: {e}", exc_info=True)
+    return redirect(url_for('main.admin_tasks'))
 
 @bp.route('/admin/sync-radarr', methods=['POST'], endpoint='admin_sync_radarr')
 def admin_sync_radarr():
@@ -183,12 +205,12 @@ def admin_sync_radarr():
 
     flash("Radarr library sync started...", "info")
     try:
-        sync_radarr_library()
-        flash("Radarr library sync completed successfully.", "success")
+        count = sync_radarr_library()
+        flash(f"Radarr library sync completed successfully. {count} movies processed.", "success")
     except Exception as e:
         flash(f"Error during Radarr sync: {str(e)}", "error")
-        print(f"Radarr sync error: {e}") # Or use current_app.logger.error
-    return redirect(url_for('main.admin_settings'))
+        current_app.logger.error(f"Radarr sync error: {e}", exc_info=True)
+    return redirect(url_for('main.admin_tasks'))
 
 
 # In-memory cache for last Plex event (for demo; replace with persistent storage later)
@@ -458,13 +480,40 @@ def callback():
             if user_record['is_admin']:
                 session['is_admin'] = True
             flash(f'Welcome back, {user_record["username"]}! Admin status: {session["is_admin"]}.')
-        else:
-            # Optional: Create a non-admin user record if you want all Plex users to have one
-            # For now, just flash a generic welcome for non-linked Plex users
-            flash(f'Logged in as Plex user: {username}.')
-    else:
-        flash('Plex login successful, but could not retrieve Plex User ID.', 'warning')
+            
+            # Create User object from app/__init__.py and log them in with Flask-Login
+            # Assuming User class is accessible or we re-fetch from load_user logic
+            # For simplicity, let's re-fetch using the load_user mechanism if possible
+            # or directly instantiate if User class is imported/available.
+            # We need the User class definition from __init__.py to be accessible here.
+            # A common way is to have User model in a separate models.py
+            # For now, we'll assume load_user can be called or we construct it.
+            
+            # Simplest approach: Re-use the User class defined in __init__.py
+            # This requires a bit of a workaround or refactoring User class to be importable.
+            # Let's try to get the user object via the loader, which is cleaner.
+            user_for_login = current_app.login_manager._user_callback(user_record['id'])
+            if user_for_login:
+                login_user(user_for_login)
+                current_app.logger.info(f"Flask-Login: User {user_for_login.username} (ID: {user_for_login.id}) logged in.")
+            else:
+                current_app.logger.error(f"Flask-Login: Could not load user {user_record['id']} after Plex auth.")
+                flash('Login session error. Please try again.', 'danger')
+                return redirect(url_for('main.login'))
 
+        elif user_info: # User authenticated with Plex but not in local DB
+            # Potentially create a new user here if auto-registration is desired
+            # For now, just log them in with Plex details, no local admin rights
+            flash(f'User {username} (Plex) logged in. Not yet linked to a local account. Please complete onboarding or contact admin.', 'info')
+            # If you want to allow login without a local DB record, you'd create a temporary User object here
+            # and call login_user. However, this is generally not recommended without linking to a local user.
+            # For now, redirect to home, they won't be Flask-Login authenticated.
+
+        # Redirect to home or a specific page after login
+        return redirect(url_for('main.home'))
+
+    # Fallback if something went wrong before user_info was processed
+    flash('Plex login process encountered an issue.', 'warning')
     return redirect(url_for('main.home'))
 
 @bp.route('/logout', endpoint='plex_logout')
@@ -520,9 +569,7 @@ def get_radarr_poster(movie_title):
 def home():
     print(f"DEBUG: Session at start of /home: {list(session.items())}")
     db = database.get_db()
-    plex_event = None
-    poster_url = None
-
+    
     # Get user details from session
     s_user_id = session.get('user_id')
     s_username = session.get('username')
@@ -530,12 +577,11 @@ def home():
 
     print(f"DEBUG: Home - session user_id: {s_user_id}, username: {s_username}, is_admin: {s_is_admin}")
 
-    # Get the most recent relevant activity for the logged-in user from plex_activity_log
-    plex_event = None # Initialize plex_event
-    if s_username: # s_username is the Plex username string from session
+    plex_event_from_db = None # Original event from plex_activity_log
+    if s_username:
         current_app.logger.info(f"Attempting to fetch latest activity for user: {s_username} from plex_activity_log.")
         try:
-            latest_activity_row = db.execute(
+            plex_event_from_db = db.execute(
                 """
                 SELECT * FROM plex_activity_log
                 WHERE plex_username = ? 
@@ -546,9 +592,8 @@ def home():
                 (s_username,)
             ).fetchone()
 
-            if latest_activity_row:
-                plex_event = latest_activity_row # This is a sqlite3.Row object, acts like a dict
-                current_app.logger.info(f"Found latest activity for {s_username}: Event ID {plex_event['id']}, Type {plex_event['event_type']}, Title '{plex_event['title']}'")
+            if plex_event_from_db:
+                current_app.logger.info(f"Found latest activity for {s_username}: Event ID {plex_event_from_db['id']}, Type {plex_event_from_db['event_type']}, Title '{plex_event_from_db['title']}'")
             else:
                 current_app.logger.info(f"No recent relevant activity found for user {s_username} in plex_activity_log.")
         except Exception as e:
@@ -556,38 +601,73 @@ def home():
     else:
         current_app.logger.info("No user in session (s_username is None), not fetching from plex_activity_log.")
 
-    if plex_event:
-        current_app.logger.info(f"--- Processing Plex Activity Log Event ID: {plex_event['id']} ---")
-        # plex_event is now a row from plex_activity_log
-        media_type = plex_event['media_type'] 
-        activity_title = plex_event['title'] # This is movie title or episode title
-        activity_show_title = plex_event['show_title'] # This is show title for episodes, None for movies
+    # Prepare details for the template
+    plex_event_for_template = None
+    poster_url_for_template = None
+
+    if plex_event_from_db:
+        plex_event_for_template = dict(plex_event_from_db) # Convert to dict for modification
+        current_app.logger.info(f"--- Processing Plex Activity Log Event ID: {plex_event_for_template['id']} ---")
+        
+        media_type = plex_event_for_template.get('media_type')
+        activity_title = plex_event_for_template.get('title') # This is movie title or episode title
+        activity_show_title = plex_event_for_template.get('show_title') # This is show title for episodes
 
         current_app.logger.info(f"Activity Log Event: Type='{media_type}', Title='{activity_title}', Show='{activity_show_title}'")
 
         remote_poster_url = None
         if media_type == 'movie' and activity_title:
-            current_app.logger.info(f"Media type is 'movie'. Searching Radarr for '{activity_title}'.")
+            current_app.logger.info(f"Media type is 'movie'. Searching Radarr for poster for '{activity_title}'.")
             remote_poster_url = utils.get_radarr_poster(activity_title)
+            # Fetch tmdb_id and year for the movie to create a link
+            try:
+                movie_info_from_db = db.execute(
+                    "SELECT tmdb_id, year FROM radarr_movies WHERE title = ? COLLATE NOCASE", (activity_title,)
+                ).fetchone()
+                if movie_info_from_db:
+                    plex_event_for_template['tmdb_id'] = movie_info_from_db['tmdb_id']
+                    plex_event_for_template['year'] = movie_info_from_db['year']
+                    current_app.logger.info(f"Found tmdb_id: {plex_event_for_template['tmdb_id']} and year: {plex_event_for_template['year']} for movie '{activity_title}'")
+                else:
+                    plex_event_for_template['tmdb_id'] = None # Ensure keys exist even if not found
+                    plex_event_for_template['year'] = None
+                    current_app.logger.warning(f"Could not find '{activity_title}' in radarr_movies to get tmdb_id and year.")
+            except Exception as e_radarr_fetch:
+                plex_event_for_template['tmdb_id'] = None
+                plex_event_for_template['year'] = None
+                current_app.logger.error(f"Error fetching tmdb_id/year for movie '{activity_title}': {e_radarr_fetch}", exc_info=True)
+
         elif media_type == 'episode' and activity_show_title:
-            current_app.logger.info(f"Media type is 'episode'. Searching Sonarr for '{activity_show_title}'.")
+            current_app.logger.info(f"Media type is 'episode'. Searching Sonarr for poster for '{activity_show_title}'.")
             remote_poster_url = utils.get_sonarr_poster(activity_show_title)
+            # Future: Fetch show_tmdb_id or tvdb_id for episodes here if needed for linking
+            # For example, to link to a future /show/<tvdb_id>/season/<season_num>/episode/<ep_num> page:
+            # try:
+            #     show_info_from_db = db.execute(
+            #         "SELECT tvdb_id FROM sonarr_shows WHERE title = ? COLLATE NOCASE", (activity_show_title,)
+            #     ).fetchone()
+            #     if show_info_from_db:
+            #         plex_event_for_template['tvdb_id'] = show_info_from_db['tvdb_id']
+            # except Exception as e_sonarr_fetch:
+            #     current_app.logger.error(f"Error fetching tvdb_id for show '{activity_show_title}': {e_sonarr_fetch}", exc_info=True)
         else:
-            current_app.logger.warning(f"Media type '{media_type}' (Title: '{activity_title}', Show: '{activity_show_title}') is not 'movie' or 'episode' with sufficient info. Cannot fetch poster.")
+            current_app.logger.warning(f"Media type '{media_type}' (Title: '{activity_title}', Show: '{activity_show_title}') is not 'movie' or 'episode' with sufficient info for poster/linking.")
 
         if remote_poster_url:
-            poster_url = url_for('main.image_proxy', url=remote_poster_url)
-            current_app.logger.info(f"Successfully generated image proxy URL for: {remote_poster_url}")
+            poster_url_for_template = url_for('main.image_proxy', url=remote_poster_url)
+            current_app.logger.info(f"Successfully generated proxied poster_url: {poster_url_for_template}")
         else:
             current_app.logger.warning(f"Failed to get remote_poster_url for media_type='{media_type}', title='{activity_title}', show_title='{activity_show_title}'.")
 
-        current_app.logger.info(f"Final poster_url for template: {poster_url}")
-    print(f"DEBUG: Passing to template: plex_event defined: {plex_event is not None}, username: {s_username}, is_admin: {s_is_admin}, poster_url defined: {poster_url is not None}")
+        current_app.logger.info(f"Final plex_event_for_template: {plex_event_for_template}")
+        current_app.logger.info(f"Final poster_url_for_template: {poster_url_for_template}")
+
+    print(f"DEBUG: Passing to template: plex_event defined: {plex_event_for_template is not None}, username: {s_username}, is_admin: {s_is_admin}, poster_url defined: {poster_url_for_template is not None}")
     return render_template('home.html', 
-                           plex_event=plex_event, 
+                           plex_event=plex_event_for_template, 
                            username=s_username, 
                            is_admin=s_is_admin, 
-                           poster_url=poster_url)
+                           poster_url=poster_url_for_template)
 
 @bp.route('/plex/debug')
 def plex_debug():
@@ -988,17 +1068,70 @@ def search():
     try:
         like_query = f"%{query_term.lower()}%"
         cursor_movies = db.execute(
-            "SELECT id, title, poster_url, fanart_url FROM radarr_movies WHERE LOWER(title) LIKE ?",
+            "SELECT tmdb_id, title, year, poster_url, fanart_url FROM radarr_movies WHERE LOWER(title) LIKE ?",
             (like_query,)
         )
         for row in cursor_movies.fetchall():
+            # Construct a unique cache key prefix using tmdb_id and title
+            safe_title_for_key = row['title'].replace(' ', '_').replace('/', '_') if row['title'] else 'unknown_title'
+            cache_key_prefix = f"movie_{str(row['tmdb_id'])}_{safe_title_for_key}"
+
             results.append({
                 'type': 'movie',
+                'id': row['tmdb_id'],
                 'title': row['title'],
-                'poster': cache_image(row['poster_url'], 'poster', 'movie_poster_' + row['title'], 'radarr'),
-                'background': cache_image(row['fanart_url'], 'background', 'movie_bg_' + row['title'], 'radarr')
+                'year': row['year'],
+                'poster': utils.cache_image(row['poster_url'], 'posters', cache_key_prefix, 'radarr') if row['poster_url'] else None,
+                'background': utils.cache_image(row['fanart_url'], 'background', f"{cache_key_prefix}_bg", 'radarr') if row['fanart_url'] else None
             })
     except Exception as e:
         current_app.logger.error(f"Error searching Radarr movies in DB: {e}", exc_info=True)
 
     return jsonify(results)
+
+
+# --- Movie Detail Page ---
+@bp.route('/movie/<int:tmdb_id>')
+def movie_detail(tmdb_id):
+    db = database.get_db()
+    # Fetch all relevant movie details
+    movie_data = db.execute(
+        """SELECT tmdb_id, title, year, overview, poster_url, fanart_url, status, 
+                  path_on_disk, has_file, imdb_id 
+           FROM radarr_movies 
+           WHERE tmdb_id = ?""",
+        (tmdb_id,)
+    ).fetchone()
+
+    if movie_data is None:
+        flash('Movie not found.', 'error')
+        return redirect(url_for('main.home'))
+
+    # Convert sqlite3.Row to a mutable dictionary for easier manipulation
+    movie = dict(movie_data)
+
+    # Generate cache keys safely, handling potential None title
+    movie_title_for_cache = movie.get('title', 'unknown_movie').replace(' ', '_').replace('/', '_') # Basic sanitization for cache key
+    tmdb_id_str = str(movie.get('tmdb_id', 'unknown_id'))
+    
+    poster_cache_key = f"movie_poster_{tmdb_id_str}_{movie_title_for_cache}"
+    fanart_cache_key = f"movie_fanart_{tmdb_id_str}_{movie_title_for_cache}"
+
+    # Use utils.cache_image for poster and fanart, handling cases where URLs might be None
+    movie['poster_display_url'] = utils.cache_image(
+        movie.get('poster_url'), 
+        'posters', 
+        poster_cache_key, 
+        'radarr'
+    ) if movie.get('poster_url') else None
+
+    movie['fanart_display_url'] = utils.cache_image(
+        movie.get('fanart_url'), 
+        'background', 
+        fanart_cache_key, 
+        'radarr'
+    ) if movie.get('fanart_url') else None
+    
+    # Future: Fetch cast, crew, trailers, etc.
+
+    return render_template('movie_detail.html', movie=movie)

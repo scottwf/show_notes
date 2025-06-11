@@ -3,8 +3,7 @@
 {% block title %}{% block page_title %}{% endblock %} - ShowNotes{% endblock %}
 
 {% block head %}
-  <link rel="stylesheet" href="{{ url_for('static', filename='admin_settings.css') }}">
-  <script src="{{ url_for('static', filename='darkmode.js') }}" defer></script>
+
   <script src="{{ url_for('static', filename='search.js') }}" defer></script>
   {# Only include admin_settings.js if needed (e.g., on admin pages) #}
   {% block extra_js %}{% endblock %}

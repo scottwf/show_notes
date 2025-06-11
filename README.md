@@ -15,7 +15,11 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
   - On page load, dots are colored green or red based on an initial connection test.
   - Clicking the "Test" button for any service triggers a live API check and updates the dot color instantly without a page reload.
 - **New Admin Panel UI:** Introduced a dedicated admin section (`/admin/dashboard`) with a responsive sidebar and a new dashboard page. The service configuration page is now part of this new layout.
-- **Library Sync Refinements:** Separated Sonarr and Radarr library sync functionalities into distinct admin actions with dedicated UI buttons and backend routes (`/admin/sync-sonarr`, `/admin/sync-radarr`).
+- **Admin Tasks Page & Sync Enhancements:** Introduced a dedicated Admin Tasks page (`/admin/tasks`) for Sonarr and Radarr library synchronization. This includes:
+    - Clearer separation of sync actions.
+    - User feedback via flash messages indicating the number of shows/movies processed.
+    - Consistent UI styling for sidebar links (e.g., 'Tasks' link) and action buttons.
+    - Corrected logo display for Sonarr/Radarr in both light and dark modes on the tasks page.
 - **Plex Integration:** Resolved Plex OAuth login/logout flows, session management. Enhanced Plex webhook handling to capture detailed events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. The homepage now displays "Now Playing" or "Recently Played" information for the logged-in user based on this detailed log.
 - **Search Image Handling:** Fixed display of Sonarr/Radarr images in search results by ensuring absolute URLs are used and API keys are included for image fetching and caching.
 

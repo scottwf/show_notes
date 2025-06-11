@@ -1,5 +1,6 @@
 import os
 from flask import Flask
+from flask_login import LoginManager
 from . import database
 import sqlite3
 import logging
@@ -77,6 +78,38 @@ def create_app(test_config=None):
             app.logger.info(f"Database successfully initialized/updated at {app.config['DATABASE']}.")
 
     from . import routes
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'main.login'  # Or your actual login route like 'main.login_plex_start'
+    login_manager.session_protection = "strong"
+
+    class User:
+        def __init__(self, id, username, is_admin=False):
+            self.id = id
+            self.username = username
+            self.is_admin = bool(is_admin) # Ensure boolean
+            self.is_active = True
+            self.is_authenticated = True
+            self.is_anonymous = False
+
+        def get_id(self):
+            return str(self.id)
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        db = database.get_db()
+        user_data = db.execute(
+            'SELECT id, username, is_admin FROM users WHERE id = ?',
+            (user_id,)
+        ).fetchone()
+        if user_data:
+            return User(
+                id=user_data['id'], 
+                username=user_data['username'], 
+                is_admin=user_data['is_admin'] # Directly access, bool() in User.__init__ handles conversion
+            )
+        return None
+
     app.register_blueprint(routes.bp)
 
     # Add other blueprints here (if any)
