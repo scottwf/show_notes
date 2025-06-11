@@ -16,7 +16,8 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
   - Clicking the "Test" button for any service triggers a live API check and updates the dot color instantly without a page reload.
 - **New Admin Panel UI:** Introduced a dedicated admin section (`/admin/dashboard`) with a responsive sidebar and a new dashboard page. The service configuration page is now part of this new layout.
 - **Library Sync Refinements:** Separated Sonarr and Radarr library sync functionalities into distinct admin actions with dedicated UI buttons and backend routes (`/admin/sync-sonarr`, `/admin/sync-radarr`).
-- **Plex Integration:** Resolved Plex OAuth login/logout flows, session management, and webhook handling.
+- **Plex Integration:** Resolved Plex OAuth login/logout flows, session management. Enhanced Plex webhook handling to capture detailed events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. The homepage now displays "Now Playing" or "Recently Played" information for the logged-in user based on this detailed log.
+- **Search Image Handling:** Fixed display of Sonarr/Radarr images in search results by ensuring absolute URLs are used and API keys are included for image fetching and caching.
 
 ### UI & Styling
 - **Tailwind CSS & Dark Mode:** The entire application uses Tailwind CSS for styling, including full dark mode support.
@@ -153,13 +154,12 @@ shownotes/
 - All API calls are tracked in the SQLite database (`api_usage` table) for cost monitoring.
 - Prompts are built using templates from `app/prompts.py` or `app/prompt_builder.py`.
 
-### Plex
 - Integration via webhooks to track viewed episodes.
 - The `/plex-webhook` route handles incoming POST requests when an episode is watched.
 - Updates `current_watch` table and `webhook_log` table.
 - This data can be used to adjust spoiler levels for summaries.
 - **Plex OAuth login** using PIN-based flow. Credentials are securely stored in the database, not in .env files.
-- **Webhook event display:** Homepage shows the most recent event for the logged-in user, with rich metadata and poster.
+- **Webhook event display:** Homepage shows the most recent relevant activity (play, pause, resume, stop, scrobble) for the logged-in user, sourced from the `plex_activity_log` table, including rich metadata and poster image.
 
 ### Sonarr
 - Used to retrieve upcoming episode schedules for a calendar view.
@@ -211,8 +211,10 @@ The application uses an SQLite database (typically `data/shownotes.db` or `db.sq
 -   **`season_metadata`**: Stores information on seasons of shows.
 -   **`top_characters`**: Stores main characters for each show (character name, actor, episode count).
 -   **`current_watch`**: Tracks the latest episode watched per user (from Plex webhooks).
--   **`webhook_log`**: Records every Plex webhook event received.
+-   **`webhook_log`**: Records a minimal log of every Plex webhook event received (older table).
+-   **`plex_activity_log`**: Stores detailed information for various Plex webhook events (e.g., `media.play`, `media.pause`, `media.resume`, `media.stop`, `media.scrobble`), including `event_type`, `plex_username`, `media_type`, `title`, `show_title`, `season_episode`, `player_uuid`, `session_key`, `view_offset_ms`, `duration_ms`, `event_timestamp`, and `raw_payload`.
 -   **`autocomplete_logs`**: Records when a user selects an autocomplete suggestion.
+-   **`plex_events`**: Older table for basic Plex play events (largely superseded by `plex_activity_log` for detailed tracking but kept for some historical context or specific uses).
 
 ### Database Initialization
 Tables are created automatically the first time you run the database initialization command.

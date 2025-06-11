@@ -1,11 +1,12 @@
 import os
 import json
 import requests
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash, current_app, send_from_directory
 from werkzeug.security import generate_password_hash
+import urllib.parse
 
-from . import database
-from .utils import sync_sonarr_library, sync_radarr_library, test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection
+from . import database, utils
+from .utils import sync_sonarr_library, sync_radarr_library, test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection, get_sonarr_poster, get_radarr_poster
 
 PLEX_HEADERS = {
     'X-Plex-Client-Identifier': os.environ.get('PLEX_CLIENT_ID', 'shownotes'),
@@ -213,6 +214,8 @@ def plex_webhook():
                 payload = pyjson.loads(payload)
             else:
                 payload = {}
+        current_app.logger.info("--- Received Plex Webhook POST ---")
+        current_app.logger.info(f"Webhook payload: {pyjson.dumps(payload, indent=2)}")
         # Store the last event in memory for backward compatibility
         global last_plex_event
         last_plex_event = payload
@@ -222,6 +225,57 @@ def plex_webhook():
         raw_json_payload = pyjson.dumps(payload) # Store the entire payload
         client_ip = request.remote_addr
 
+        # --- Log to plex_activity_log --- 
+        activity_event_types = ['media.play', 'media.pause', 'media.resume', 'media.stop', 'media.scrobble']
+        if event_type in activity_event_types:
+            try:
+                db_activity = database.get_db()
+                metadata = payload.get('Metadata', {})
+                account = payload.get('Account', {})
+                player = payload.get('Player', {})
+
+                plex_username = account.get('title')
+                player_title = player.get('title')
+                player_uuid = player.get('uuid')
+                session_key = metadata.get('sessionKey') # Plex often puts sessionKey here for media events
+                rating_key = metadata.get('ratingKey')
+                parent_rating_key = metadata.get('parentRatingKey')
+                grandparent_rating_key = metadata.get('grandparentRatingKey')
+                media_type_activity = metadata.get('type')
+                title_activity = metadata.get('title')
+                show_title_activity = metadata.get('grandparentTitle') if media_type_activity == 'episode' else None
+                
+                season_episode_str = None
+                if media_type_activity == 'episode':
+                    season_num = metadata.get('parentIndex')
+                    episode_num = metadata.get('index')
+                    if season_num is not None and episode_num is not None:
+                        season_episode_str = f"S{str(season_num).zfill(2)}E{str(episode_num).zfill(2)}"
+                
+                view_offset_ms = metadata.get('viewOffset')
+                duration_ms = metadata.get('duration')
+
+                sql_insert_activity = """
+                    INSERT INTO plex_activity_log (
+                        event_type, plex_username, player_title, player_uuid, session_key,
+                        rating_key, parent_rating_key, grandparent_rating_key, media_type,
+                        title, show_title, season_episode, view_offset_ms, duration_ms, raw_payload
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                params_activity = (
+                    event_type, plex_username, player_title, player_uuid, session_key,
+                    rating_key, parent_rating_key, grandparent_rating_key, media_type_activity,
+                    title_activity, show_title_activity, season_episode_str, view_offset_ms, duration_ms, raw_json_payload
+                )
+                db_activity.execute(sql_insert_activity, params_activity)
+                db_activity.commit()
+                current_app.logger.info(f"Logged event '{event_type}' for '{title_activity}' to plex_activity_log.")
+            except Exception as e_activity:
+                current_app.logger.error(f"Error logging to plex_activity_log: {e_activity}", exc_info=True)
+                # Optionally rollback if part of a larger transaction, but here it's likely standalone.
+
+        # Original logging to plex_events (only for media.play)
         if event_type == 'media.play':
             # Insert into DB only if it's a 'media.play' (start) event
             db = database.get_db()
@@ -470,89 +524,64 @@ def home():
     poster_url = None
 
     # Get user details from session
-    s_user_id = session.get('user_id') # This is Plex account ID (integer or string)
-    s_username = session.get('username') # This is Plex account title (string)
+    s_user_id = session.get('user_id')
+    s_username = session.get('username')
     s_is_admin = session.get('is_admin', False)
 
     print(f"DEBUG: Home - session user_id: {s_user_id}, username: {s_username}, is_admin: {s_is_admin}")
 
-    # Try to get the most recent event and then filter by user if available
-    latest_event_row = db.execute('SELECT * FROM plex_events ORDER BY timestamp DESC, id DESC LIMIT 1').fetchone()
-    
-    row = None # Initialize row to None, it will be set if the event matches the logged-in user
-    if latest_event_row and s_user_id:
+    # Get the most recent relevant activity for the logged-in user from plex_activity_log
+    plex_event = None # Initialize plex_event
+    if s_username: # s_username is the Plex username string from session
+        current_app.logger.info(f"Attempting to fetch latest activity for user: {s_username} from plex_activity_log.")
         try:
-            metadata_json = latest_event_row['metadata']
-            if metadata_json:
-                metadata = json.loads(metadata_json)
-                # Plex webhook structures vary; common patterns for user ID:
-                # Check Account.id (integer)
-                plex_event_user_id_int = metadata.get('Account', {}).get('id')
-                # Check User.id (integer, less common but possible in some payloads)
-                plex_event_user_id_user_int = metadata.get('User', {}).get('id')
+            latest_activity_row = db.execute(
+                """
+                SELECT * FROM plex_activity_log
+                WHERE plex_username = ? 
+                  AND event_type IN ('media.play', 'media.resume', 'media.stop', 'media.scrobble', 'media.pause')
+                ORDER BY event_timestamp DESC, id DESC
+                LIMIT 1
+                """,
+                (s_username,)
+            ).fetchone()
 
-                # Compare with session user ID (ensure types match, e.g., both int or both str)
-                # Session s_user_id is often an int from Plex OAuth
-                if (plex_event_user_id_int is not None and plex_event_user_id_int == s_user_id) or \
-                   (plex_event_user_id_user_int is not None and plex_event_user_id_user_int == s_user_id):
-                    row = latest_event_row # This event is for the current user
-                else:
-                    # Log if an event was found but didn't match the user, for debugging
-                    current_app.logger.debug(f"Latest Plex event (ID: {latest_event_row['id']}) user ID ({plex_event_user_id_int or plex_event_user_id_user_int}) does not match session user ID ({s_user_id}).")
+            if latest_activity_row:
+                plex_event = latest_activity_row # This is a sqlite3.Row object, acts like a dict
+                current_app.logger.info(f"Found latest activity for {s_username}: Event ID {plex_event['id']}, Type {plex_event['event_type']}, Title '{plex_event['title']}'")
             else:
-                current_app.logger.debug(f"Latest Plex event (ID: {latest_event_row['id']}) has no metadata to check user.")
-
-        except json.JSONDecodeError:
-            current_app.logger.error(f"Failed to parse metadata JSON for plex_event id {latest_event_row['id']}")
+                current_app.logger.info(f"No recent relevant activity found for user {s_username} in plex_activity_log.")
         except Exception as e:
-            current_app.logger.error(f"Error processing plex_event metadata for event ID {latest_event_row.get('id', 'N/A')}: {e}", exc_info=True)
-    elif latest_event_row and not s_user_id:
-        # Logic for when no user is logged in but an event exists (e.g., show latest global event or nothing)
-        # For now, we are not setting 'row', so no event will be shown unless a user is logged in and matches.
-        current_app.logger.debug("No user in session; not attempting to match latest Plex event.")
+            current_app.logger.error(f"Error fetching from plex_activity_log for user {s_username}: {e}", exc_info=True)
     else:
-        current_app.logger.debug("No Plex events found in the database or no user in session.")
-    
-    if row:
-        try:
-            plex_event = json.loads(row['metadata']) if row['metadata'] else dict(row)
-        except Exception:
-            plex_event = dict(row)
-    else:
-        plex_event = None
+        current_app.logger.info("No user in session (s_username is None), not fetching from plex_activity_log.")
 
-    # Try to use local cached poster if available
-    if plex_event and plex_event.get('Metadata'):
-        import os, re
-        meta = plex_event['Metadata']
-        poster_url = None
-        clean_name = None
-        ext = '.jpg'
-        if meta.get('type') == 'episode' and meta.get('grandparentTitle'):
-            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', meta['grandparentTitle'].lower())
-        elif meta.get('type') == 'movie' and meta.get('title'):
-            clean_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', meta['title'].lower())
-        if clean_name:
-            # Check for any allowed extension
-            static_dir = os.path.join(os.path.dirname(__file__), 'static', 'poster')
-            for candidate_ext in ['.jpg', '.jpeg', '.png', '.webp']:
-                candidate_path = os.path.join(static_dir, f'poster_{clean_name}{candidate_ext}')
-                if os.path.exists(candidate_path):
-                    poster_url = url_for('static', filename=f'poster/poster_{clean_name}{candidate_ext}')
-                    break
-        # If not cached, fallback to Sonarr/Radarr/remote
-        if not poster_url:
-            if meta.get('type') == 'episode' and meta.get('grandparentTitle'):
-                poster_url = get_sonarr_poster(meta['grandparentTitle'])
-            elif meta.get('type') == 'movie' and meta.get('title'):
-                poster_url = get_radarr_poster(meta['title'])
-            # fallback to Plex poster
-            if not poster_url:
-                thumb = meta.get('grandparentThumb') or meta.get('thumb')
-                if thumb and thumb.startswith('http'):
-                    poster_url = thumb
-                elif thumb:
-                    poster_url = f"https://shownotes.chitekmedia.club{thumb}"
+    if plex_event:
+        current_app.logger.info(f"--- Processing Plex Activity Log Event ID: {plex_event['id']} ---")
+        # plex_event is now a row from plex_activity_log
+        media_type = plex_event['media_type'] 
+        activity_title = plex_event['title'] # This is movie title or episode title
+        activity_show_title = plex_event['show_title'] # This is show title for episodes, None for movies
+
+        current_app.logger.info(f"Activity Log Event: Type='{media_type}', Title='{activity_title}', Show='{activity_show_title}'")
+
+        remote_poster_url = None
+        if media_type == 'movie' and activity_title:
+            current_app.logger.info(f"Media type is 'movie'. Searching Radarr for '{activity_title}'.")
+            remote_poster_url = utils.get_radarr_poster(activity_title)
+        elif media_type == 'episode' and activity_show_title:
+            current_app.logger.info(f"Media type is 'episode'. Searching Sonarr for '{activity_show_title}'.")
+            remote_poster_url = utils.get_sonarr_poster(activity_show_title)
+        else:
+            current_app.logger.warning(f"Media type '{media_type}' (Title: '{activity_title}', Show: '{activity_show_title}') is not 'movie' or 'episode' with sufficient info. Cannot fetch poster.")
+
+        if remote_poster_url:
+            poster_url = url_for('main.image_proxy', url=remote_poster_url)
+            current_app.logger.info(f"Successfully generated image proxy URL for: {remote_poster_url}")
+        else:
+            current_app.logger.warning(f"Failed to get remote_poster_url for media_type='{media_type}', title='{activity_title}', show_title='{activity_show_title}'.")
+
+        current_app.logger.info(f"Final poster_url for template: {poster_url}")
     print(f"DEBUG: Passing to template: plex_event defined: {plex_event is not None}, username: {s_username}, is_admin: {s_is_admin}, poster_url defined: {poster_url is not None}")
     return render_template('home.html', 
                            plex_event=plex_event, 
@@ -801,28 +830,106 @@ def login_plex_poll():
         return jsonify({'authorized': True})
     return jsonify({'authorized': False})
 
+# --- Image Proxy -----------------------------------------------------------
+
+@bp.route('/image-proxy')
+def image_proxy():
+    remote_url = request.args.get('url')
+    if not remote_url:
+        return 'Missing URL parameter', 400
+
+    # Basic validation to ensure it's a Sonarr/Radarr URL if possible
+    # This is not a security feature, just a sanity check.
+    settings = database.get_db().execute('SELECT radarr_url, sonarr_url, radarr_api_key, sonarr_api_key FROM settings LIMIT 1').fetchone()
+    radarr_url = settings['radarr_url'] if settings else ''
+    sonarr_url = settings['sonarr_url'] if settings else ''
+
+    if not (remote_url.startswith(radarr_url) or remote_url.startswith(sonarr_url)):
+        # For security, you might want to strictly enforce this or have a better check
+        pass # Allowing any URL for now, but be cautious
+
+    try:
+        # Generate a safe filename from the URL
+        parsed_url = urllib.parse.urlparse(remote_url)
+        # Use a hash of the path to avoid issues with long filenames or special characters
+        filename = f"{hash(parsed_url.path)}.jpg"
+        
+        cache_dir = os.path.join(current_app.static_folder, 'poster_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        image_path = os.path.join(cache_dir, filename)
+
+        if not os.path.exists(image_path):
+            # Fetch from remote and save to cache
+            # Add API keys if required by Sonarr/Radarr for media covers
+            headers = {}
+            if remote_url.startswith(sonarr_url):
+                headers['X-Api-Key'] = settings['sonarr_api_key']
+            elif remote_url.startswith(radarr_url):
+                headers['X-Api-Key'] = settings['radarr_api_key']
+
+            response = requests.get(remote_url, stream=True, headers=headers)
+            response.raise_for_status()
+            with open(image_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+        return send_from_directory(cache_dir, filename)
+
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Failed to proxy image from {remote_url}: {e}")
+        # Optionally, return a placeholder image
+        return send_from_directory(current_app.static_folder, 'placeholder.png')
+    except Exception as e:
+        current_app.logger.error(f"An unexpected error occurred in image_proxy: {e}")
+        return 'Internal Server Error', 500
+
 # --- Search Endpoint -------------------------------------------------------
 
 @bp.route('/search')
 def search():
     """Search shows and movies from the local database."""
-    query_term = request.args.get('q', '').strip() # Keep original case for prefix, but use lower for LIKE comparison
+    query_term = request.args.get('q', '').strip()
     if not query_term:
         return jsonify([])
 
     db = database.get_db()
+    # Retrieve settings individually using database.get_setting
+    raw_sonarr_url = database.get_setting('sonarr_url')
+    sonarr_url_base = raw_sonarr_url.rstrip('/') if raw_sonarr_url else ''
+    sonarr_api_key_val = database.get_setting('sonarr_api_key') or ''
+    
+    raw_radarr_url = database.get_setting('radarr_url')
+    radarr_url_base = raw_radarr_url.rstrip('/') if raw_radarr_url else ''
+    radarr_api_key_val = database.get_setting('radarr_api_key') or ''
     results = []
 
     # Ensure re is imported if not already globally in this file (it is via other functions)
     # import re
 
-    def cache_image(url, folder, prefix):
-        if not url:
+    def cache_image(original_url, folder, prefix, item_type): # item_type can be 'sonarr' or 'radarr'
+        if not original_url:
             return None
+
+        # Determine absolute URL and API key
+        current_url = original_url
+        headers = {}
+        if item_type == 'sonarr' and sonarr_url_base:
+            if original_url.startswith('/'):
+                current_url = f"{sonarr_url_base}{original_url}"
+            if sonarr_api_key_val:
+                headers['X-Api-Key'] = sonarr_api_key_val
+        elif item_type == 'radarr' and radarr_url_base:
+            if original_url.startswith('/'):
+                current_url = f"{radarr_url_base}{original_url}"
+            if radarr_api_key_val:
+                headers['X-Api-Key'] = radarr_api_key_val
+
+        # Sanitize prefix: use the original title for better uniqueness before lowercasing for filename
         # Sanitize prefix: use the original title for better uniqueness before lowercasing for filename
         safe_prefix = re.sub(r'[^\w\s-]', '', prefix).strip().replace(' ', '_') # Clean non-alphanum, keep spaces as underscores
 
-        ext = os.path.splitext(url)[-1].split('?')[0]
+        ext = os.path.splitext(current_url)[-1].split('?')[0]
         if not ext or ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
             ext = '.jpg' # Default extension
 
@@ -837,24 +944,26 @@ def search():
             try:
                 os.makedirs(static_folder_path)
             except OSError as e:
-                print(f"Error creating directory {static_folder_path}: {e}")
-                # Cannot create folder, so cannot cache image locally
-                return url # Fallback to remote URL
+                current_app.logger.error(f"Error creating directory {static_folder_path}: {e}")
+                return current_url # Fallback to original (potentially absolute) URL
 
         path = os.path.join(static_folder_path, safe_filename)
 
         if not os.path.exists(path):
             try:
-                r = requests.get(url, timeout=10, stream=True)
-                if r.status_code == 200:
-                    with open(path, 'wb') as f:
-                        for chunk in r.iter_content(1024):
-                            f.write(chunk)
-                else: # Failed to download
-                    return url # Fallback to remote URL
-            except Exception as e:
-                print(f"Error caching image {url} to {path}: {e}")
-                return url # Fallback to remote URL
+                # Use current_url which is now absolute, and include headers
+                r = requests.get(current_url, timeout=10, stream=True, headers=headers)
+                r.raise_for_status() # Will raise an HTTPError for bad responses (4XX or 5XX)
+                with open(path, 'wb') as f:
+                    for chunk in r.iter_content(1024):
+                        f.write(chunk)
+                current_app.logger.info(f"Successfully cached {current_url} to {path}")
+            except requests.exceptions.RequestException as e:
+                current_app.logger.error(f"Error caching image {current_url} to {path}: {e}")
+                return current_url # Fallback to original (potentially absolute) URL
+            except Exception as e: # Catch any other unexpected errors
+                current_app.logger.error(f"Unexpected error caching image {current_url} to {path}: {e}")
+                return current_url
 
         return url_for('static', filename=f'{folder}/{safe_filename}')
 
@@ -869,11 +978,11 @@ def search():
             results.append({
                 'type': 'show',
                 'title': row['title'],
-                'poster': cache_image(row['poster_url'], 'poster', 'show_poster_' + row['title']),
-                'background': cache_image(row['fanart_url'], 'background', 'show_bg_' + row['title'])
+                'poster': cache_image(row['poster_url'], 'poster', 'show_poster_' + row['title'], 'sonarr'),
+                'background': cache_image(row['fanart_url'], 'background', 'show_bg_' + row['title'], 'sonarr')
             })
     except Exception as e:
-        print(f"Error searching Sonarr shows in DB: {e}") # Replace with app.logger.error
+        current_app.logger.error(f"Error searching Sonarr shows in DB: {e}", exc_info=True)
 
     # Search Radarr movies
     try:
@@ -886,10 +995,10 @@ def search():
             results.append({
                 'type': 'movie',
                 'title': row['title'],
-                'poster': cache_image(row['poster_url'], 'poster', 'movie_poster_' + row['title']),
-                'background': cache_image(row['fanart_url'], 'background', 'movie_bg_' + row['title'])
+                'poster': cache_image(row['poster_url'], 'poster', 'movie_poster_' + row['title'], 'radarr'),
+                'background': cache_image(row['fanart_url'], 'background', 'movie_bg_' + row['title'], 'radarr')
             })
     except Exception as e:
-        print(f"Error searching Radarr movies in DB: {e}") # Replace with app.logger.error
+        current_app.logger.error(f"Error searching Radarr movies in DB: {e}", exc_info=True)
 
     return jsonify(results)

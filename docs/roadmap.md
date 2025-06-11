@@ -5,7 +5,8 @@ This document outlines the planned features and development stages for the ShowN
 ## Completed
 - [x] **Dynamic Service Status Indicators:** Added visual connection status indicators (green/red dots) for configured services that update in real-time via JavaScript.
 - [x] Plex OAuth login (PIN-based, DB-stored credentials), logout, session management, and onboarding fixes.
-- [x] Show most recent Plex event for logged-in user on homepage (Plex Webhook processing fixes and schema updates).
+- [x] **Enhanced Plex Event Handling & Homepage Display:** Implemented detailed logging of Plex webhook events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. Updated the homepage to display "Now Playing" or "Recently Played" information for the logged-in user, using data from this new log.
+- [x] **Search Image Display Fix:** Corrected image display in search results by ensuring absolute URLs and proper API key usage for Sonarr/Radarr images, with on-demand caching.
 - [x] Integrate Sonarr/Radarr APIs for reliable poster/metadata display.
 - [x] Admin settings UI for service URLs and API keys (initial version).
 - [x] Separated Sonarr and Radarr library sync functionalities with dedicated admin actions.
@@ -17,7 +18,7 @@ This document outlines the planned features and development stages for the ShowN
 - [x] Initial documentation setup.
 
 ## Next Steps
-- [ ] Add caching or proxying for poster images to improve performance and reliability
+- [ ] **Pre-cache Media Assets:** Implement image caching (posters, fanart) during Sonarr/Radarr library synchronization to improve performance and local availability for search and display. (Currently, search uses on-demand caching).
 - [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)
 - [ ] Consider showing a history/list of recent events per user
 - [ ] Add more metadata from Sonarr/Radarr to homepage card
