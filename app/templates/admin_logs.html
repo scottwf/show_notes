@@ -1,0 +1,147 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Logs{% endblock %}
+
+{% block admin_extra_css %}
+<style>
+    /* Optional: if you need very specific styles not easily done with Tailwind */
+    #logDisplay {
+        white-space: pre-wrap; /* Allows wrapping long lines but preserves whitespace */
+        word-break: break-all; /* Breaks long words/strings if they would overflow */
+    }
+</style>
+{% endblock %}
+
+{% block admin_page_header %}
+    <h1 class="text-2xl font-semibold text-gray-800 dark:text-slate-100">Application Logs</h1>
+{% endblock %}
+
+{% block admin_page_content %}
+<div class="container mx-auto p-4">
+    <div class="mb-4 flex flex-wrap items-center gap-4">
+        <div>
+            <label for="logFileSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Log File:</label>
+            <select id="logFileSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                <!-- Options will be populated by JavaScript -->
+            </select>
+        </div>
+        <div>
+            <label for="logSearchInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Logs:</label>
+            <input type="text" id="logSearchInput" class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md p-2" placeholder="Filter displayed logs...">
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-2">
+        <div id="logDisplayWrapper" class="h-[60vh] overflow-y-auto rounded-md bg-gray-50 dark:bg-gray-900 p-3">
+            <pre id="logDisplay" class="text-xs text-gray-800 dark:text-gray-200"></pre>
+        </div>
+         <div id="logStatus" class="mt-2 text-sm text-gray-600 dark:text-gray-400"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const logFileSelect = document.getElementById('logFileSelect');
+        const logSearchInput = document.getElementById('logSearchInput');
+        const logDisplay = document.getElementById('logDisplay');
+        const logDisplayWrapper = document.getElementById('logDisplayWrapper');
+        const logStatus = document.getElementById('logStatus');
+
+        let currentEventSource = null;
+        let displayedLogLines = []; // To store all lines for client-side filtering
+
+        async function fetchLogFiles() {
+            try {
+                const response = await fetch('{{ url_for("main.admin_logs_list") }}');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const files = await response.json();
+                logFileSelect.innerHTML = ''; // Clear existing options
+                files.forEach(file => {
+                    const option = new Option(file, file);
+                    logFileSelect.add(option);
+                });
+                if (files.length > 0) {
+                    logFileSelect.value = files.find(f => f === 'shownotes.log') || files[0]; // Default to shownotes.log or first file
+                    loadLogContent(logFileSelect.value);
+                }
+            } catch (error) {
+                console.error('Error fetching log files:', error);
+                logStatus.textContent = 'Error fetching log files list.';
+            }
+        }
+
+        async function loadLogContent(filename) {
+            if (!filename) return;
+            logStatus.textContent = `Loading ${filename}...`;
+            displayedLogLines = []; // Reset lines
+            logDisplay.innerHTML = ''; // Clear previous content
+
+            if (currentEventSource) {
+                currentEventSource.close();
+                currentEventSource = null;
+            }
+
+            try {
+                // Fetch initial last N lines
+                const response = await fetch(`{{ url_for("main.admin_get_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const initialLines = await response.json();
+                initialLines.forEach(line => {
+                    displayedLogLines.push(line);
+                });
+                filterAndDisplayLogs(); // Display initial lines
+                logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Scroll to bottom
+
+                // Start SSE
+                currentEventSource = new EventSource(`{{ url_for("main.admin_stream_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
+                logStatus.textContent = `Streaming updates for ${filename}...`;
+
+                currentEventSource.onmessage = function (event) {
+                    displayedLogLines.push(event.data);
+                    // Keep the array from growing indefinitely if performance becomes an issue
+                    // For now, let's assume client-side filtering is on all received lines.
+                    // A more robust solution might involve server-side windowing for very large/fast logs.
+                    filterAndDisplayLogs();
+                    logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Auto-scroll
+                };
+
+                currentEventSource.onerror = function (error) {
+                    console.error('SSE error:', error);
+                    logStatus.textContent = `Error streaming ${filename}. Connection closed.`;
+                    if (currentEventSource) currentEventSource.close();
+                };
+
+            } catch (error) {
+                console.error('Error loading log content:', error);
+                logDisplay.textContent = 'Error loading log content.';
+                logStatus.textContent = `Error loading ${filename}.`;
+            }
+        }
+
+        function filterAndDisplayLogs() {
+            const searchTerm = logSearchInput.value.toLowerCase();
+            const filteredLines = displayedLogLines.filter(line => line.toLowerCase().includes(searchTerm));
+            logDisplay.innerHTML = ''; // Clear existing lines
+
+            // Create a document fragment to batch DOM appends for performance
+            const fragment = document.createDocumentFragment();
+            filteredLines.forEach(line => {
+                const lineElement = document.createElement('div');
+                lineElement.textContent = line;
+                fragment.appendChild(lineElement);
+            });
+            logDisplay.appendChild(fragment);
+        }
+
+        logFileSelect.addEventListener('change', function () {
+            loadLogContent(this.value);
+        });
+
+        logSearchInput.addEventListener('input', function() {
+            filterAndDisplayLogs();
+        });
+
+        fetchLogFiles(); // Initial fetch
+    });
+</script>
+{% endblock %}

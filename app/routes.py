@@ -1,7 +1,9 @@
 import os
 import json
 import requests
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash, current_app, send_from_directory
+import glob
+import time
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash, current_app, send_from_directory, Response, stream_with_context
 from werkzeug.security import generate_password_hash
 import urllib.parse
 
@@ -98,6 +100,96 @@ def admin_dashboard():
 def admin_tasks():
     return render_template('admin_tasks.html', title='Admin Tasks')
 
+
+@bp.route('/admin/logs', methods=['GET'], endpoint='admin_logs_view')
+@login_required
+@admin_required
+def admin_logs_view():
+    return render_template('admin_logs.html', title='View Logs')
+
+@bp.route('/admin/logs/list', methods=['GET'], endpoint='admin_logs_list')
+@login_required
+@admin_required
+def admin_logs_list():
+    log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
+    log_files_paths = glob.glob(os.path.join(log_dir, 'shownotes.log*'))
+    log_filenames = sorted([os.path.basename(f) for f in log_files_paths])
+    return jsonify(log_filenames)
+
+@bp.route('/admin/logs/get/<path:filename>', methods=['GET'], endpoint='admin_get_log_content')
+@login_required
+@admin_required
+def admin_get_log_content(filename):
+    log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
+    file_path = os.path.join(log_dir, filename)
+
+    # Security Check
+    if not os.path.abspath(file_path).startswith(os.path.abspath(log_dir)):
+        current_app.logger.warning(f"Log access rejected for {filename} due to path traversal attempt.")
+        return jsonify({"error": "Access denied"}), 403
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        return jsonify(lines[-100:]) # Return last 100 lines
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        current_app.logger.error(f"Error reading log file {filename}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@bp.route('/admin/logs/stream/<path:filename>', methods=['GET'], endpoint='admin_stream_log_content')
+@login_required
+@admin_required
+def admin_stream_log_content(filename):
+    log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
+    file_path = os.path.join(log_dir, filename)
+
+    # Security Check
+    if not os.path.abspath(file_path).startswith(os.path.abspath(log_dir)):
+        current_app.logger.warning(f"Log stream access rejected for {filename} due to path traversal attempt.")
+        # For SSE, returning a non-200 response might be handled by client-side error events
+        return Response("data: ERROR: Access Denied\n\n", mimetype='text/event-stream', status=403)
+
+    if not os.path.exists(file_path):
+        return Response("data: ERROR: File Not Found\n\n", mimetype='text/event-stream', status=404)
+
+    def generate_log_updates(file_path_stream):
+        try:
+            with open(file_path_stream, 'r', encoding='utf-8') as f:
+                # Send last N lines first (e.g. last 10 lines)
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+
+                # Attempt to send the last few lines immediately
+                # This is a simplified approach; a more robust one would handle small files
+                # or read in chunks backwards.
+                num_initial_lines = 10
+                if file_size > 0:
+                    # Try to find the start of the 10th to last line
+                    # This is approximate and might not be perfect
+                    approx_avg_line_length = 100 # Assume average line length
+                    seek_pos = max(0, file_size - (num_initial_lines * approx_avg_line_length))
+                    f.seek(seek_pos)
+                    if seek_pos > 0: # if not at the beginning, discard the first partial line
+                        f.readline()
+
+                    initial_lines = f.readlines() # Read remaining lines up to the end
+                    for line in initial_lines:
+                         yield f"data: {line.rstrip()}\n\n"
+
+                # Now, start streaming new lines
+                while True:
+                    line = f.readline()
+                    if not line:
+                        time.sleep(0.5)  # Wait for new lines
+                        continue
+                    yield f"data: {line.rstrip()}\n\n"
+        except Exception as e:
+            current_app.logger.error(f"Error streaming log file {file_path_stream}: {e}")
+            yield f"data: ERROR: Could not stream log: {str(e)}\n\n"
+
+    return Response(stream_with_context(generate_log_updates(file_path)), mimetype='text/event-stream')
 
 @bp.route('/admin/settings', methods=['GET', 'POST'], endpoint='admin_settings')
 def admin_settings():

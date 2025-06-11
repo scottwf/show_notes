@@ -54,6 +54,10 @@
                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 016-6h6M21 13.5A4.5 4.5 0 1116.5 9 4.5 4.5 0 0121 13.5z"></path></svg>
                 Users <span class="ml-auto text-xs">(Soon)</span>
             </a>
+            <a href="{{ url_for('main.admin_logs_view') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'main.admin_logs_view' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Logs
+            </a>
              <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.755 4 3.92C16 12.862 14.713 14 12.995 14c-1.406 0-2.657-.936-3.104-2.186M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17.625V18.5A1.5 1.5 0 0110.5 20h-1A1.5 1.5 0 018 18.5v-.875M12 3.5V2.625A1.5 1.5 0 0010.5 1h-1A1.5 1.5 0 008 2.625V3.5m0 13.125V18.5A1.5 1.5 0 009.5 20h1a1.5 1.5 0 001.5-1.5v-.875M12 3.5V2.625A1.5 1.5 0 0111.5 1h1A1.5 1.5 0 0114 2.625V3.5M4.5 10.5a7.5 7.5 0 1115 0v3a7.5 7.5 0 01-7.5 7.5h-1.5a7.5 7.5 0 01-6-7.5v-3z"></path></svg>
                 Help <span class="ml-auto text-xs">(Soon)</span>

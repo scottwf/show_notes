@@ -35,8 +35,8 @@ def create_app(test_config=None):
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, 'shownotes.log')
 
-    # Rotating file handler: 10MB per file, 5 backup files
-    file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
+    # Rotating file handler: 5MB per file, 5 backup files
+    file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
     formatter = logging.Formatter(
         '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
     )
