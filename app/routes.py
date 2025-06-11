@@ -259,7 +259,7 @@ def plex_webhook():
                 plex_username = account.get('title')
                 player_title = player.get('title')
                 player_uuid = player.get('uuid')
-                session_key = metadata.get('sessionKey') # Plex often puts sessionKey here for media events
+                session_key = metadata.get('sessionKey')
                 rating_key = metadata.get('ratingKey')
                 parent_rating_key = metadata.get('parentRatingKey')
                 grandparent_rating_key = metadata.get('grandparentRatingKey')
@@ -273,7 +273,33 @@ def plex_webhook():
                     episode_num = metadata.get('index')
                     if season_num is not None and episode_num is not None:
                         season_episode_str = f"S{str(season_num).zfill(2)}E{str(episode_num).zfill(2)}"
+
+                # --- Extract TMDB ID from GUIDs ---
+                tmdb_id = None
+                guids = metadata.get('Guid')
+                if isinstance(guids, list):
+                    for guid_item in guids:
+                        guid_str = guid_item.get('id', '')
+                        if guid_str.startswith('tmdb://'):
+                            try:
+                                tmdb_id = int(guid_str.split('//')[1])
+                                current_app.logger.info(f"Extracted tmdb_id '{tmdb_id}' from Guid list.")
+                                break # Found it
+                            except (ValueError, IndexError):
+                                current_app.logger.warning(f"Could not parse tmdb_id from guid: {guid_str}")
                 
+                if not tmdb_id:
+                    guid_str = metadata.get('guid')
+                    if isinstance(guid_str, str) and 'tmdb://' in guid_str:
+                        import re
+                        match = re.search(r'tmdb://(\d+)', guid_str)
+                        if match:
+                            try:
+                                tmdb_id = int(match.group(1))
+                                current_app.logger.info(f"Extracted tmdb_id '{tmdb_id}' from guid string.")
+                            except ValueError:
+                                current_app.logger.warning(f"Could not parse tmdb_id from guid string: {guid_str}")
+
                 view_offset_ms = metadata.get('viewOffset')
                 duration_ms = metadata.get('duration')
 
@@ -281,21 +307,20 @@ def plex_webhook():
                     INSERT INTO plex_activity_log (
                         event_type, plex_username, player_title, player_uuid, session_key,
                         rating_key, parent_rating_key, grandparent_rating_key, media_type,
-                        title, show_title, season_episode, view_offset_ms, duration_ms, raw_payload
+                        title, show_title, season_episode, view_offset_ms, duration_ms, tmdb_id, raw_payload
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 params_activity = (
                     event_type, plex_username, player_title, player_uuid, session_key,
                     rating_key, parent_rating_key, grandparent_rating_key, media_type_activity,
-                    title_activity, show_title_activity, season_episode_str, view_offset_ms, duration_ms, raw_json_payload
+                    title_activity, show_title_activity, season_episode_str, view_offset_ms, duration_ms, tmdb_id, raw_json_payload
                 )
                 db_activity.execute(sql_insert_activity, params_activity)
                 db_activity.commit()
                 current_app.logger.info(f"Logged event '{event_type}' for '{title_activity}' to plex_activity_log.")
             except Exception as e_activity:
                 current_app.logger.error(f"Error logging to plex_activity_log: {e_activity}", exc_info=True)
-                # Optionally rollback if part of a larger transaction, but here it's likely standalone.
 
         # Original logging to plex_events (only for media.play)
         if event_type == 'media.play':
@@ -606,56 +631,49 @@ def home():
     poster_url_for_template = None
 
     if plex_event_from_db:
-        plex_event_for_template = dict(plex_event_from_db) # Convert to dict for modification
-        current_app.logger.info(f"--- Processing Plex Activity Log Event ID: {plex_event_for_template['id']} ---")
-        
+        plex_event_for_template = dict(plex_event_from_db)
         media_type = plex_event_for_template.get('media_type')
-        activity_title = plex_event_for_template.get('title') # This is movie title or episode title
-        activity_show_title = plex_event_for_template.get('show_title') # This is show title for episodes
+        tmdb_id = plex_event_for_template.get('tmdb_id')
 
-        current_app.logger.info(f"Activity Log Event: Type='{media_type}', Title='{activity_title}', Show='{activity_show_title}'")
+        current_app.logger.info(f"Processing event for media_type: '{media_type}', tmdb_id: {tmdb_id}")
 
-        remote_poster_url = None
-        if media_type == 'movie' and activity_title:
-            current_app.logger.info(f"Media type is 'movie'. Searching Radarr for poster for '{activity_title}'.")
-            remote_poster_url = utils.get_radarr_poster(activity_title)
-            # Fetch tmdb_id and year for the movie to create a link
-            try:
-                movie_info_from_db = db.execute(
-                    "SELECT tmdb_id, year FROM radarr_movies WHERE title = ? COLLATE NOCASE", (activity_title,)
-                ).fetchone()
-                if movie_info_from_db:
-                    plex_event_for_template['tmdb_id'] = movie_info_from_db['tmdb_id']
-                    plex_event_for_template['year'] = movie_info_from_db['year']
-                    current_app.logger.info(f"Found tmdb_id: {plex_event_for_template['tmdb_id']} and year: {plex_event_for_template['year']} for movie '{activity_title}'")
-                else:
-                    plex_event_for_template['tmdb_id'] = None # Ensure keys exist even if not found
-                    plex_event_for_template['year'] = None
-                    current_app.logger.warning(f"Could not find '{activity_title}' in radarr_movies to get tmdb_id and year.")
-            except Exception as e_radarr_fetch:
-                plex_event_for_template['tmdb_id'] = None
-                plex_event_for_template['year'] = None
-                current_app.logger.error(f"Error fetching tmdb_id/year for movie '{activity_title}': {e_radarr_fetch}", exc_info=True)
+        # --- Logic for Movies ---
+        if media_type == 'movie' and tmdb_id:
+            movie_data = db.execute(
+                'SELECT poster, tmdbId, year, overview FROM radarr_movies WHERE tmdbId = ?',
+                (tmdb_id,)
+            ).fetchone()
 
-        elif media_type == 'episode' and activity_show_title:
-            current_app.logger.info(f"Media type is 'episode'. Searching Sonarr for poster for '{activity_show_title}'.")
-            remote_poster_url = utils.get_sonarr_poster(activity_show_title)
-            # Future: Fetch show_tmdb_id or tvdb_id for episodes here if needed for linking
-            # For example, to link to a future /show/<tvdb_id>/season/<season_num>/episode/<ep_num> page:
-            # try:
-            #     show_info_from_db = db.execute(
-            #         "SELECT tvdb_id FROM sonarr_shows WHERE title = ? COLLATE NOCASE", (activity_show_title,)
-            #     ).fetchone()
-            #     if show_info_from_db:
-            #         plex_event_for_template['tvdb_id'] = show_info_from_db['tvdb_id']
-            # except Exception as e_sonarr_fetch:
-            #     current_app.logger.error(f"Error fetching tvdb_id for show '{activity_show_title}': {e_sonarr_fetch}", exc_info=True)
+            if movie_data:
+                current_app.logger.info(f"Found movie data for tmdbId: {tmdb_id}")
+                plex_event_for_template['poster_path'] = movie_data['poster']
+                plex_event_for_template['tmdb_id'] = movie_data['tmdbId'] # Redundant but good for consistency
+                plex_event_for_template['year'] = movie_data['year']
+                plex_event_for_template['overview'] = movie_data['overview']
+            else:
+                current_app.logger.warning(f"Could not find movie in radarr_movies with tmdbId: {tmdb_id}")
+
+        # --- Logic for TV Shows ---
+        elif media_type == 'episode' and tmdb_id:
+            show_data = db.execute(
+                'SELECT poster, tmdbId, year, overview FROM sonarr_shows WHERE tmdbId = ?',
+                (tmdb_id,)
+            ).fetchone()
+
+            if show_data:
+                current_app.logger.info(f"Found show data for tmdbId: {tmdb_id}")
+                plex_event_for_template['poster_path'] = show_data['poster']
+                plex_event_for_template['show_tmdb_id'] = show_data['tmdbId'] # Use specific key for shows
+                plex_event_for_template['year'] = show_data['year']
+                plex_event_for_template['overview'] = show_data['overview']
+            else:
+                current_app.logger.warning(f"Could not find show in sonarr_shows with tmdbId: {tmdb_id}")
         else:
-            current_app.logger.warning(f"Media type '{media_type}' (Title: '{activity_title}', Show: '{activity_show_title}') is not 'movie' or 'episode' with sufficient info for poster/linking.")
+            current_app.logger.warning("Event had no tmdb_id or was not a movie/episode, cannot fetch details.")
 
-        if remote_poster_url:
-            poster_url_for_template = url_for('main.image_proxy', url=remote_poster_url)
-            current_app.logger.info(f"Successfully generated proxied poster_url: {poster_url_for_template}")
+        if plex_event_for_template and plex_event_for_template.get('poster_path'):
+            poster_url_for_template = url_for('main.image_proxy', url=plex_event_for_template['poster_path'])
+            current_app.logger.info(f"Generated proxied poster URL for: {plex_event_for_template.get('poster_path')}")
         else:
             current_app.logger.warning(f"Failed to get remote_poster_url for media_type='{media_type}', title='{activity_title}', show_title='{activity_show_title}'.")
 
@@ -757,12 +775,11 @@ def onboarding():
                 db.commit()
                 flash(f'Admin account created and linked to Plex user {plex_username_in_session}.', 'info')
 
-            # Populate settings table (ensure it's empty or handle updates appropriately)
-            # For simplicity, we assume it's the first setup, so we clear and insert.
-            # A more robust solution would check if a settings row exists and update it.
-            db.execute('DELETE FROM settings') # Clear any existing settings row
+            db = database.get_db()
+            # Clear any existing settings to ensure a single row, then insert new settings.
+            db.execute('DELETE FROM settings')
             db.execute(
-                'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, webhook_secret) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, webhook_secret, plex_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     request.form.get('radarr_url'),
                     request.form.get('radarr_api_key'),
@@ -771,11 +788,12 @@ def onboarding():
                     request.form.get('bazarr_url'),
                     request.form.get('bazarr_api_key'),
                     request.form.get('ollama_url'),
-                    request.form.get('pushover_user_key'),
-                    request.form.get('pushover_api_token'),
-                    request.form.get('plex_client_id', os.environ.get('PLEX_CLIENT_ID')), # Keep fallback for POST
-                    session.get('webhook_secret') # Store generated webhook secret
-                ),
+                    request.form.get('pushover_user_key'),  # Form field for pushover_key column
+                    request.form.get('pushover_api_token'), # Form field for pushover_token column
+                    request.form.get('plex_client_id', os.environ.get('PLEX_CLIENT_ID')),
+                    session.get('webhook_secret'),
+                    session.get('plex_token') # Use plex_token from session if available for settings.plex_token
+                )
             )
             db.commit()
             session['is_admin'] = True
@@ -964,102 +982,43 @@ def image_proxy():
         current_app.logger.error(f"An unexpected error occurred in image_proxy: {e}")
         return 'Internal Server Error', 500
 
-# --- Search Endpoint -------------------------------------------------------
-
 @bp.route('/search')
 def search():
-    """Search shows and movies from the local database."""
+    """Search shows and movies from the local database efficiently."""
     query_term = request.args.get('q', '').strip()
     if not query_term:
         return jsonify([])
 
     db = database.get_db()
-    # Retrieve settings individually using database.get_setting
-    raw_sonarr_url = database.get_setting('sonarr_url')
-    sonarr_url_base = raw_sonarr_url.rstrip('/') if raw_sonarr_url else ''
-    sonarr_api_key_val = database.get_setting('sonarr_api_key') or ''
-    
-    raw_radarr_url = database.get_setting('radarr_url')
-    radarr_url_base = raw_radarr_url.rstrip('/') if raw_radarr_url else ''
-    radarr_api_key_val = database.get_setting('radarr_api_key') or ''
+    # Retrieve service URLs for constructing absolute image paths
+    sonarr_url_base = (database.get_setting('sonarr_url') or '').rstrip('/')
+    radarr_url_base = (database.get_setting('radarr_url') or '').rstrip('/')
     results = []
 
-    # Ensure re is imported if not already globally in this file (it is via other functions)
-    # import re
-
-    def cache_image(original_url, folder, prefix, item_type): # item_type can be 'sonarr' or 'radarr'
-        if not original_url:
+    def get_proxied_url(base_url, relative_path):
+        """Constructs an absolute URL and returns a proxied URL for it."""
+        if not base_url or not relative_path:
             return None
-
-        # Determine absolute URL and API key
-        current_url = original_url
-        headers = {}
-        if item_type == 'sonarr' and sonarr_url_base:
-            if original_url.startswith('/'):
-                current_url = f"{sonarr_url_base}{original_url}"
-            if sonarr_api_key_val:
-                headers['X-Api-Key'] = sonarr_api_key_val
-        elif item_type == 'radarr' and radarr_url_base:
-            if original_url.startswith('/'):
-                current_url = f"{radarr_url_base}{original_url}"
-            if radarr_api_key_val:
-                headers['X-Api-Key'] = radarr_api_key_val
-
-        # Sanitize prefix: use the original title for better uniqueness before lowercasing for filename
-        # Sanitize prefix: use the original title for better uniqueness before lowercasing for filename
-        safe_prefix = re.sub(r'[^\w\s-]', '', prefix).strip().replace(' ', '_') # Clean non-alphanum, keep spaces as underscores
-
-        ext = os.path.splitext(current_url)[-1].split('?')[0]
-        if not ext or ext.lower() not in ['.jpg', '.jpeg', '.png', '.webp']:
-            ext = '.jpg' # Default extension
-
-        # Create a safe filename from the prefix
-        # Limit length to avoid overly long filenames
-        safe_filename_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', safe_prefix.lower())
-        safe_filename = safe_filename_base[:50] + ext # Limit base name length
-
-        # Ensure static subdirectories exist
-        static_folder_path = os.path.join(os.path.dirname(__file__), 'static', folder)
-        if not os.path.exists(static_folder_path):
-            try:
-                os.makedirs(static_folder_path)
-            except OSError as e:
-                current_app.logger.error(f"Error creating directory {static_folder_path}: {e}")
-                return current_url # Fallback to original (potentially absolute) URL
-
-        path = os.path.join(static_folder_path, safe_filename)
-
-        if not os.path.exists(path):
-            try:
-                # Use current_url which is now absolute, and include headers
-                r = requests.get(current_url, timeout=10, stream=True, headers=headers)
-                r.raise_for_status() # Will raise an HTTPError for bad responses (4XX or 5XX)
-                with open(path, 'wb') as f:
-                    for chunk in r.iter_content(1024):
-                        f.write(chunk)
-                current_app.logger.info(f"Successfully cached {current_url} to {path}")
-            except requests.exceptions.RequestException as e:
-                current_app.logger.error(f"Error caching image {current_url} to {path}: {e}")
-                return current_url # Fallback to original (potentially absolute) URL
-            except Exception as e: # Catch any other unexpected errors
-                current_app.logger.error(f"Unexpected error caching image {current_url} to {path}: {e}")
-                return current_url
-
-        return url_for('static', filename=f'{folder}/{safe_filename}')
+        # Sonarr/Radarr may provide full URLs or relative paths
+        if relative_path.startswith(('http://', 'https://')):
+            absolute_url = relative_path
+        else:
+            absolute_url = f"{base_url}{relative_path}"
+        return url_for('main.image_proxy', url=absolute_url)
 
     # Search Sonarr shows
     try:
         like_query = f"%{query_term.lower()}%"
         cursor_shows = db.execute(
-            "SELECT id, title, poster_url, fanart_url FROM sonarr_shows WHERE LOWER(title) LIKE ?",
+            "SELECT title, poster as poster_url, fanart as fanart_url FROM sonarr_shows WHERE LOWER(title) LIKE ?",
             (like_query,)
         )
         for row in cursor_shows.fetchall():
             results.append({
                 'type': 'show',
                 'title': row['title'],
-                'poster': cache_image(row['poster_url'], 'poster', 'show_poster_' + row['title'], 'sonarr'),
-                'background': cache_image(row['fanart_url'], 'background', 'show_bg_' + row['title'], 'sonarr')
+                'poster': get_proxied_url(sonarr_url_base, row['poster_url']),
+                'background': get_proxied_url(sonarr_url_base, row['fanart_url'])
             })
     except Exception as e:
         current_app.logger.error(f"Error searching Sonarr shows in DB: {e}", exc_info=True)
@@ -1068,27 +1027,31 @@ def search():
     try:
         like_query = f"%{query_term.lower()}%"
         cursor_movies = db.execute(
-            "SELECT tmdb_id, title, year, poster_url, fanart_url FROM radarr_movies WHERE LOWER(title) LIKE ?",
+            "SELECT title, poster, fanart FROM radarr_movies WHERE LOWER(title) LIKE ?",
             (like_query,)
         )
         for row in cursor_movies.fetchall():
-            # Construct a unique cache key prefix using tmdb_id and title
-            safe_title_for_key = row['title'].replace(' ', '_').replace('/', '_') if row['title'] else 'unknown_title'
-            cache_key_prefix = f"movie_{str(row['tmdb_id'])}_{safe_title_for_key}"
-
             results.append({
                 'type': 'movie',
-                'id': row['tmdb_id'],
                 'title': row['title'],
-                'year': row['year'],
-                'poster': utils.cache_image(row['poster_url'], 'posters', cache_key_prefix, 'radarr') if row['poster_url'] else None,
-                'background': utils.cache_image(row['fanart_url'], 'background', f"{cache_key_prefix}_bg", 'radarr') if row['fanart_url'] else None
+                'poster': get_proxied_url(radarr_url_base, row['poster']),
+                'background': get_proxied_url(radarr_url_base, row['fanart'])
             })
     except Exception as e:
         current_app.logger.error(f"Error searching Radarr movies in DB: {e}", exc_info=True)
 
     return jsonify(results)
 
+
+# --- Show Detail Page ---
+@bp.route('/show/<int:tmdb_id>')
+@login_required
+def show_detail(tmdb_id):
+    db = database.get_db()
+    show = db.execute('SELECT * FROM sonarr_shows WHERE tmdbId = ?', (tmdb_id,)).fetchone()
+    if not show:
+        abort(404)
+    return render_template('show_detail.html', show=show, title=show['title'])
 
 # --- Movie Detail Page ---
 @bp.route('/movie/<int:tmdb_id>')

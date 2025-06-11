@@ -1,0 +1,22 @@
+{% extends 'layout.html' %}
+
+{% block page_content %}
+<div class="max-w-4xl mx-auto mt-10 p-6 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
+  {% if show %}
+    <div class="flex flex-col md:flex-row gap-6">
+      {% if show.remotePoster %}
+        <img src="{{ show.remotePoster }}" alt="Poster for {{ show.title }}" class="w-48 h-auto object-cover rounded-lg shadow-md self-center md:self-start">
+      {% endif %}
+      <div class="flex-1">
+        <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">{{ show.title }}</h1>
+        {% if show.year %}
+          <p class="text-lg text-slate-500 dark:text-slate-400 mb-4">({{ show.year }})</p>
+        {% endif %}
+        <p class="text-base text-slate-600 dark:text-slate-300">{{ show.overview }}</p>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-center text-slate-600 dark:text-slate-300">Show details could not be found.</p>
+  {% endif %}
+</div>
+{% endblock %}
