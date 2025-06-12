@@ -2,54 +2,195 @@
 
 {% block title %}{{ movie.title }} - Movie Details{% endblock %}
 
-{% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-12">
-            <h1 class="mb-0">{{ movie.title }}</h1>
-            <p class="text-muted">{{ movie.year }}</p>
-        </div>
-    </div>
+{% block page_content %}
+<div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
 
-    {% if movie.fanart_display_url %}
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <img src="{{ movie.fanart_display_url }}" class="img-fluid rounded" alt="Fanart for {{ movie.title }}" style="width: 100%; max-height: 400px; object-fit: cover;">
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="row">
-        <div class="col-md-4">
-            {% if movie.poster_display_url %}
-                <img src="{{ movie.poster_display_url }}" class="img-fluid rounded mb-3" alt="Poster for {{ movie.title }}">
-            {% else %}
-                <div class="img-fluid rounded mb-3 d-flex align-items-center justify-content-center" style="height: 450px; background-color: #f0f0f0; color: #6c757d;">
-                    <span>No Poster Available</span>
+    <!-- Hero Section -->
+    <div 
+        class="relative bg-cover bg-center py-12 md:py-16 lg:py-24 xl:py-32"
+        style="{% if movie.fanart_display_url %}background-image: url('{{ movie.fanart_display_url }}');{% else %}background-color: #2d3748;{% endif %}"
+    >
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
+        
+        <div class="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="md:flex md:items-start md:space-x-8 lg:space-x-12">
+                
+                <!-- Poster -->
+                <div class="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0 mb-6 md:mb-0 relative z-10">
+                    {% if movie.poster_display_url %}
+                        <img src="{{ movie.poster_display_url }}" alt="Poster for {{ movie.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover">
+                    {% else %}
+                        <div class="rounded-lg shadow-2xl w-full aspect-[2/3] bg-gray-700/80 flex items-center justify-center">
+                            <span class="text-gray-400">No Poster</span>
+                        </div>
+                    {% endif %}
                 </div>
-            {% endif %}
+
+                <!-- Title, Year, Overview -->
+                <div class="text-center md:text-left relative z-10 flex-grow">
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-2 tracking-tight">{{ movie.title }}</h1>
+                    {% if movie.year %}
+                    <p class="text-xl sm:text-2xl text-gray-300 mb-6 font-light">{{ movie.year }}</p>
+                    {% endif %}
+                    
+                    <p class="text-gray-200 leading-relaxed max-w-none line-clamp-6 sm:line-clamp-none pt-4 sm:pt-6">
+                        {{ movie.overview | default('No overview available.') }}
+                    </p>
+                </div>
+            </div>
         </div>
-        <div class="col-md-8">
-            <h4>Overview</h4>
-            <p>{{ movie.overview | default('No overview available.') }}</p>
-            
-            <hr>
-            <h5>Details</h5>
-            <ul class="list-unstyled">
-                <li><strong>Status:</strong> {{ movie.status | default('N/A') }}</li>
-                <li><strong>On Disk:</strong> {{ 'Yes' if movie.has_file else 'No' }}</li>
-                {% if movie.path_on_disk %}
-                <li><strong>Path:</strong> <small>{{ movie.path_on_disk }}</small></li>
+    </div>
+
+    <!-- Details Section -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
+            <!-- Ratings Section -->
+            <div class="flex flex-wrap items-center gap-x-6 gap-y-3 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                {% if movie.ratings_tmdb_value %}
+                <div class="flex items-center">
+                    <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_1-5bdc75aaebeb75dc7ae79426ddd9be3b2be1e6ad585bddc9def8bd9873a658f0.svg" alt="TMDB Logo" class="h-6 w-auto mr-2">
+                    <span class="text-lg font-semibold text-gray-700 dark:text-gray-300" title="{{ movie.ratings_tmdb_votes | default(0) }} votes">{{ movie.ratings_tmdb_value | round(1) }}/10</span>
+                </div>
+                {% endif %}
+                {% if movie.ratings_imdb_value %}
+                <div class="flex items-center">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/IMDB_Logo_2016.svg/1200px-IMDB_Logo_2016.svg.png" alt="IMDb Logo" class="h-5 w-auto mr-2">
+                    <span class="text-lg font-semibold text-gray-700 dark:text-gray-300" title="{{ movie.ratings_imdb_votes | default(0) }} votes">{{ movie.ratings_imdb_value | round(1) }}/10</span>
+                </div>
+                {% endif %}
+                {% if movie.ratings_rottenTomatoes_value %}
+                <div class="flex items-center">
+                    {# Placeholder SVG for Rotten Tomatoes - replace with actual if available or better one #}
+                    <svg class="h-6 w-6 mr-2 text-red-600 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                    <span class="text-lg font-semibold text-gray-700 dark:text-gray-300" title="{{ movie.ratings_rottenTomatoes_votes | default(0) }} votes">{{ movie.ratings_rottenTomatoes_value }}%</span>
+                </div>
+                {% endif %}
+                {% if not movie.ratings_tmdb_value and not movie.ratings_imdb_value and not movie.ratings_rottenTomatoes_value %}
+                <span class="text-gray-500 dark:text-gray-400">No ratings available.</span>
+                {% endif %}
+            </div>
+
+             <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Details</h3>
+             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                {% if movie.original_title and movie.original_title != movie.title %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Original Title:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.original_title }}</span>
+                </div>
+                {% endif %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Status:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.status | default('N/A') | title }}</span>
+                </div>
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Release Date:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.release_date | default('N/A') }}</span>
+                </div>
+                {% if movie.runtime %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Runtime:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.runtime }} minutes</span>
+                </div>
+                {% endif %}
+                {% if movie.original_language_name %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Original Language:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.original_language_name | title }}</span>
+                </div>
+                {% endif %}
+                {% if movie.studio %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Studio:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.studio }}</span>
+                </div>
+                {% endif %}
+                {% if movie.certification %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Certification:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.certification }}</span>
+                </div>
+                {% endif %}
+                {% if movie.popularity %}
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Popularity Score:</span>
+                    <span class="text-gray-600 dark:text-gray-400">{{ movie.popularity | round(2) }}</span>
+                </div>
+                {% endif %}
+                {% if movie.genres %}
+                <div class="sm:col-span-2">
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Genres:</span>
+                    <span class="text-gray-600 dark:text-gray-400">
+                        {% if movie.genres is string %}
+                            {# Attempt to parse if it's a JSON string representation of a list #}
+                            {% set genres_list = [] %}
+                            {% if movie.genres.startswith('[') and movie.genres.endswith(']') %}
+                                {# Crude parsing for simple list of strings like '["Action", "Adventure"]' #}
+                                {% set trimmed_genres = movie.genres[1:-1] %}
+                                {% if trimmed_genres %}
+                                    {% for genre_item in trimmed_genres.split(',') %}
+                                        {% set genre_name = genre_item.strip()[1:-1] if genre_item.strip().startswith('"') and genre_item.strip().endswith('"') else genre_item.strip() %}
+                                        {% if genres_list.append(genre_name) %}{% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                            {% else %}
+                                {# Assume it's a single genre string or comma-separated #}
+                                {% for genre_item in movie.genres.split(',') %}
+                                     {% if genres_list.append(genre_item.strip()) %}{% endif %}
+                                {% endfor %}
+                            {% endif %}
+                            {{ genres_list | join(', ') if genres_list else 'N/A' }}
+                        {% elif movie.genres is iterable and movie.genres is not string %}
+                            {{ movie.genres | join(', ') }}
+                        {% else %}
+                            {{ movie.genres | default('N/A') }}
+                        {% endif %}
+                    </span>
+                </div>
                 {% endif %}
                 {% if movie.imdb_id %}
-                <li><strong>IMDb:</strong> <a href="https://www.imdb.com/title/{{ movie.imdb_id }}/" target="_blank">{{ movie.imdb_id }}</a></li>
+                <div>
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">IMDb:</span>
+                    <a href="https://www.imdb.com/title/{{ movie.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500 hover:underline">
+                        View on IMDb
+                    </a>
+                </div>
                 {% endif %}
-            </ul>
+            </div>
         </div>
     </div>
 
-    {# Future sections for Cast, Crew, Trailers etc. can be added here #}
-    {# e.g. <div class="row mt-4"><div class="col-md-12"><h4>Cast</h4>...</div></div> #}
+    <!-- Cast Section (Placeholder) -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-0">
+        <div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Cast</h2>
+            <p class="text-gray-600 dark:text-gray-300 mb-4">
+                Displaying cast information requires updates to the backend to fetch this data. 
+                Once available, cast members with their photos and names will appear here.
+            </p>
+            {# 
+            Example structure for when cast data is available:
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-x-4 gap-y-6">
+                {% for member in movie.cast %}
+                <div class="text-center">
+                    <div class="w-24 h-32 sm:w-28 sm:h-36 md:w-32 md:h-40 mx-auto mb-2 rounded overflow-hidden shadow-lg bg-gray-200 dark:bg-gray-700">
+                    {% if member.profile_path %}
+                        <img src="{{ member.profile_display_url }}" alt="{{ member.name }}" class="w-full h-full object-cover">
+                    {% else %}
+                        <div class="w-full h-full flex items-center justify-center">
+                            <svg class="w-10 h-10 text-gray-400 dark:text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                        </div>
+                    {% endif %}
+                    </div>
+                    <p class="font-semibold text-sm text-gray-800 dark:text-white">{{ member.name }}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">{{ member.character }}</p>
+                </div>
+                {% else %}
+                <p class="col-span-full text-center text-gray-500 dark:text-gray-400">No cast information available for this movie yet.</p>
+                {% endfor %}
+            </div>
+            #}
+        </div>
+    </div>
 
 </div>
 {% endblock %}

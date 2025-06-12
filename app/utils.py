@@ -468,12 +468,12 @@ def sync_sonarr_library():
                 show_values = {
                     "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
+                    "tmdb_id": show_data.get("tmdbId"),
                     "imdb_id": show_data.get("imdbId"),
+                    "title": show_data.get("title"),
                     "status": show_data.get("status"),
                     "ended": show_data.get("ended", False),
-
                     "overview": show_data.get("overview"),
-                    "status": show_data.get("status"),
                     "season_count": len(show_data.get("seasons", [])), # More reliable than show_data.get("seasonCount") sometimes
                     "episode_count": show_data.get("episodeCount"),
                     "episode_file_count": show_data.get("episodeFileCount"),
@@ -754,112 +754,160 @@ def sync_sonarr_library():
         return shows_synced_count
 
 def sync_radarr_library():
-    processed_count = 0
     """
-    Fetches all movies from Radarr and syncs them with the local database.
+    Synchronizes Radarr movie library with the local database.
+
+    Fetches all movies from Radarr, then for each movie:
+    - Extracts relevant information including new detailed fields.
+    - Inserts a new record or updates an existing one in the 'radarr_movies' table.
+    - Updates 'last_synced_at' in the 'service_sync_status' table.
     """
-    current_app.logger.info("Starting Radarr library sync.")
+    current_app.logger.info("Starting Radarr library synchronization with new details...")
     movies_synced_count = 0
+    movies_added_count = 0
+    movies_updated_count = 0
 
-    with current_app.app_context():
-        db = database.get_db()
-
-        settings_row = db.execute('SELECT radarr_url FROM settings LIMIT 1').fetchone()
-        radarr_base_url = settings_row['radarr_url'].rstrip('/') if settings_row and 'radarr_url' in settings_row and settings_row['radarr_url'] else None
-        if not radarr_base_url:
-            current_app.logger.warning("sync_radarr_library: Radarr URL not found in settings. Cannot form absolute image URLs if they are relative.")
-
-        all_movies_data = get_all_radarr_movies()
-
-        if not all_movies_data:
-            current_app.logger.warning("sync_radarr_library: No movies returned from Radarr API or Radarr not configured.")
-            return processed_count
-
-        for movie_data in all_movies_data:
+    all_radarr_movies = get_all_radarr_movies()
+    if not all_radarr_movies:
+        current_app.logger.warning("sync_radarr_library: No movies returned from Radarr or Radarr not configured.")
+        with current_app.app_context():
+            conn = database.get_db_connection()
             try:
-                current_app.logger.info(f"Syncing movie: {movie_data.get('title', 'N/A')} (Radarr ID: {movie_data.get('id', 'N/A')})")
+                database.update_sync_status(conn, 'radarr', 'failed' if not database.get_setting('radarr_url') else 'success_no_data')
+            finally:
+                conn.close()
+        return {'status': 'warning', 'message': 'No movies returned from Radarr or Radarr not configured.', 'synced': 0, 'added': 0, 'updated': 0}
 
-                raw_poster_url = next((img.get('url') for img in movie_data.get('images', []) if img.get('coverType') == 'poster'), None)
-                raw_fanart_url = next((img.get('url') for img in movie_data.get('images', []) if img.get('coverType') == 'fanart'), None)
+    radarr_url = None
+    with current_app.app_context():
+        radarr_url = database.get_setting('radarr_url')
+        conn = database.get_db_connection()
+    
+    try:
+        cursor = conn.cursor()
+        for movie_data in all_radarr_movies:
+            radarr_movie_id = movie_data.get('id')
+            if not radarr_movie_id:
+                current_app.logger.warning(f"sync_radarr_library: Movie data missing 'id'. Skipping. Data: {movie_data.get('title', 'N/A')}")
+                continue
 
-                final_poster_url = raw_poster_url # Default to original
-                if radarr_base_url and raw_poster_url and raw_poster_url.startswith('/'):
-                    final_poster_url = f"{radarr_base_url}{raw_poster_url}"
+            # Extract poster and fanart URLs
+            poster_url = None
+            fanart_url = None
+            if movie_data.get('images'):
+                for image in movie_data['images']:
+                    # Prefer remoteUrl (absolute) over url (relative)
+                    img_src = image.get('remoteUrl') or image.get('url')
+                    if img_src and img_src.startswith('/') and radarr_url:
+                        img_src = f"{radarr_url.rstrip('/')}{img_src}"
+                    
+                    if image.get('coverType') == 'poster':
+                        poster_url = img_src
+                    elif image.get('coverType') == 'fanart':
+                        fanart_url = img_src
+
+            # Safely extract nested rating info
+            ratings_data = movie_data.get('ratings', {})
+            imdb_rating_info = ratings_data.get('imdb', {})
+            tmdb_rating_info = ratings_data.get('tmdb', {})
+            rt_rating_info = ratings_data.get('rottenTomatoes', {})
+
+            # Safely extract original language name
+            original_language_obj = movie_data.get('originalLanguage', {})
+            original_language_name = original_language_obj.get('name')
+
+            # Convert genres list to JSON string
+            genres_list = movie_data.get('genres', [])
+            genres_json = json.dumps(genres_list) if genres_list else None
+
+            movie_to_insert = {
+                'radarr_id': radarr_movie_id,
+                'title': movie_data.get('title'),
+                'year': movie_data.get('year'),
+                'tmdb_id': movie_data.get('tmdbId'),
+                'imdb_id': movie_data.get('imdbId'),
+                'overview': movie_data.get('overview'),
+                'poster_url': poster_url,
+                'fanart_url': fanart_url,
+                'release_date': movie_data.get('releaseDate'), # Or physicalRelease / digitalRelease if preferred
+                'original_language_name': original_language_name,
+                'studio': movie_data.get('studio'),
+                'runtime': movie_data.get('runtime'),
+                'status': movie_data.get('status'),
+                'genres': genres_json,
+                'certification': movie_data.get('certification'),
+                'popularity': movie_data.get('popularity'),
+                'original_title': movie_data.get('originalTitle'),
+                'ratings_imdb_value': imdb_rating_info.get('value'),
+                'ratings_imdb_votes': imdb_rating_info.get('votes'),
+                'ratings_tmdb_value': tmdb_rating_info.get('value'),
+                'ratings_tmdb_votes': tmdb_rating_info.get('votes'),
+                'ratings_rottenTomatoes_value': rt_rating_info.get('value'),
+                'ratings_rottenTomatoes_votes': rt_rating_info.get('votes'),
+                # Ensure all columns from migration 005 are covered
+            }
+
+            # Check if movie exists
+            cursor.execute("SELECT id FROM radarr_movies WHERE radarr_id = ?", (radarr_movie_id,))
+            existing_movie = cursor.fetchone()
+
+            # Construct columns and placeholders for insert/update dynamically
+            # This ensures that if a key is None from Radarr, it's inserted as NULL
+            # (assuming the DB column allows NULLs, which they should for optional fields)
+            
+            db_columns = list(movie_to_insert.keys())
+            db_values = [movie_to_insert.get(col) for col in db_columns]
+
+            if existing_movie:
+                set_clause = ", ".join([f"{col} = ?" for col in db_columns if col != 'radarr_id'])
+                sql_query = f"UPDATE radarr_movies SET {set_clause} WHERE radarr_id = ?"
                 
-                final_fanart_url = raw_fanart_url # Default to original
-                if radarr_base_url and raw_fanart_url and raw_fanart_url.startswith('/'):
-                    final_fanart_url = f"{radarr_base_url}{raw_fanart_url}"
+                # Prepare values for update: all values except radarr_movie_id, then radarr_movie_id at the end for WHERE clause
+                update_values_list = [movie_to_insert.get(col) for col in db_columns if col != 'radarr_id']
+                update_values_list.append(radarr_movie_id)
                 
-                movie_values = {
-                    "radarr_id": movie_data.get("id"),
-                    "tmdb_id": movie_data.get("tmdbId"),
-                    "imdb_id": movie_data.get("imdbId"),
-                    "title": movie_data.get("title"),
-                    "year": movie_data.get("year"),
-                    "overview": movie_data.get("overview"),
-                    "status": movie_data.get("status"),
-                    "poster_url": final_poster_url,
-                    "fanart_url": final_fanart_url,
-                    "path_on_disk": movie_data.get("path"),
-                    "has_file": bool(movie_data.get("hasFile", False)),
-                    "last_synced_at": datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-                }
-                movie_values_filtered = {k: v for k, v in movie_values.items() if v is not None}
+                cursor.execute(sql_query, tuple(update_values_list))
+                if cursor.rowcount > 0:
+                    movies_updated_count += 1
+            else:
+                placeholders = ', '.join(['?'] * len(db_columns))
+                sql_query = f"INSERT INTO radarr_movies ({', '.join(db_columns)}) VALUES ({placeholders})"
+                cursor.execute(sql_query, tuple(db_values))
+                movies_added_count += 1
+            
+            movies_synced_count += 1
 
-                sql = """
-                    INSERT INTO radarr_movies ({columns}, last_synced_at)
-                    VALUES ({placeholders}, CURRENT_TIMESTAMP)
-                    ON CONFLICT (radarr_id) DO UPDATE SET
-                    {update_setters}, last_synced_at = CURRENT_TIMESTAMP
-                    RETURNING id;
-                """.format(
-                    columns=", ".join(movie_values_filtered.keys()),
-                    placeholders=", ".join("?" for _ in movie_values_filtered),
-                    update_setters=", ".join(f"{key} = excluded.{key}" for key in movie_values_filtered)
-                )
+        conn.commit()
+        database.update_sync_status(conn, 'radarr', 'success')
+        current_app.logger.info(f"Radarr library synchronization finished. Synced: {movies_synced_count}, Added: {movies_added_count}, Updated: {movies_updated_count}")
+        return {'status': 'success', 'message': 'Radarr library synced successfully.', 'synced': movies_synced_count, 'added': movies_added_count, 'updated': movies_updated_count}
 
-                cursor = db.execute(sql, tuple(movie_values_filtered.values()))
-                movie_db_id_row = cursor.fetchone()
-                if not movie_db_id_row:
-                    current_app.logger.error(f"sync_radarr_library: Failed to get DB ID for Radarr movie ID {movie_data.get('id')}")
-                    continue # Skip this movie if ID retrieval failed
-                movie_db_id = movie_db_id_row[0]
-
-                # Add to image_cache_queue
-                if final_poster_url:
-                    parsed_poster_url = urllib.parse.urlparse(final_poster_url)
-                    poster_target_filename = f"{hash(parsed_poster_url.path)}.jpg"
-                    try:
-                        db.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('movie', movie_db_id, final_poster_url, 'poster', poster_target_filename)
-                        )
-                        current_app.logger.info(f"Queued poster for movie ID {movie_db_id}: {final_poster_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue poster for movie ID {movie_db_id}: {e}")
-
-                if final_fanart_url:
-                    parsed_fanart_url = urllib.parse.urlparse(final_fanart_url)
-                    fanart_target_filename = f"{hash(parsed_fanart_url.path)}.jpg"
-                    try:
-                        db.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('movie', movie_db_id, final_fanart_url, 'fanart', fanart_target_filename)
-                        )
-                        current_app.logger.info(f"Queued fanart for movie ID {movie_db_id}: {final_fanart_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue fanart for movie ID {movie_db_id}: {e}")
-
-                db.commit() # Commit after each movie and its queued images
-                movies_synced_count += 1
-                current_app.logger.info(f"Successfully synced movie: {movie_data.get('title')}")
-
-            except sqlite3.Error as e:
-                db.rollback()
-                current_app.logger.error(f"sync_radarr_library: Database error while syncing movie Radarr ID {movie_data.get('id', 'N/A')}: {e}")
-            except Exception as e:
-                db.rollback()
-                current_app.logger.error(f"sync_radarr_library: Unexpected error while syncing movie Radarr ID {movie_data.get('id', 'N/A')}: {e}", exc_info=True)
-
-        current_app.logger.info(f"Radarr library sync finished. Synced {movies_synced_count} movies.")
-        return movies_synced_count
+    except sqlite3.Error as e:
+        current_app.logger.error(f"sync_radarr_library: Database error during Radarr sync: {e}")
+        if conn: conn.rollback()
+        temp_conn_for_status = None
+        try:
+            with current_app.app_context():
+                 temp_conn_for_status = database.get_db_connection()
+            database.update_sync_status(temp_conn_for_status, 'radarr', 'failed_db_error')
+        except Exception as e_status:
+            current_app.logger.error(f"sync_radarr_library: Failed to update sync status after DB error: {e_status}")
+        finally:
+            if temp_conn_for_status: temp_conn_for_status.close()
+        return {'status': 'error', 'message': f'Database error: {e}', 'synced': movies_synced_count, 'added': movies_added_count, 'updated': movies_updated_count}
+    except Exception as e:
+        current_app.logger.error(f"sync_radarr_library: An unexpected error occurred during Radarr sync: {e}")
+        if conn: conn.rollback()
+        temp_conn_for_status_unexpected = None
+        try:
+            with current_app.app_context():
+                 temp_conn_for_status_unexpected = database.get_db_connection()
+            database.update_sync_status(temp_conn_for_status_unexpected, 'radarr', 'failed_unexpected_error')
+        except Exception as e_status_unexpected:
+            current_app.logger.error(f"sync_radarr_library: Failed to update sync status after unexpected error: {e_status_unexpected}")
+        finally:
+            if temp_conn_for_status_unexpected: temp_conn_for_status_unexpected.close()
+        return {'status': 'error', 'message': f'Unexpected error: {e}', 'synced': movies_synced_count, 'added': movies_added_count, 'updated': movies_updated_count}
+    finally:
+        if conn:
+            conn.close()

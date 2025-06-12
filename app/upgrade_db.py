@@ -4,7 +4,7 @@ import os
 DB_PATH = os.environ.get('SHOWNOTES_DB', 'instance/shownotes.sqlite3')
 
 SCHEMA = '''
-CREATE TABLE IF NOT EXISTS plex_events (
+CREATE TABLE IF NOT EXISTS plex_activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type TEXT,
     user_id INTEGER,
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS plex_events (
     season INTEGER,
     episode INTEGER,
     summary TEXT,
+    tmdb_id INTEGER, -- Added tmdb_id
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     raw_json TEXT
 );
@@ -23,11 +24,13 @@ CREATE TABLE IF NOT EXISTS sonarr_shows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sonarr_id INTEGER UNIQUE NOT NULL,
     tvdb_id INTEGER,
+    tmdb_id INTEGER,
     imdb_id TEXT,
     title TEXT NOT NULL,
     year INTEGER,
     overview TEXT,
     status TEXT,
+    ended BOOLEAN,
     season_count INTEGER,
     episode_count INTEGER,
     episode_file_count INTEGER,
@@ -72,11 +75,34 @@ CREATE TABLE IF NOT EXISTS radarr_movies (
     year INTEGER,
     overview TEXT,
     status TEXT,
+    release_date TEXT,
+    original_language TEXT,
+    production_countries TEXT,
+    studios TEXT,
+    runtime INTEGER,
+    tmdb_vote_average REAL,
+    tmdb_vote_count INTEGER,
+    imdb_rating REAL,
+    imdb_votes INTEGER,
     poster_url TEXT,
     fanart_url TEXT,
     path_on_disk TEXT,
     has_file BOOLEAN,
     last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS image_cache_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_type TEXT NOT NULL,
+    item_db_id INTEGER NOT NULL,
+    image_url TEXT NOT NULL,
+    image_kind TEXT NOT NULL,
+    target_filename TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' NOT NULL, -- pending, processing, completed, failed
+    attempts INTEGER DEFAULT 0 NOT NULL,
+    last_attempt_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 '''
 
@@ -84,7 +110,7 @@ def upgrade():
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.executescript(SCHEMA)
-        print('Database schema upgraded successfully (plex_events, sonarr_shows, sonarr_seasons, sonarr_episodes, radarr_movies tables checked/created).')
+        print('Database schema upgraded successfully (plex_activity_log, sonarr_shows, sonarr_seasons, sonarr_episodes, radarr_movies, image_cache_queue tables checked/created).')
     finally:
         conn.close()
 

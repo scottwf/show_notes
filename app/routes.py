@@ -726,20 +726,22 @@ def home():
         plex_event_for_template = dict(plex_event_from_db)
         media_type = plex_event_for_template.get('media_type')
         tmdb_id = plex_event_for_template.get('tmdb_id')
+        activity_title = plex_event_for_template.get('title') # General title
+        activity_show_title = plex_event_for_template.get('show_title') # Specific to shows/episodes
 
         current_app.logger.info(f"Processing event for media_type: '{media_type}', tmdb_id: {tmdb_id}")
 
         # --- Logic for Movies ---
         if media_type == 'movie' and tmdb_id:
             movie_data = db.execute(
-                'SELECT poster, tmdbId, year, overview FROM radarr_movies WHERE tmdbId = ?',
+                'SELECT poster_url, tmdb_id AS tmdbId, year, overview FROM radarr_movies WHERE tmdb_id = ?',
                 (tmdb_id,)
             ).fetchone()
 
             if movie_data:
                 current_app.logger.info(f"Found movie data for tmdbId: {tmdb_id}")
-                plex_event_for_template['poster_path'] = movie_data['poster']
-                plex_event_for_template['tmdb_id'] = movie_data['tmdbId'] # Redundant but good for consistency
+                plex_event_for_template['poster_path'] = movie_data['poster_url']
+                plex_event_for_template['tmdb_id'] = movie_data['tmdbId'] # This should be tmdb_id from the aliased select # Redundant but good for consistency
                 plex_event_for_template['year'] = movie_data['year']
                 plex_event_for_template['overview'] = movie_data['overview']
             else:
@@ -748,14 +750,14 @@ def home():
         # --- Logic for TV Shows ---
         elif media_type == 'episode' and tmdb_id:
             show_data = db.execute(
-                'SELECT poster, tmdbId, year, overview FROM sonarr_shows WHERE tmdbId = ?',
+                'SELECT poster_url, tmdb_id AS tmdbId, year, overview FROM sonarr_shows WHERE tmdb_id = ?',
                 (tmdb_id,)
             ).fetchone()
 
             if show_data:
                 current_app.logger.info(f"Found show data for tmdbId: {tmdb_id}")
-                plex_event_for_template['poster_path'] = show_data['poster']
-                plex_event_for_template['show_tmdb_id'] = show_data['tmdbId'] # Use specific key for shows
+                plex_event_for_template['poster_path'] = show_data['poster_url']
+                plex_event_for_template['show_tmdb_id'] = show_data['tmdbId'] # This should be tmdb_id from the aliased select # Use specific key for shows
                 plex_event_for_template['year'] = show_data['year']
                 plex_event_for_template['overview'] = show_data['overview']
             else:
@@ -1102,11 +1104,12 @@ def search():
     try:
         like_query = f"%{query_term.lower()}%"
         cursor_shows = db.execute(
-            "SELECT title, poster as poster_url, fanart as fanart_url FROM sonarr_shows WHERE LOWER(title) LIKE ?",
+            "SELECT tmdb_id, title, poster_url, fanart_url FROM sonarr_shows WHERE LOWER(title) LIKE ?",
             (like_query,)
         )
         for row in cursor_shows.fetchall():
             results.append({
+                'id': row['tmdb_id'],
                 'type': 'show',
                 'title': row['title'],
                 'poster': get_proxied_url(sonarr_url_base, row['poster_url']),
@@ -1119,15 +1122,17 @@ def search():
     try:
         like_query = f"%{query_term.lower()}%"
         cursor_movies = db.execute(
-            "SELECT title, poster, fanart FROM radarr_movies WHERE LOWER(title) LIKE ?",
+            "SELECT tmdb_id, title, year, poster_url, fanart_url FROM radarr_movies WHERE LOWER(title) LIKE ?",
             (like_query,)
         )
         for row in cursor_movies.fetchall():
             results.append({
+                'id': row['tmdb_id'],
                 'type': 'movie',
                 'title': row['title'],
-                'poster': get_proxied_url(radarr_url_base, row['poster']),
-                'background': get_proxied_url(radarr_url_base, row['fanart'])
+                'year': row['year'],
+                'poster': get_proxied_url(radarr_url_base, row['poster_url']),
+                'background': get_proxied_url(radarr_url_base, row['fanart_url'])
             })
     except Exception as e:
         current_app.logger.error(f"Error searching Radarr movies in DB: {e}", exc_info=True)

@@ -1,7 +1,8 @@
 import sqlite3
 import os
 
-DB_PATH = os.environ.get('SHOWNOTES_DB', 'data/shownotes.db')
+INSTANCE_FOLDER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'instance')
+DB_PATH = os.environ.get('SHOWNOTES_DB', os.path.join(INSTANCE_FOLDER_PATH, 'shownotes.sqlite3'))
 
 def column_exists(cursor, table_name, column_name):
     """Check if a column exists in a table."""
