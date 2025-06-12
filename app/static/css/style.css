@@ -2564,3 +2564,11 @@ video {
     padding-bottom: 8rem;
   }
 }
+
+/* Search suggestion highlighting */
+.search-suggestion-highlight {
+  background-color: #e2e8f0; /* Tailwind's gray-200 for light mode */
+}
+.dark .search-suggestion-highlight {
+  background-color: #4a5568; /* Tailwind's gray-700 for dark mode */
+}

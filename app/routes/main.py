@@ -65,16 +65,46 @@ def home():
     if plex_event_from_db:
         plex_event_for_template = dict(plex_event_from_db)
         media_type = plex_event_for_template.get('media_type')
-        tmdb_id = plex_event_for_template.get('tmdb_id')
+        tmdb_id = plex_event_for_template.get('tmdb_id') # This is episode tmdb_id for episodes
 
         if media_type == 'movie' and tmdb_id:
             item_data = db.execute('SELECT poster_url, year, overview FROM radarr_movies WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
             if item_data:
                 plex_event_for_template.update(dict(item_data))
-        elif media_type == 'episode' and tmdb_id:
-            item_data = db.execute('SELECT poster_url, year, overview FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
-            if item_data:
-                plex_event_for_template.update(dict(item_data))
+        elif media_type == 'episode':
+            # First, try to get the show's TMDB ID using grandparent_rating_key -> tvdb_id
+            grandparent_rating_key = plex_event_for_template.get('grandparent_rating_key')
+            show_tmdb_id_from_sonarr = None
+            if grandparent_rating_key:
+                try:
+                    # Assuming grandparent_rating_key from Plex maps to tvdb_id in sonarr_shows
+                    show_info = db.execute(
+                        'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
+                        (grandparent_rating_key,)
+                    ).fetchone()
+                    if show_info and show_info['tmdb_id']:
+                        show_tmdb_id_from_sonarr = show_info['tmdb_id']
+                        plex_event_for_template['show_tmdb_id'] = show_tmdb_id_from_sonarr
+                except Exception as e:
+                    current_app.logger.error(f"Error fetching show_tmdb_id from sonarr_shows by tvdb_id: {e}")
+
+            # Fallback or primary fetch for episode-specific display (poster, year of show, overview of show)
+            # The current tmdb_id is the episode's tmdb_id.
+            # If we have show_tmdb_id_from_sonarr, we should use that to fetch show details.
+            # Otherwise, the original logic using episode's tmdb_id (if it was ever meant to be show's tmdb_id) might be flawed.
+            # Let's assume the original intent for item_data was to get show details.
+            # If show_tmdb_id_from_sonarr is found, use it. Otherwise, the original tmdb_id (episode's) won't find a show.
+
+            show_id_to_query = show_tmdb_id_from_sonarr if show_tmdb_id_from_sonarr else tmdb_id
+            # However, tmdb_id here is for the EPISODE, not the show. So the original query for sonarr_shows using episode tmdb_id was incorrect.
+            # We should ONLY query sonarr_shows if we have a valid show_tmdb_id from the tvdb_id lookup.
+
+            if show_tmdb_id_from_sonarr: # Use the show's actual TMDB ID
+                 item_data = db.execute('SELECT poster_url, year, overview FROM sonarr_shows WHERE tmdb_id = ?', (show_tmdb_id_from_sonarr,)).fetchone()
+                 if item_data:
+                     plex_event_for_template.update(dict(item_data))
+            # If show_tmdb_id_from_sonarr is None, we don't have a reliable show TMDB ID to fetch poster/year/overview for the show.
+            # The plex_event_for_template will still contain episode title, show title, etc. from plex_activity_log.
 
     return render_template('home.html',
                            plex_event=plex_event_for_template,

@@ -8,7 +8,7 @@
     <!-- Hero Section -->
     <div 
         class="relative bg-cover bg-center py-12 md:py-16 lg:py-24 xl:py-32"
-        style="{% if movie.fanart_display_url %}background-image: url('{{ movie.fanart_display_url }}');{% else %}background-color: #2d3748;{% endif %}"
+        style="{% if movie.fanart_url %}background-image: url('{{ url_for('main.image_proxy', url=movie.fanart_url) }}');{% else %}background-color: #2d3748;{% endif %}"
     >
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
         
@@ -17,8 +17,8 @@
                 
                 <!-- Poster -->
                 <div class="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0 mb-6 md:mb-0 relative z-10">
-                    {% if movie.poster_display_url %}
-                        <img src="{{ movie.poster_display_url }}" alt="Poster for {{ movie.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover">
+                    {% if movie.poster_url %}
+                        <img src="{{ url_for('main.image_proxy', url=movie.poster_url) }}" alt="Poster for {{ movie.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover">
                     {% else %}
                         <div class="rounded-lg shadow-2xl w-full aspect-[2/3] bg-gray-700/80 flex items-center justify-center">
                             <span class="text-gray-400">No Poster</span>
