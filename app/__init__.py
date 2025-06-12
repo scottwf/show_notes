@@ -4,6 +4,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask
 from flask_login import LoginManager
 from . import database # Reverted to use the original database.py
+from . import cli
 
 login_manager = LoginManager()
 
@@ -58,6 +59,7 @@ def create_app(test_config=None):
     # The init_app function in database_clean.py will register CLI commands like 'init-db'
     # It does NOT automatically create the database on app start anymore.
     database.init_app(app)
+    cli.init_app(app) # Register CLI commands from app/cli.py
 
     # --- Login Manager Setup ---
     login_manager.init_app(app)

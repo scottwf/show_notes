@@ -511,15 +511,30 @@ def sync_sonarr_library():
                     db.rollback() # Rollback this show's transaction
                     continue # Skip to next show
 
-                # Pre-cache images
+                # Add to image_cache_queue
                 if final_poster_url:
-                    proxy_poster_url = cache_image(final_poster_url, 'posters', f"show_{current_sonarr_id}_poster", 'sonarr')
-                    if proxy_poster_url:
-                        _trigger_image_cache(proxy_poster_url, show_data.get("title"))
+                    parsed_poster_url = urllib.parse.urlparse(final_poster_url)
+                    poster_target_filename = f"{hash(parsed_poster_url.path)}.jpg"
+                    try:
+                        db.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('show', show_db_id, final_poster_url, 'poster', poster_target_filename)
+                        )
+                        current_app.logger.info(f"Queued poster for show ID {show_db_id}: {final_poster_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue poster for show ID {show_db_id}: {e}")
+
                 if final_fanart_url:
-                    proxy_fanart_url = cache_image(final_fanart_url, 'background', f"show_{current_sonarr_id}_fanart", 'sonarr')
-                    if proxy_fanart_url:
-                        _trigger_image_cache(proxy_fanart_url, show_data.get("title"))
+                    parsed_fanart_url = urllib.parse.urlparse(final_fanart_url)
+                    fanart_target_filename = f"{hash(parsed_fanart_url.path)}.jpg"
+                    try:
+                        db.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('show', show_db_id, final_fanart_url, 'fanart', fanart_target_filename)
+                        )
+                        current_app.logger.info(f"Queued fanart for show ID {show_db_id}: {final_fanart_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue fanart for show ID {show_db_id}: {e}")
 
                 # Sync Seasons and Episodes for this show
                 # Sonarr's /api/v3/series endpoint includes season details
@@ -791,29 +806,51 @@ def sync_radarr_library():
                 }
                 movie_values_filtered = {k: v for k, v in movie_values.items() if v is not None}
 
-                # Pre-cache images
-                if final_poster_url:
-                    proxy_poster_url = cache_image(final_poster_url, 'posters', f"movie_{movie_data.get('id')}_poster", 'radarr')
-                    if proxy_poster_url:
-                        _trigger_image_cache(proxy_poster_url, movie_data.get("title"))
-                if final_fanart_url:
-                    proxy_fanart_url = cache_image(final_fanart_url, 'background', f"movie_{movie_data.get('id')}_fanart", 'radarr')
-                    if proxy_fanart_url:
-                        _trigger_image_cache(proxy_fanart_url, movie_data.get("title"))
-
                 sql = """
                     INSERT INTO radarr_movies ({columns}, last_synced_at)
                     VALUES ({placeholders}, CURRENT_TIMESTAMP)
                     ON CONFLICT (radarr_id) DO UPDATE SET
-                    {update_setters}, last_synced_at = CURRENT_TIMESTAMP;
+                    {update_setters}, last_synced_at = CURRENT_TIMESTAMP
+                    RETURNING id;
                 """.format(
                     columns=", ".join(movie_values_filtered.keys()),
                     placeholders=", ".join("?" for _ in movie_values_filtered),
                     update_setters=", ".join(f"{key} = excluded.{key}" for key in movie_values_filtered)
                 )
 
-                db.execute(sql, tuple(movie_values_filtered.values()))
-                db.commit() # Commit after each movie
+                cursor = db.execute(sql, tuple(movie_values_filtered.values()))
+                movie_db_id_row = cursor.fetchone()
+                if not movie_db_id_row:
+                    current_app.logger.error(f"sync_radarr_library: Failed to get DB ID for Radarr movie ID {movie_data.get('id')}")
+                    continue # Skip this movie if ID retrieval failed
+                movie_db_id = movie_db_id_row[0]
+
+                # Add to image_cache_queue
+                if final_poster_url:
+                    parsed_poster_url = urllib.parse.urlparse(final_poster_url)
+                    poster_target_filename = f"{hash(parsed_poster_url.path)}.jpg"
+                    try:
+                        db.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('movie', movie_db_id, final_poster_url, 'poster', poster_target_filename)
+                        )
+                        current_app.logger.info(f"Queued poster for movie ID {movie_db_id}: {final_poster_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue poster for movie ID {movie_db_id}: {e}")
+
+                if final_fanart_url:
+                    parsed_fanart_url = urllib.parse.urlparse(final_fanart_url)
+                    fanart_target_filename = f"{hash(parsed_fanart_url.path)}.jpg"
+                    try:
+                        db.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('movie', movie_db_id, final_fanart_url, 'fanart', fanart_target_filename)
+                        )
+                        current_app.logger.info(f"Queued fanart for movie ID {movie_db_id}: {final_fanart_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue fanart for movie ID {movie_db_id}: {e}")
+
+                db.commit() # Commit after each movie and its queued images
                 movies_synced_count += 1
                 current_app.logger.info(f"Successfully synced movie: {movie_data.get('title')}")
 

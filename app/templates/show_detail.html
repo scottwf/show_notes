@@ -4,8 +4,12 @@
 <div class="max-w-4xl mx-auto mt-10 p-6 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
   {% if show %}
     <div class="flex flex-col md:flex-row gap-6">
-      {% if show.remotePoster %}
-        <img src="{{ show.remotePoster }}" alt="Poster for {{ show.title }}" class="w-48 h-auto object-cover rounded-lg shadow-md self-center md:self-start">
+      {% if show.poster_display_url %}
+        <img src="{{ show.poster_display_url }}" alt="Poster for {{ show.title }}" class="w-48 h-auto object-cover rounded-lg shadow-md self-center md:self-start">
+      {% else %}
+        <div class="w-48 h-72 bg-slate-200 dark:bg-slate-700 flex items-center justify-center rounded-lg shadow-md self-center md:self-start">
+          <span class="text-slate-500 dark:text-slate-400">No Poster</span>
+        </div>
       {% endif %}
       <div class="flex-1">
         <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">{{ show.title }}</h1>

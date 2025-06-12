@@ -1141,9 +1141,35 @@ def search():
 def show_detail(tmdb_id):
     db = database.get_db()
     show = db.execute('SELECT * FROM sonarr_shows WHERE tmdbId = ?', (tmdb_id,)).fetchone()
-    if not show:
+    if show:
+        show_dict = dict(show) # Make it mutable
+
+        # Generate proxied URLs for display
+        if show_dict.get('poster_url'):
+            # Use tmdbId from sonarr_shows for the cache key prefix part, as it's the ID used in the route
+            show_dict['poster_display_url'] = utils.cache_image(
+                show_dict['poster_url'],
+                'posters',
+                f"show_poster_{show_dict['tmdbId']}", # tmdbId from sonarr_shows
+                'sonarr'
+            )
+        else:
+            show_dict['poster_display_url'] = None
+
+        if show_dict.get('fanart_url'):
+            show_dict['fanart_display_url'] = utils.cache_image(
+                show_dict['fanart_url'],
+                'background',
+                f"show_fanart_{show_dict['tmdbId']}", # tmdbId from sonarr_shows
+                'sonarr'
+            )
+        else:
+            show_dict['fanart_display_url'] = None
+
+        return render_template('show_detail.html', show=show_dict, title=show_dict['title'])
+    else:
+        current_app.logger.warning(f"Show with tmdb_id {tmdb_id} not found in sonarr_shows.")
         abort(404)
-    return render_template('show_detail.html', show=show, title=show['title'])
 
 # --- Movie Detail Page ---
 @bp.route('/movie/<int:tmdb_id>')

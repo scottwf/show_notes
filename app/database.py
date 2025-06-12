@@ -64,6 +64,7 @@ def init_db():
             DROP TABLE IF EXISTS radarr_movies;
             DROP TABLE IF EXISTS plex_events;
             DROP TABLE IF EXISTS plex_activity_log;
+            DROP TABLE IF EXISTS image_cache_queue;
             DROP TABLE IF EXISTS schema_version;
 
             CREATE TABLE character_summaries (
@@ -274,8 +275,25 @@ def init_db():
                 view_offset_ms INTEGER,
                 duration_ms INTEGER,
                 event_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                tmdb_id INTEGER,
                 raw_payload TEXT
             );
+
+            CREATE TABLE image_cache_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL, -- 'movie' or 'show'
+                item_db_id INTEGER NOT NULL, -- Corresponds to id in radarr_movies or sonarr_shows
+                image_url TEXT NOT NULL,
+                image_kind TEXT NOT NULL, -- 'poster' or 'fanart'
+                target_filename TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, complete, failed
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_attempt_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX idx_image_cache_queue_status_attempts ON image_cache_queue (status, attempts);
 
             CREATE INDEX idx_users_username ON users (username);
             CREATE INDEX idx_users_plex_user_id ON users (plex_user_id);
