@@ -21,6 +21,8 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Admin UI Consistency:** Standardized styling for sidebar navigation links (e.g., 'Tasks' link) to match other admin links.
 - [x] **Task Button Styling:** Restyled Sonarr/Radarr sync buttons on the `/admin/tasks` page for better visual consistency.
 - [x] **Logo Display Fixes:** Corrected display of Sonarr and Radarr logos on the `/admin/tasks` page for proper visibility in both light and dark modes.
+- [x] **Flask Route Modularization:** Refactored application routes into Admin (`/admin`) and Main blueprints for improved organization and maintainability.
+- [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
 
 ## Next Steps
 - [ ] **Pre-cache Media Assets:** Implement image caching (posters, fanart) during Sonarr/Radarr library synchronization to improve performance and local availability for search and display. (Currently, search uses on-demand caching).

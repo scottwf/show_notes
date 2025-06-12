@@ -164,7 +164,89 @@ def test_ollama_connection():
     # A GET to the root or /api/tags should work if the server is up.
     return _test_service_connection("Ollama", 'ollama_url', endpoint='/api/tags') # /api/ps or just / might also work
 
-# --- End Connection Test Functions --- 
+# --- End Connection Test Functions ---
+
+
+# --- Connection Test Functions (with Parameters) ---
+
+def _test_service_connection_with_params(service_name, service_url, api_key=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None, body_json=None):
+    """Generic helper to test service connection with provided URL and API key."""
+    if not service_url:
+        current_app.logger.info(f"_test_service_connection_with_params: {service_name} URL not provided.")
+        return False, f"{service_name} URL not provided."
+    
+    required_key_services = ["Sonarr", "Radarr", "Bazarr"]
+    if service_name in required_key_services and not api_key:
+        current_app.logger.info(f"_test_service_connection_with_params: {service_name} API key not provided, but required for this service test.")
+        return False, f"{service_name} API key not provided."
+
+    full_endpoint_url = f"{service_url.rstrip('/')}{endpoint}"
+    headers = headers_extra or {}
+    if api_key and service_name in required_key_services:
+        headers["X-Api-Key"] = api_key
+
+    try:
+        current_app.logger.debug(f"Testing {service_name} connection to {full_endpoint_url} with method {method} using provided params.")
+        response = requests.request(method, full_endpoint_url, headers=headers, params=params, json=body_json, timeout=5)
+        if response.status_code == expected_status:
+            current_app.logger.info(f"_test_service_connection_with_params: {service_name} connection successful to {full_endpoint_url}.")
+            return True, None
+        else:
+            error_message = f"{service_name} connection test to {full_endpoint_url} failed with status {response.status_code}. Response: {response.text[:200]}"
+            current_app.logger.warning(f"_test_service_connection_with_params: {error_message}")
+            return False, error_message
+    except requests.exceptions.Timeout:
+        error_message = f"Timeout connecting to {service_name} at {full_endpoint_url}"
+        current_app.logger.error(f"_test_service_connection_with_params: {error_message}")
+        return False, error_message
+    except requests.exceptions.ConnectionError:
+        error_message = f"Connection error for {service_name} at {full_endpoint_url}"
+        current_app.logger.error(f"_test_service_connection_with_params: {error_message}")
+        return False, error_message
+    except requests.exceptions.RequestException as e:
+        error_message = f"Generic error for {service_name} at {full_endpoint_url}: {e}"
+        current_app.logger.error(f"_test_service_connection_with_params: {error_message}")
+        return False, error_message
+
+def test_sonarr_connection_with_params(url, api_key):
+    return _test_service_connection_with_params("Sonarr", url, api_key, '/api/v3/system/status')
+
+def test_radarr_connection_with_params(url, api_key):
+    return _test_service_connection_with_params("Radarr", url, api_key, '/api/v3/system/status')
+
+def test_bazarr_connection_with_params(url, api_key):
+    return _test_service_connection_with_params("Bazarr", url, api_key, '/api/system/status')
+
+def test_ollama_connection_with_params(url):
+    return _test_service_connection_with_params("Ollama", url, endpoint='/api/tags')
+
+def test_pushover_notification_with_params(token, user_key):
+    """Sends a test notification using provided Pushover credentials."""
+    if not token or not user_key:
+        return False, "Pushover token and user key are required."
+
+    url = "https://api.pushover.net/1/messages.json"
+    payload = {
+        'token': token,
+        'user': user_key,
+        'message': 'This is a test notification from ShowNotes!',
+        'title': 'ShowNotes Test'
+    }
+    try:
+        response = requests.post(url, data=payload, timeout=5)
+        response_data = response.json()
+        if response_data.get('status') == 1:
+            current_app.logger.info("Pushover test notification sent successfully.")
+            return True, None
+        else:
+            error_message = response_data.get('errors', ['Unknown error'])
+            current_app.logger.warning(f"Pushover test failed: {error_message}")
+            return False, ', '.join(error_message)
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Error sending Pushover test notification: {e}")
+        return False, str(e)
+
+# --- End Connection Test Functions (with Parameters) --- 
 
 
 def get_all_sonarr_shows():

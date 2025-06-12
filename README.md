@@ -114,7 +114,8 @@ tmux attach -t shownotes
 
 ### Key Files & Modules
 - **`app/__init__.py`**: Flask app factory (`create_app()`). Initializes the Flask app, registers the main application blueprint, and configures Jinja filters.
-- **`app/routes.py`**: All route definitions. Handles page requests and API endpoints, including user-facing pages, autocomplete APIs, integration webhooks, and admin/utility routes.
+- **`app/routes/main.py`**: Contains user-facing routes (e.g., homepage, character summaries) using the `main_bp` blueprint.
+- **`app/routes/admin.py`**: Contains admin-specific routes (e.g., settings, tasks, logs) under the `/admin` prefix, using the `admin_bp` blueprint.
 - **`app/utils.py`**: All major logic, including TMDB calls, OpenAI calls, summary generation, database operations, and parsing functions.
 - **`app/prompts.py` / `app/prompt_builder.py`**: Prompt templates for OpenAI queries. Defines reusable prompt templates for tasks like character summaries, quotes, and relationship lists.
 - **`app/templates/`**: Jinja2 HTML templates.
@@ -130,7 +131,9 @@ tmux attach -t shownotes
 shownotes/
 ├── app/
 │   ├── __init__.py            # Flask app factory
-│   ├── routes.py              # All route definitions
+│   ├── routes/                # Blueprint-based route definitions
+│   │   ├── admin.py           # Admin panel routes (/admin/*)
+│   │   └── main.py            # Main application routes
 │   ├── utils.py               # Helper functions
 │   ├── prompts.py             # Prompt templates for OpenAI queries
 │   ├── templates/             # Jinja2 HTML templates

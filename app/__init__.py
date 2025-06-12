@@ -96,8 +96,10 @@ def create_app(test_config=None):
         return None # Return None if the user is not found or an error occurs
 
     # --- Register Blueprints ---
-    from . import routes  # Import your routes blueprint
-    app.register_blueprint(routes.bp)
+    from .routes.main import main_bp
+    from .routes.admin import admin_bp
+    app.register_blueprint(main_bp)
+    app.register_blueprint(admin_bp)
     # If you have other blueprints, register them here
     # Example: from . import admin_routes
     #          app.register_blueprint(admin_routes.admin_bp, url_prefix='/admin')

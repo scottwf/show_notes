@@ -14,7 +14,7 @@
         <p class="text-gray-600 dark:text-gray-400 mb-6">
             Manually trigger a synchronization of your Sonarr library. This will fetch all shows, seasons, and episodes, and pre-cache poster images. This process might take some time.
         </p>
-        <form action="{{ url_for('main.admin_sync_sonarr') }}" method="POST">
+        <form action="{{ url_for('admin.sync_sonarr') }}" method="POST">
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581" />
@@ -34,7 +34,7 @@
         <p class="text-gray-600 dark:text-gray-400 mb-6">
             Manually trigger a synchronization of your Radarr library. This will fetch all movies and pre-cache poster and fanart images. This process might take some time.
         </p>
-        <form action="{{ url_for('main.admin_sync_radarr') }}" method="POST">
+        <form action="{{ url_for('admin.sync_radarr') }}" method="POST">
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581" />

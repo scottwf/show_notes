@@ -52,7 +52,7 @@
 
         async function fetchLogFiles() {
             try {
-                const response = await fetch('{{ url_for("main.admin_logs_list") }}');
+                const response = await fetch('{{ url_for("admin.logs_list") }}');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const files = await response.json();
                 logFileSelect.innerHTML = ''; // Clear existing options
@@ -83,7 +83,7 @@
 
             try {
                 // Fetch initial last N lines
-                const response = await fetch(`{{ url_for("main.admin_get_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
+                const response = await fetch(`{{ url_for("admin.get_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const initialLines = await response.json();
                 initialLines.forEach(line => {
@@ -93,7 +93,7 @@
                 logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Scroll to bottom
 
                 // Start SSE
-                currentEventSource = new EventSource(`{{ url_for("main.admin_stream_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
+                currentEventSource = new EventSource(`{{ url_for("admin.stream_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
                 logStatus.textContent = `Streaming updates for ${filename}...`;
 
                 currentEventSource.onmessage = function (event) {

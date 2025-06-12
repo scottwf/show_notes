@@ -64,7 +64,7 @@ function bindTests() {
         url = document.getElementById('ollama_url').value;
       }
       
-      fetch('/test-api', {
+      fetch('/admin/test-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ service, url, api_key: key })
@@ -100,7 +100,7 @@ function bindTests() {
       pushoverBtn.disabled = true;
       statusElem.textContent = 'Testing...';
       statusElem.className = 'ml-2 text-sm text-gray-600';
-      fetch('/test-pushover', {
+      fetch('/admin/test-pushover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
