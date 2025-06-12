@@ -1,26 +1,151 @@
-{% extends 'layout.html' %}
+{% extends "layout.html" %}
+
+{% block title %}{{ show.title }} - Show Details{% endblock %}
 
 {% block page_content %}
-<div class="max-w-4xl mx-auto mt-10 p-6 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
-  {% if show %}
-    <div class="flex flex-col md:flex-row gap-6">
-      {% if show.poster_url %}
-        <img src="{{ url_for('main.image_proxy', url=show.poster_url) }}" alt="Poster for {{ show.title }}" class="w-48 h-auto object-cover rounded-lg shadow-md self-center md:self-start">
-      {% else %}
-        <div class="w-48 h-72 bg-slate-200 dark:bg-slate-700 flex items-center justify-center rounded-lg shadow-md self-center md:self-start">
-          <span class="text-slate-500 dark:text-slate-400">No Poster</span>
-        </div>
-      {% endif %}
-      <div class="flex-1">
-        <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">{{ show.title }}</h1>
-        {% if show.year %}
-          <p class="text-lg text-slate-500 dark:text-slate-400 mb-4">({{ show.year }})</p>
-        {% endif %}
-        <p class="text-base text-slate-600 dark:text-slate-300">{{ show.overview }}</p>
-      </div>
+<div class="relative min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <!-- Hero Section with Background Image -->
+    <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-no-repeat bg-cover bg-center"
+         style="{% if show.fanart_url %}background-image: url('/static/background/{{ show.tmdb_id }}.jpg');{% else %}background-color: #1a202c;{% endif %}">
     </div>
-  {% else %}
-    <p class="text-center text-slate-600 dark:text-slate-300">Show details could not be found.</p>
-  {% endif %}
+    <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
+
+    <!-- Content Area -->
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[25vh] md:pt-[30vh]">
+
+        <div class="md:flex md:items-start md:space-x-8 lg:space-x-12 mb-8">
+            <!-- Poster -->
+            <div class="flex-shrink-0 w-48 sm:w-56 md:w-64 mx-auto md:mx-0 mb-6 md:mb-0">
+                <img src="/static/poster/{{ show.tmdb_id }}.jpg"
+                     alt="Poster for {{ show.title }}"
+                     class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
+                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
+            </div>
+
+            <!-- Details: Title, Year, Overview, Metadata -->
+            <div class="text-center md:text-left flex-grow">
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
+                {% if show.year %}
+                <p class="text-xl sm:text-2xl text-gray-300 mb-4 font-light drop-shadow-sm">({{ show.year }})</p>
+                {% endif %}
+
+                <p class="text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6">
+                    {{ show.overview | default('No overview available.') }}
+                </p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-gray-300 mb-6">
+                    <div>
+                        <span class="font-semibold text-gray-100">First Air Date:</span> {{ show.year }} {# More specific date could be added if available #}
+                    </div>
+                    <div>
+                        <span class="font-semibold text-gray-100">Status:</span> {{ show.status | title | default('N/A') }}
+                    </div>
+                    {% if show.imdb_id %}
+                    <div>
+                        <span class="font-semibold text-gray-100">IMDb:</span>
+                        <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:text-sky-300 hover:underline">
+                            View on IMDb
+                        </a>
+                    </div>
+                    {% endif %}
+                     {% if show.tvdb_id %}
+                    <div>
+                        <span class="font-semibold text-gray-100">TVDB ID:</span> {{ show.tvdb_id }}
+                    </div>
+                    {% endif %}
+                    {% if show.tmdb_id %}
+                    <div>
+                        <span class="font-semibold text-gray-100">TMDB ID:</span> {{ show.tmdb_id }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications: Next Aired / Currently Watching -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {% if next_aired_episode_info %}
+            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-sky-400 mb-2">Next Episode Airing</h3>
+                <p class="text-gray-200">
+                    {{ next_aired_episode_info.season_episode_str }}: {{ next_aired_episode_info.title }}
+                </p>
+                <p class="text-sm text-gray-400">
+                    Airs on: {{ next_aired_episode_info.air_date_utc | format_datetime }}
+                </p>
+            </div>
+            {% endif %}
+
+            {% if currently_watched_episode_info %}
+            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-sky-400 mb-2">Currently Watching</h3>
+                <p class="text-gray-200">
+                    {{ currently_watched_episode_info.season_episode }}: {{ currently_watched_episode_info.title }}
+                </p>
+                {% if currently_watched_episode_info.progress_percent is defined %}
+                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-2">
+                    <div class="bg-sky-500 h-2.5 rounded-full" style="width: {{ currently_watched_episode_info.progress_percent }}%"></div>
+                </div>
+                <p class="text-xs text-gray-400 text-right">{{ currently_watched_episode_info.progress_percent }}% watched (approx.)</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Seasons and Episodes Section -->
+        <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Seasons & Episodes</h2>
+            {% if seasons_with_episodes %}
+                {% for season in seasons_with_episodes %}
+                    {% if season.season_number == 0 and not season.episodes %} {# Skip empty specials season #}
+                        {% continue %}
+                    {% endif %}
+                    <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if season.season_number == 1 %}open{% endif %}>
+                        <summary class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
+                            Season {{ season.season_number }}
+                            <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
+                                ({{ season.episodes | length }} episode{{ 's' if (season.episodes | length) != 1 else '' }})
+                            </span>
+                        </summary>
+                        <div class="p-3 bg-gray-50 dark:bg-gray-800/50">
+                            <ul class="space-y-3">
+                                {% for episode in season.episodes %}
+                                    <li class="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                                        <div class="flex justify-between items-start">
+                                            <div>
+                                                <h4 class="font-medium text-gray-800 dark:text-gray-100">
+                                                    {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
+                                                </h4>
+                                                {% if episode.overview %}
+                                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
+                                                    {{ episode.overview }}
+                                                </p>
+                                                {% endif %}
+                                            </div>
+                                            {% if episode.air_date_utc %}
+                                            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
+                                                {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                         {% if episode.has_file %}
+                                            <span class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
+                                                Downloaded
+                                            </span>
+                                        {% endif %}
+                                    </li>
+                                {% else %}
+                                    <li class="text-gray-500 dark:text-gray-400">No episodes listed for this season.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </details>
+                {% endfor %}
+            {% else %}
+                <p class="text-gray-500 dark:text-gray-400">No season or episode information available for this show yet.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

@@ -7,25 +7,18 @@
 
     let controller;
     let currentHighlightIndex = -1;
-    const highlightClass = 'search-suggestion-highlight';
+    const keyboardSelectedClass = 'keyboard-selected'; // Changed from highlightClass
 
     function updateHighlight() {
       const items = results.children;
       for (let i = 0; i < items.length; i++) {
-        items[i].classList.remove(highlightClass);
-        // Each item is an <a> tag, its child <div> has the hover styles
-        if (items[i].firstElementChild) {
-            items[i].firstElementChild.classList.remove(highlightClass); // Remove from inner div too
-        }
+        // Ensure class is removed only from the <a> tag itself
+        items[i].classList.remove(keyboardSelectedClass);
       }
       if (currentHighlightIndex >= 0 && currentHighlightIndex < items.length) {
         const currentItem = items[currentHighlightIndex];
-        currentItem.classList.add(highlightClass);
-         // The highlighting should apply to the <a> tag directly or its immediate child <div>
-        // If the structure is <a><div>..</div></a>, applying to <a> is fine for bg color.
-        // If Tailwind hover classes are on the div, we might need to target that.
-        // For simplicity, let's assume applying to <a> is sufficient as per CSS.
-        // The CSS targets .search-suggestion-highlight directly.
+        // Ensure class is added only to the <a> tag itself
+        currentItem.classList.add(keyboardSelectedClass);
         currentItem.scrollIntoView({ block: 'nearest' });
       }
     }
@@ -33,6 +26,7 @@
     input.addEventListener('input', async function(){
       const q = this.value.trim();
       currentHighlightIndex = -1; // Reset highlight on new input
+      // updateHighlight(); // Ensure any visual keyboard selection is cleared immediately. This will be called later if results are populated.
       if(controller){ controller.abort(); }
       if(!q){ results.classList.add('hidden'); results.innerHTML=''; return; }
 
@@ -47,16 +41,18 @@
           if (item.year) {
             itemTitle += ` (${item.year})`;
           }
-          // Note: The hover:bg-gray-200 dark:hover:bg-gray-700 are on the DIV inside the A tag.
-          // The highlightClass will be applied to the A tag itself.
+          // The hover:bg-gray-200 dark:hover:bg-gray-700 are on the A tag.
+          // The keyboardSelectedClass will be applied to the A tag itself.
           const baseDivHtml = `<div class="p-2 cursor-pointer">${itemTitle}</div>`;
 
           if ((item.type === 'movie' || item.type === 'show') && item.tmdb_id) {
             const link = item.type === 'movie' ? `/movie/${item.tmdb_id}` : `/show/${item.tmdb_id}`;
-            // The <a> tag will receive the highlight class.
             itemHtml = `<a href="${link}" class="block hover:bg-gray-200 dark:hover:bg-gray-700">${baseDivHtml}</a>`;
           } else {
             // For non-linkable items, the div itself is the child of 'results'
+            // These non-linkable items won't be navigable by keyboard in the current setup,
+            // as 'items' in addEventListener('keydown') only looks at 'results.children' which are <a> tags.
+            // This is existing behavior.
             itemHtml = `<div class="p-2">${itemTitle}</div>`; // Non-linked item
           }
           return itemHtml;
@@ -67,14 +63,15 @@
         } else {
           results.classList.add('hidden');
         }
-        updateHighlight(); // Call to remove any previous highlight if results are empty or repopulated
+        updateHighlight(); // Call to remove any previous highlight or apply to index 0 if input changes quickly
       }catch(e){ if(e.name!=='AbortError') console.error(e); }
     });
 
     input.addEventListener('keydown', function(event) {
       const items = results.children;
       if (results.classList.contains('hidden') || items.length === 0) {
-        currentHighlightIndex = -1; // Ensure index is reset if no items visible
+        currentHighlightIndex = -1;
+        updateHighlight(); // Clear any existing keyboard highlight if results are hidden or empty
         return;
       }
 
@@ -109,6 +106,7 @@
       } else if (event.key === 'Escape') {
         results.classList.add('hidden');
         currentHighlightIndex = -1;
+        updateHighlight(); // Clear keyboard highlight
         input.blur();
       }
     });
@@ -116,7 +114,8 @@
     document.addEventListener('click', (e)=>{
       if(!results.contains(e.target) && e.target!==input){
         results.classList.add('hidden');
-        currentHighlightIndex = -1; // Reset highlight when hiding results
+        currentHighlightIndex = -1;
+        updateHighlight(); // Clear keyboard highlight when hiding results
       }
     });
 

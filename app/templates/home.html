@@ -1,85 +1,141 @@
 {% extends 'layout.html' %}
+
 {% block page_content %}
-<div class="max-w-2xl mx-auto mt-6 sm:mt-10 p-4 sm:p-6 bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg">
-  {% if session.user_id %} 
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
-      <h2 class="text-xl sm:text-2xl font-bold mb-4 sm:mb-0 text-center text-slate-800 dark:text-slate-100">
-        Last Played on Plex
-      </h2>
-    </div>
-
-    {% if plex_event %}
-      <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6">
-        {% if plex_event.poster_url %}
-          <img class="w-24 sm:w-32 h-36 sm:h-48 object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm" src="{{ url_for('main.image_proxy', url=plex_event.poster_url) }}" alt="{{ plex_event.title }} poster">
-        {% else %}
-          {# Optionally, display a placeholder if no poster_url is available #}
-          <!-- <div class="w-24 sm:w-32 h-36 sm:h-48 bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center">
-            <span class="text-slate-500 dark:text-slate-400 text-xs">No Poster</span>
-          </div> -->
-        {% endif %}
-        <div class="flex-1">
-          {# Determine main title based on media type #}
-          {% if plex_event.media_type == 'episode' and plex_event.show_title %}
-                        {% if plex_event.show_tmdb_id %}
-              <a href="{{ url_for('main.show_detail', tmdb_id=plex_event.show_tmdb_id) }}" class="text-xl sm:text-2xl font-bold text-sky-600 dark:text-sky-400 hover:underline mb-1 sm:mb-2">
-                {{ plex_event.show_title }}
-              </a>
-            {% else %}
-              <h3 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 sm:mb-2">{{ plex_event.show_title }}</h3>
-            {% endif %}
-            <div class="text-md sm:text-lg font-semibold text-slate-700 dark:text-slate-200 mb-1">
-              {{ plex_event.season_episode }}: {{ plex_event.title }}
-            </div>
-            {% if plex_event.overview %}
-              <p class="text-sm text-slate-600 dark:text-slate-400 mt-2 hidden sm:block">{{ plex_event.overview | truncate(200) }}</p>
-            {% endif %}
-          {% elif plex_event.media_type == 'movie' and plex_event.title %}
-            {% if plex_event.tmdb_id %}
-              <a href="{{ url_for('main.movie_detail', tmdb_id=plex_event.tmdb_id) }}" class="text-xl sm:text-2xl font-bold text-sky-600 dark:text-sky-400 hover:underline mb-1 sm:mb-2">
-                {{ plex_event.title }}
-              </a>
-            {% else %}
-              <h3 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 sm:mb-2">{{ plex_event.title }}</h3>
-            {% endif %}
-            {% if plex_event.overview %}
-              <p class="text-sm text-slate-600 dark:text-slate-400 mt-2 hidden sm:block">{{ plex_event.overview | truncate(200) }}</p>
-            {% endif %}
-            {% if plex_event.year %}
-              <p class="text-sm text-slate-500 dark:text-slate-400">({{ plex_event.year }})</p>
-            {% endif %}
+<div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
+  {% if session.user_id %}
+    {# Current Item Section #}
+    {% if current_plex_event %}
+      <div class="mb-8 sm:mb-12">
+        <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3 sm:mb-4">
+          {% if current_plex_event.event_type == 'media.pause' %}
+            Paused
+          {% elif current_plex_event.event_type in ['media.play', 'media.resume'] %}
+            Now Playing
           {% else %}
-            <h3 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 sm:mb-2">{{ plex_event.title or 'Unknown Media' }}</h3>
+            Currently Active
           {% endif %}
-
-          {# Summary is not directly available in plex_activity_log, would need to parse raw_payload #}
-          {# {% if plex_event.raw_payload %}
-            {% set payload_data = fromjson(plex_event.raw_payload) %}
-            {% if payload_data and payload_data.Metadata and payload_data.Metadata.summary %}
-              <p class="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-2">{{ payload_data.Metadata.summary }}</p>
+        </h2>
+        <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-3 sm:gap-5">
+          {% if current_plex_event.tmdb_id_for_poster %}
+            <a href="{{ url_for('main.' + current_plex_event.item_type_for_url + '_detail', tmdb_id=current_plex_event.link_tmdb_id) if current_plex_event.item_type_for_url and current_plex_event.link_tmdb_id else '#' }}" class="flex-shrink-0">
+              <img class="w-32 sm:w-40 md:w-48 aspect-[2/3] object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-lg transition-shadow duration-150"
+                   src="/static/poster/{{ current_plex_event.tmdb_id_for_poster }}.jpg"
+                   alt="Poster for {{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}"
+                   onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
+            </a>
+          {% else %}
+            <div class="flex-shrink-0 w-32 sm:w-40 md:w-48 aspect-[2/3] bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center border border-slate-300 dark:border-slate-700 shadow-sm">
+              <span class="text-slate-500 dark:text-slate-400 text-xs px-2 text-center">No Poster Available</span>
+            </div>
+          {% endif %}
+          <div class="flex-1 min-w-0"> {# Added min-w-0 for flex truncation #}
+            {% if current_plex_event.item_type_for_url == 'show' and current_plex_event.link_tmdb_id %}
+              <a href="{{ url_for('main.show_detail', tmdb_id=current_plex_event.link_tmdb_id) }}"
+                 class="text-xl sm:text-2xl font-bold text-sky-600 dark:text-sky-400 hover:underline mb-1 block truncate" title="{{ current_plex_event.title }}">
+                {{ current_plex_event.title }} {# This is Show Title from _get_plex_event_details #}
+              </a>
+              <p class="text-md sm:text-lg font-semibold text-slate-700 dark:text-slate-200 mb-1 truncate" title="{{ current_plex_event.episode_title }}">
+                {{ current_plex_event.season_episode }}: {{ current_plex_event.episode_title }}
+              </p>
+            {% elif current_plex_event.item_type_for_url == 'movie' and current_plex_event.link_tmdb_id %}
+              <a href="{{ url_for('main.movie_detail', tmdb_id=current_plex_event.link_tmdb_id) }}"
+                 class="text-xl sm:text-2xl font-bold text-sky-600 dark:text-sky-400 hover:underline mb-1 block truncate" title="{{ current_plex_event.title }}">
+                {{ current_plex_event.title }}
+              </a>
+            {% else %}
+              <h3 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 truncate" title="{{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}">
+                {{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}
+              </h3>
             {% endif %}
-          {% endif %} #}
 
+            {% if current_plex_event.year %}
+              <p class="text-sm text-slate-500 dark:text-slate-400 mb-1 sm:mb-2">({{ current_plex_event.year }})</p>
+            {% endif %}
+
+            {% if current_plex_event.overview %}
+              <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 sm:mt-2 hidden md:block line-clamp-2 sm:line-clamp-3">
+                {{ current_plex_event.overview }}
+              </p>
+            {% endif %}
+
+            {% if current_plex_event.view_offset_ms is defined and current_plex_event.duration_ms is defined and current_plex_event.duration_ms > 0 %}
+              {% set progress_percent = (current_plex_event.view_offset_ms / current_plex_event.duration_ms * 100) | round %}
+              <div class="mt-2 sm:mt-3">
+                <div class="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-2 sm:h-2.5">
+                  <div class="bg-sky-500 h-2 sm:h-2.5 rounded-full" style="width: {{ progress_percent }}%"></div>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 text-right">{{ progress_percent }}%</p>
+              </div>
+            {% endif %}
+          </div>
         </div>
       </div>
-    {% else %}
-      <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 mb-6 text-slate-600 dark:text-slate-300 text-center">
-        <p>No recent Plex activity found for your account, or still waiting for the first webhook event.</p>
-        <p class="mt-2 text-sm">Try playing something on Plex!</p>
+    {% endif %}
+
+    {# Previous Items Section #}
+    {% if previous_items_list %}
+      <div class="mb-8 sm:mb-12">
+        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3 sm:mb-4">Previously Watched</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          {% for item in previous_items_list %}
+            <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg overflow-hidden transition-transform duration-150 ease-in-out hover:scale-105">
+              <a href="{{ url_for('main.' + item.item_type_for_url + '_detail', tmdb_id=item.link_tmdb_id) if item.item_type_for_url and item.link_tmdb_id else '#' }}">
+                {% if item.tmdb_id_for_poster %}
+                  <img class="w-full aspect-[2/3] object-cover"
+                       src="/static/poster/{{ item.tmdb_id_for_poster }}.jpg"
+                       alt="Poster for {{ item.title if item.media_type == 'movie' else item.episode_title }}"
+                       onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
+                {% else %}
+                  <div class="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <span class="text-slate-500 dark:text-slate-400 text-xs p-2 text-center">No Poster</span>
+                  </div>
+                {% endif %}
+              </a>
+              <div class="p-2 sm:p-3">
+                {% set display_title = (item.title if item.media_type == 'movie' else item.episode_title) %}
+                {% if item.item_type_for_url == 'show' and item.link_tmdb_id %}
+                   <a href="{{ url_for('main.show_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
+                    {{ item.title }} {# Show Title #}
+                  </a>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ item.episode_title }}">{{ item.season_episode }}: {{ item.episode_title }}</p>
+                {% elif item.item_type_for_url == 'movie' and item.link_tmdb_id %}
+                  <a href="{{ url_for('main.movie_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
+                    {{ item.title }}
+                  </a>
+                {% else %}
+                   <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate" title="{{ display_title }}">{{ display_title }}</p>
+                {% endif %}
+                {% if item.year %}<p class="text-xs text-slate-400 dark:text-slate-500">({{ item.year }})</p>{% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
       </div>
     {% endif %}
-  {% else %} 
-    <div class="text-center py-10">
+
+    {# No Activity Message #}
+    {% if not current_plex_event and not previous_items_list %}
+      <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-10 my-6 sm:my-10 text-slate-600 dark:text-slate-300 text-center">
+        <svg class="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-slate-400 dark:text-slate-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+        <p class="text-lg sm:text-xl font-semibold mb-2">No recent Plex activity found.</p>
+        <p class="text-sm sm:text-base">Try playing something on Plex to see it here!</p>
+      </div>
+    {% endif %}
+
+  {% else %} {# Not logged in #}
+    <div class="text-center py-10 sm:py-20">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="ShowNotes Logo" class="w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-6">
       <h2 class="text-3xl sm:text-4xl font-bold text-slate-800 dark:text-slate-100 mb-4">
         ShowNotes
       </h2>
-      <p class="text-xl sm:text-2xl text-slate-600 dark:text-slate-300 mb-8">
-        The Ultimate Companion for Your Plex Experience.
+      <p class="text-lg sm:text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-md mx-auto">
+        The Ultimate Companion for Your Plex Experience. Keep track of notes, discover new content, and more.
       </p>
       <a href="{{ url_for('main.login') }}" 
-         class="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out text-lg">
+         class="px-8 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out text-lg">
         Sign in with Plex
       </a>
     </div>
   {% endif %}
-</div>{% endblock page_content %}
+</div>
+{% endblock page_content %}

@@ -18,7 +18,9 @@ from ..utils import (
     test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection,
     test_sonarr_connection_with_params, test_radarr_connection_with_params, 
     test_bazarr_connection_with_params, test_ollama_connection_with_params,
-    test_pushover_notification_with_params
+    test_pushover_notification_with_params,
+    # Placeholders for Tautulli functions to be created in utils.py
+    test_tautulli_connection, test_tautulli_connection_with_params
 )
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -139,7 +141,7 @@ def settings():
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
             ollama_url=?, pushover_key=?, pushover_token=?,
-            plex_client_id=?
+            plex_client_id=?, tautulli_url=?, tautulli_api_key=?
             WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
@@ -151,6 +153,8 @@ def settings():
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
             request.form.get('plex_client_id'),
+            request.form.get('tautulli_url'),
+            request.form.get('tautulli_api_key'),
             settings['id'] if settings else 1
         ))
         db.commit()
@@ -180,6 +184,7 @@ def settings():
     radarr_status = test_radarr_connection()
     bazarr_status = test_bazarr_connection()
     ollama_status = test_ollama_connection()
+    tautulli_status = test_tautulli_connection() # Added Tautulli status
 
     return render_template(
         'admin_settings.html',
@@ -190,7 +195,8 @@ def settings():
         sonarr_status=sonarr_status,
         radarr_status=radarr_status,
         bazarr_status=bazarr_status,
-        ollama_status=ollama_status
+        ollama_status=ollama_status,
+        tautulli_status=tautulli_status # Added Tautulli status
     )
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
@@ -248,6 +254,8 @@ def test_api_connection():
         success, error_message = test_bazarr_connection_with_params(url, api_key)
     elif service == 'ollama':
         success, error_message = test_ollama_connection_with_params(url)
+    elif service == 'tautulli': # Added Tautulli service
+        success, error_message = test_tautulli_connection_with_params(url, api_key)
     
     if success:
         return jsonify({'success': True})
@@ -270,3 +278,10 @@ def test_pushover_connection_route():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': error_message or 'Pushover test failed'}), 400
+
+@admin_bp.route('/sync-tautulli-placeholder', methods=['POST'])
+@login_required
+@admin_required
+def sync_tautulli_placeholder():
+    flash("Tautulli sync functionality is not yet implemented.", "info")
+    return redirect(url_for('admin.tasks'))

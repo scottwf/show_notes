@@ -3,8 +3,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask
 from flask_login import LoginManager
-from . import database # Reverted to use the original database.py
+from . import database
 from . import cli
+from .utils import format_datetime_simple # Added import for the filter
 
 login_manager = LoginManager()
 
@@ -103,6 +104,9 @@ def create_app(test_config=None):
     # If you have other blueprints, register them here
     # Example: from . import admin_routes
     #          app.register_blueprint(admin_routes.admin_bp, url_prefix='/admin')
+
+    # Register Jinja filters
+    app.jinja_env.filters['format_datetime'] = format_datetime_simple
 
     app.logger.info('ShowNotes application successfully created.')
     return app

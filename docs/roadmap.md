@@ -3,9 +3,13 @@
 This document outlines the planned features and development stages for the ShowNotes application.
 
 ## Completed
+- [x] **Search Navigation Highlighting:** Added visual highlight for keyboard-selected search items.
+- [x] **Local Image Caching & Loading:** Switched movie/show images to load from local cache (`/static/poster/`, `/static/background/`) and updated Sonarr/Radarr sync jobs to queue images with TMDB ID based filenames.
+- [x] **Show Detail Page Overhaul:** Redesigned show detail page with background image, poster, full metadata (first air date, status, next episode, IMDb link), collapsible seasons/episodes list, and 'currently watched' status display.
+- [x] **Homepage Layout Update:** Implemented new homepage design with prominent 'current' item (playing/paused) and a grid of 'previously watched' items, based on detailed Plex activity history.
 - [x] **Dynamic Service Status Indicators:** Added visual connection status indicators (green/red dots) for configured services that update in real-time via JavaScript.
 - [x] Plex OAuth login (PIN-based, DB-stored credentials), logout, session management, and onboarding fixes.
-- [x] **Enhanced Plex Event Handling & Homepage Display:** Implemented detailed logging of Plex webhook events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. Updated the homepage to display "Now Playing" or "Recently Played" information for the logged-in user, using data from this new log.
+- [x] **Enhanced Plex Event Handling & Homepage Display (Initial):** Implemented detailed logging of Plex webhook events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. Initial homepage update to display "Now Playing" or "Recently Played" information. (Further enhanced by the new layout update).
 - [x] **Search Image Display Fix:** Corrected image display in search results by ensuring absolute URLs and proper API key usage for Sonarr/Radarr images, with on-demand caching.
 - [x] Integrate Sonarr/Radarr APIs for reliable poster/metadata display.
 - [x] Admin settings UI for service URLs and API keys (initial version).
@@ -25,12 +29,12 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
 
 ## Next Steps
-- [ ] **Pre-cache Media Assets:** Implement image caching (posters, fanart) during Sonarr/Radarr library synchronization to improve performance and local availability for search and display. (Currently, search uses on-demand caching).
+- [ ] **Tautulli Integration (Full):** Complete implementation of Tautulli watch history synchronization and API interaction (stubs currently in place).
 - [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)
-- [ ] Consider showing a history/list of recent events per user
-- [ ] Add more metadata from Sonarr/Radarr to homepage card
-- [ ] UX: Add loading/error states for poster fetches
-- [ ] Document setup and troubleshooting for multi-user environments
+- [ ] Consider showing a more detailed history/list of recent events per user on a dedicated page.
+- [ ] Add more metadata from Sonarr/Radarr to homepage cards if needed (current display is quite rich).
+- [ ] UX: Add loading/error states for poster fetches, especially on slower connections or if images are missing from cache.
+- [ ] Document setup and troubleshooting for multi-user environments.
 
 ## Phase 2: Core Functionality
 - [ ] Spoiler-aware character summaries (Ollama integration)

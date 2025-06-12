@@ -594,29 +594,35 @@ def sync_sonarr_library():
                     continue # Skip to next show
 
                 # Add to image_cache_queue
+                show_tmdb_id_for_filename = show_data.get("tmdbId")
+
                 if final_poster_url:
-                    parsed_poster_url = urllib.parse.urlparse(final_poster_url)
-                    poster_target_filename = f"{hash(parsed_poster_url.path)}.jpg"
-                    try:
-                        db.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('show', show_db_id, final_poster_url, 'poster', poster_target_filename)
-                        )
-                        current_app.logger.info(f"Queued poster for show ID {show_db_id}: {final_poster_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue poster for show ID {show_db_id}: {e}")
+                    if show_tmdb_id_for_filename:
+                        poster_target_filename = f"{show_tmdb_id_for_filename}.jpg"
+                        try:
+                            db.execute(
+                                "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                                ('show', show_db_id, final_poster_url, 'poster', poster_target_filename)
+                            )
+                            current_app.logger.info(f"Queued poster for show ID {show_db_id} (TMDB ID {show_tmdb_id_for_filename}): {final_poster_url}")
+                        except sqlite3.Error as e:
+                            current_app.logger.error(f"Failed to queue poster for show ID {show_db_id}: {e}")
+                    else:
+                        current_app.logger.warning(f"Skipping poster queue for show ID {show_db_id} (Title: {show_data.get('title', 'N/A')}) due to missing TMDB ID.")
 
                 if final_fanart_url:
-                    parsed_fanart_url = urllib.parse.urlparse(final_fanart_url)
-                    fanart_target_filename = f"{hash(parsed_fanart_url.path)}.jpg"
-                    try:
-                        db.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('show', show_db_id, final_fanart_url, 'fanart', fanart_target_filename)
-                        )
-                        current_app.logger.info(f"Queued fanart for show ID {show_db_id}: {final_fanart_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue fanart for show ID {show_db_id}: {e}")
+                    if show_tmdb_id_for_filename:
+                        fanart_target_filename = f"{show_tmdb_id_for_filename}.jpg"
+                        try:
+                            db.execute(
+                                "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                                ('show', show_db_id, final_fanart_url, 'background', fanart_target_filename)
+                            )
+                            current_app.logger.info(f"Queued fanart for show ID {show_db_id} (TMDB ID {show_tmdb_id_for_filename}): {final_fanart_url}")
+                        except sqlite3.Error as e:
+                            current_app.logger.error(f"Failed to queue fanart for show ID {show_db_id}: {e}")
+                    else:
+                        current_app.logger.warning(f"Skipping fanart queue for show ID {show_db_id} (Title: {show_data.get('title', 'N/A')}) due to missing TMDB ID.")
 
                 # Sync Seasons and Episodes for this show
                 # Sonarr's /api/v3/series endpoint includes season details
@@ -951,13 +957,51 @@ def sync_radarr_library():
                 cursor.execute(sql_query, tuple(update_values_list))
                 if cursor.rowcount > 0:
                     movies_updated_count += 1
+                movie_db_id = existing_movie[0] # Get ID if exists
             else:
                 placeholders = ', '.join(['?'] * len(db_columns))
-                sql_query = f"INSERT INTO radarr_movies ({', '.join(db_columns)}) VALUES ({placeholders})"
+                sql_query = f"INSERT INTO radarr_movies ({', '.join(db_columns)}) VALUES ({placeholders}) RETURNING id" # Added RETURNING id
                 cursor.execute(sql_query, tuple(db_values))
-                movies_added_count += 1
+                result = cursor.fetchone()
+                if result and result[0]:
+                    movie_db_id = result[0]
+                    movies_added_count += 1
+                else:
+                    current_app.logger.error(f"sync_radarr_library: Failed to get ID for new movie Radarr ID {radarr_movie_id}. Skipping image queue for this movie.")
+                    conn.rollback() # Rollback this movie's transaction
+                    continue # Skip to next movie
             
             movies_synced_count += 1
+
+            # Add to image_cache_queue
+            movie_tmdb_id_for_filename = movie_to_insert.get('tmdb_id') # This is movie_data.get('tmdbId')
+
+            if movie_db_id and movie_tmdb_id_for_filename:
+                if poster_url:
+                    poster_target_filename = f"{movie_tmdb_id_for_filename}.jpg"
+                    try:
+                        # Use conn.execute directly as we are already in a transaction managed by conn
+                        conn.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('movie', movie_db_id, poster_url, 'poster', poster_target_filename)
+                        )
+                        current_app.logger.info(f"Queued poster for movie ID {movie_db_id} (TMDB ID {movie_tmdb_id_for_filename}): {poster_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue poster for movie ID {movie_db_id}: {e}")
+
+                if fanart_url:
+                    fanart_target_filename = f"{movie_tmdb_id_for_filename}.jpg"
+                    try:
+                        conn.execute(
+                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
+                            ('movie', movie_db_id, fanart_url, 'background', fanart_target_filename)
+                        )
+                        current_app.logger.info(f"Queued background (fanart) for movie ID {movie_db_id} (TMDB ID {movie_tmdb_id_for_filename}): {fanart_url}")
+                    except sqlite3.Error as e:
+                        current_app.logger.error(f"Failed to queue background (fanart) for movie ID {movie_db_id}: {e}")
+            elif not movie_tmdb_id_for_filename:
+                 current_app.logger.warning(f"Skipping image queue for movie ID {movie_db_id} (Title: {movie_to_insert.get('title', 'N/A')}) due to missing TMDB ID.")
+            # movie_db_id should always be set if we didn't 'continue'
 
         conn.commit()
         database.update_sync_status(conn, 'radarr', 'success')
@@ -993,3 +1037,107 @@ def sync_radarr_library():
     finally:
         if conn:
             conn.close()
+
+# --- Jinja Filters ---
+import datetime
+
+def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
+    """
+    Formats an ISO datetime string or datetime object into a more readable string.
+    Example format: Oct 27, 2023 10:00
+    """
+    if not value:
+        return "N/A" # Or an empty string, depending on preference for missing dates
+
+    dt_obj = None
+    if isinstance(value, str):
+        try:
+            dt_obj = datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            # Attempt to parse just the date part if time is not crucial or format is unexpected
+            try:
+                dt_obj = datetime.datetime.strptime(value, '%Y-%m-%d')
+            except ValueError:
+                current_app.logger.warning(f"format_datetime_simple: Could not parse date string: {value}")
+                return value # Return original if parsing fails completely
+    elif isinstance(value, datetime.datetime):
+        dt_obj = value
+    else:
+        current_app.logger.warning(f"format_datetime_simple: Invalid type for value: {type(value)}")
+        return value # Return original if not a string or datetime object
+
+    if dt_obj:
+        return dt_obj.strftime(format_str)
+    return value # Should not be reached if logic is correct, but as a fallback
+
+# --- Tautulli Stubs ---
+
+def sync_tautulli_watch_history():
+    current_app.logger.info("Placeholder: sync_tautulli_watch_history called.")
+    # Future implementation will go here
+    return 0 # Return 0 items processed for now
+
+def test_tautulli_connection():
+    # This function will be called on page load of admin settings
+    # It should use settings from DB
+    tautulli_url = None
+    # api_key = None # Declare api_key if it's going to be used
+    with current_app.app_context(): # Required for get_setting
+        tautulli_url = database.get_setting('tautulli_url')
+        # api_key = database.get_setting('tautulli_api_key') # API key might be needed for a real test
+
+    if not tautulli_url:
+        current_app.logger.info("Tautulli URL not set, connection test skipped (marked as False).")
+        return False
+
+    # For a stub, we can just log and return False, or attempt a very basic check if desired.
+    # current_app.logger.info(f"Attempting Tautulli connection test to URL: {tautulli_url}. (Stub: will return False)")
+    # Example of a minimal actual check (requires requests import):
+    # try:
+    #     # A common Tautulli endpoint that doesn't always require API key for basic status
+    #     # response = requests.get(f"{tautulli_url.rstrip('/')}/status", timeout=3)
+    #     # response.raise_for_status() # Check for HTTP errors
+    #     # return True
+    #     # For a more robust test, you'd check a specific API endpoint with the API key:
+    #     # if not api_key: return False
+    #     # response = requests.get(f"{tautulli_url.rstrip('/')}/api/v2?apikey={api_key}&cmd=get_server_info", timeout=3)
+    #     # if response.status_code == 200 and response.json().get('response',{}).get('result') == 'success':
+    #     #    return True
+    #     # return False
+    # except requests.exceptions.RequestException as e:
+    #     current_app.logger.warning(f"Tautulli connection test to {tautulli_url} failed: {e}")
+    #     return False
+    # except Exception as e: # Catch any other error during the test
+    #     current_app.logger.error(f"Unexpected error during Tautulli connection test to {tautulli_url}: {e}")
+    #     return False
+    return False # Placeholder: always returns False until properly implemented
+
+def test_tautulli_connection_with_params(url, api_key):
+    current_app.logger.info(f"Testing Tautulli connection (stub) to {url} with api_key {'present' if api_key else 'absent'}")
+    if not url:
+        return False, "Tautulli URL not provided."
+
+    # Actual test logic would go here. For now, this is a stub.
+    # This stub will indicate that the feature is not fully implemented yet.
+    return False, "Tautulli connection test is a stub and not fully implemented. It only checks if the URL is provided."
+    # Example of a slightly more useful stub:
+    # if not api_key:
+    #     return False, "API Key is required for a meaningful Tautulli test."
+    # try:
+    #     # A common command to check if Tautulli is responsive with the API key
+    #     # Adjust cmd as necessary for a lightweight check, e.g., get_server_info or get_users
+    #     response = requests.get(f"{url.rstrip('/')}/api/v2?apikey={api_key}&cmd=get_server_status", timeout=5)
+    #     if response.status_code == 200:
+    #         data = response.json()
+    #         if data.get('response', {}).get('result') == 'success':
+    #             return True, None
+    #         else:
+    #             return False, f"API call succeeded but Tautulli reported an error: {data.get('response',{}).get('message', 'Unknown error')}"
+    #     else:
+    #         return False, f"Failed with status {response.status_code}. Response: {response.text[:100]}"
+    # except requests.exceptions.RequestException as e:
+    #     current_app.logger.error(f"Tautulli connection test with params to {url} failed: {e}")
+    #     return False, f"Connection error: {str(e)}"
+    # except Exception as e:
+    #     current_app.logger.error(f"Unexpected error during Tautulli connection test with params to {url}: {e}")
+    #     return False, f"Unexpected error: {str(e)}"
