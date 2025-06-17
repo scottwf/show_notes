@@ -1,0 +1,39 @@
+{% extends "admin_layout.html" %}
+{% block admin_page_title %}Logbook{% endblock %}
+{% block admin_page_header %}Logbook{% endblock %}
+{% block admin_page_content %}
+<div class="space-y-8">
+  <div>
+    <form method="get" class="mb-4">
+      <label class="mr-2">Category:</label>
+      <select name="category" onchange="this.form.submit()" class="border rounded px-2 py-1">
+        <option value="" {% if not category %}selected{% endif %}>All</option>
+        <option value="sync" {% if category=='sync' %}selected{% endif %}>Service Sync</option>
+        <option value="plex" {% if category=='plex' %}selected{% endif %}>Plex Events</option>
+      </select>
+    </form>
+  </div>
+  {% if not category or category in ['sync','all'] %}
+  <div>
+    <h2 class="text-xl font-semibold mb-2">Service Sync Events</h2>
+    <table class="min-w-full text-sm">
+      <tr class="font-bold text-left"><th class="pr-4">Service</th><th class="pr-4">Status</th><th>Last Attempt</th></tr>
+      {% for row in sync_logs %}
+      <tr class="border-t"><td>{{ row.service_name }}</td><td>{{ row.status }}</td><td>{{ row.last_attempted_sync_at }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+  {% if not category or category in ['plex','all'] %}
+  <div>
+    <h2 class="text-xl font-semibold mb-2">Recent Plex Activity</h2>
+    <table class="min-w-full text-sm">
+      <tr class="font-bold text-left"><th class="pr-4">User</th><th class="pr-4">Event</th><th class="pr-4">Title</th><th>Time</th></tr>
+      {% for row in plex_logs %}
+      <tr class="border-t"><td>{{ row.plex_username }}</td><td>{{ row.event_type }}</td><td>{{ row.title }}</td><td>{{ row.event_timestamp|format_datetime }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

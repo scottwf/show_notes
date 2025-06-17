@@ -1085,53 +1085,108 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
 # --- Tautulli Stubs ---
 
 def sync_tautulli_watch_history():
-    current_app.logger.info("Placeholder: sync_tautulli_watch_history called.")
-    # Future implementation will go here
-    return 0 # Return 0 items processed for now
+    """Sync watch history from Tautulli into the plex_activity_log table."""
+    with current_app.app_context():
+        tautulli_url = database.get_setting('tautulli_url')
+        api_key = database.get_setting('tautulli_api_key')
+
+    if not tautulli_url or not api_key:
+        current_app.logger.warning("Tautulli URL or API key not configured. Skipping sync.")
+        return 0
+
+    params = {
+        'apikey': api_key,
+        'cmd': 'get_history',
+        'length': 100
+    }
+    try:
+        resp = requests.get(f"{tautulli_url.rstrip('/')}/api/v2", params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        history_items = data.get('response', {}).get('data', {}).get('data', [])
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Tautulli history: {e}")
+        return 0
+
+    db = database.get_db()
+    inserted = 0
+    for item in history_items:
+        try:
+            db.execute(
+                """INSERT INTO plex_activity_log (
+                       event_type, plex_username, player_title, player_uuid, session_key,
+                       rating_key, parent_rating_key, grandparent_rating_key, media_type,
+                       title, show_title, season_episode, view_offset_ms, duration_ms, event_timestamp,
+                       tmdb_id, raw_payload)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    item.get('event'),
+                    item.get('friendly_name'),
+                    None,
+                    None,
+                    item.get('session_id'),
+                    item.get('rating_key'),
+                    item.get('parent_rating_key'),
+                    item.get('grandparent_rating_key'),
+                    item.get('media_type'),
+                    item.get('title'),
+                    item.get('grandparent_title'),
+                    item.get('parent_media_index') and item.get('media_index') and f"S{int(item.get('parent_media_index')):02d}E{int(item.get('media_index')):02d}",
+                    None,
+                    None,
+                    item.get('date'),
+                    None,
+                    json.dumps(item)
+                )
+            )
+            inserted += 1
+        except Exception as e:
+            current_app.logger.warning(f"Failed to insert Tautulli history item: {e}")
+            continue
+
+    db.commit()
+    current_app.logger.info(f"Tautulli sync complete. {inserted} events added.")
+    return inserted
 
 def test_tautulli_connection():
-    # This function will be called on page load of admin settings
-    # It should use settings from DB
-    tautulli_url = None
-    # api_key = None # Declare api_key if it's going to be used
-    with current_app.app_context(): # Required for get_setting
+    """Check if Tautulli API is reachable using saved settings."""
+    with current_app.app_context():
         tautulli_url = database.get_setting('tautulli_url')
-        # api_key = database.get_setting('tautulli_api_key') # API key might be needed for a real test
+        api_key = database.get_setting('tautulli_api_key')
 
-    if not tautulli_url:
-        current_app.logger.info("Tautulli URL not set, connection test skipped (marked as False).")
+    if not tautulli_url or not api_key:
         return False
 
-    # For a stub, we can just log and return False, or attempt a very basic check if desired.
-    # current_app.logger.info(f"Attempting Tautulli connection test to URL: {tautulli_url}. (Stub: will return False)")
-    # Example of a minimal actual check (requires requests import):
-    # try:
-    #     # A common Tautulli endpoint that doesn't always require API key for basic status
-    #     # response = requests.get(f"{tautulli_url.rstrip('/')}/status", timeout=3)
-    #     # response.raise_for_status() # Check for HTTP errors
-    #     # return True
-    #     # For a more robust test, you'd check a specific API endpoint with the API key:
-    #     # if not api_key: return False
-    #     # response = requests.get(f"{tautulli_url.rstrip('/')}/api/v2?apikey={api_key}&cmd=get_server_info", timeout=3)
-    #     # if response.status_code == 200 and response.json().get('response',{}).get('result') == 'success':
-    #     #    return True
-    #     # return False
-    # except requests.exceptions.RequestException as e:
-    #     current_app.logger.warning(f"Tautulli connection test to {tautulli_url} failed: {e}")
-    #     return False
-    # except Exception as e: # Catch any other error during the test
-    #     current_app.logger.error(f"Unexpected error during Tautulli connection test to {tautulli_url}: {e}")
-    #     return False
-    return False # Placeholder: always returns False until properly implemented
+    try:
+        resp = requests.get(
+            f"{tautulli_url.rstrip('/')}/api/v2",
+            params={'apikey': api_key, 'cmd': 'get_server_info'},
+            timeout=5,
+        )
+        if resp.status_code == 200 and resp.json().get('response', {}).get('result') == 'success':
+            return True
+    except Exception as e:
+        current_app.logger.warning(f"Tautulli connection failed: {e}")
+    return False
 
 def test_tautulli_connection_with_params(url, api_key):
-    current_app.logger.info(f"Testing Tautulli connection (stub) to {url} with api_key {'present' if api_key else 'absent'}")
+    """Connection test using supplied parameters."""
     if not url:
         return False, "Tautulli URL not provided."
-
-    # Actual test logic would go here. For now, this is a stub.
-    # This stub will indicate that the feature is not fully implemented yet.
-    return False, "Tautulli connection test is a stub and not fully implemented. It only checks if the URL is provided."
+    if not api_key:
+        return False, "Tautulli API key not provided."
+    try:
+        resp = requests.get(
+            f"{url.rstrip('/')}/api/v2",
+            params={'apikey': api_key, 'cmd': 'get_server_info'},
+            timeout=5,
+        )
+        if resp.status_code == 200 and resp.json().get('response', {}).get('result') == 'success':
+            return True, None
+        return False, f"HTTP {resp.status_code}"
+    except Exception as e:
+        current_app.logger.error(f"Tautulli connection test error: {e}")
+        return False, str(e)
     # Example of a slightly more useful stub:
     # if not api_key:
     #     return False, "API Key is required for a meaningful Tautulli test."

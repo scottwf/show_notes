@@ -62,6 +62,9 @@ function bindTests() {
         key = document.getElementById('bazarr_api_key').value;
       } else if (service === 'ollama') {
         url = document.getElementById('ollama_url').value;
+      } else if (service === 'tautulli') {
+        url = document.getElementById('tautulli_url').value;
+        key = document.getElementById('tautulli_api_key').value;
       }
       
       fetch('/admin/test-api', {

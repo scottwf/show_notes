@@ -14,7 +14,11 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - **Image Loading:** Updated image loading strategy to use locally cached images (posters and backgrounds) served from `/static/poster/` and `/static/background/` respectively, with filenames based on TMDB IDs. Image queuing for Sonarr and Radarr syncs now prepares files for this local cache.
 - **Show Detail Page:** Significantly enhanced the Show Detail page with a new Sonarr-like layout including a background image, detailed metadata (first air date, status, next episode, IMDb link), collapsible season/episode lists, and display of the 'currently watched' episode based on Plex activity.
 - **Homepage Layout:** Revamped the homepage to prominently display the 'currently playing/paused' item and a grid of 'previously watched' items, derived from Plex activity.
-- **Tautulli Stubs:** Added initial stubs for future Tautulli integration, including settings in the admin panel and a placeholder for Tautulli watch history sync.
+- **Tautulli Integration:** Completed support for syncing watch history from Tautulli with connection testing.
+- **Episode Pages:** Episodes are now clickable from show details and the homepage.
+- **Collapsible Service Cards:** All service settings on the admin page start collapsed for easier navigation.
+- **Admin Logbook:** New logbook section summarizing sync operations and Plex activity.
+- **User List:** Admins can view Plex users, last login times, and latest watched items.
 
 ### Admin Panel & Service Management
 - **Dynamic Service Status:** The admin services page (`/admin/settings`) now features real-time status indicators.

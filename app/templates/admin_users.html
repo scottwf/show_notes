@@ -1,0 +1,23 @@
+{% extends "admin_layout.html" %}
+{% block admin_page_title %}Users{% endblock %}
+{% block admin_page_header %}Users{% endblock %}
+{% block admin_page_content %}
+<table class="min-w-full text-sm">
+  <tr class="font-bold text-left"><th class="pr-4">Avatar</th><th class="pr-4">Username</th><th class="pr-4">Last Login</th><th>Last Watched</th></tr>
+  {% for user in users %}
+  <tr class="border-t">
+    <td class="py-1">
+      {% if user.plex_user_id and plex_token %}
+      <img src="https://plex.tv/users/{{ user.plex_user_id }}/avatar?token={{ plex_token }}" class="h-8 w-8 rounded-full"/>
+      {% endif %}
+    </td>
+    <td>{{ user.username }}</td>
+    <td>{{ user.last_login_at or 'N/A' }}</td>
+    <td>
+      {% set latest = user_latest.get(user.id) %}
+      {% if latest %}{{ latest.season_episode }} {{ latest.title }}{% else %}N/A{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

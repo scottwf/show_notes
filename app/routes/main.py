@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import re
 import sqlite3
 import time
 import datetime # Added
@@ -95,6 +96,13 @@ def _get_plex_event_details(plex_event_row, db):
     # Ensure some title exists, default to original from plex_event_row if no enrichment happened
     item_details.setdefault('title', dict(plex_event_row).get('title'))
     item_details.setdefault('year', None)
+
+    if item_details.get('season_episode') and item_details.get('link_tmdb_id'):
+        match = re.match(r'S(\d+)E(\d+)', item_details['season_episode'])
+        if match:
+            item_details['season_number'] = int(match.group(1))
+            item_details['episode_number'] = int(match.group(2))
+            item_details['episode_detail_url'] = url_for('main.episode_detail', tmdb_id=item_details['link_tmdb_id'], season_number=item_details['season_number'], episode_number=item_details['episode_number'])
 
     return item_details
 
@@ -292,6 +300,8 @@ def callback():
         login_user(user_obj)
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
+        db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
+        db.commit()
         flash(f'Welcome back, {user_obj.username}!', 'success')
     else:
         flash('Could not log you in. Please contact an administrator.', 'danger')
@@ -447,6 +457,7 @@ def show_detail(tmdb_id):
             current_app.logger.error(f"Error determining next aired episode for show TMDB ID {tmdb_id}: {e_next_aired}")
 
     currently_watched_episode_info = None
+    last_watched_episode_info = None
     plex_username = session.get('username')
     show_tvdb_id = show_dict.get('tvdb_id') # This is from sonarr_shows.tvdb_id
 
@@ -480,11 +491,45 @@ def show_detail(tmdb_id):
         except Exception as e_watched:
             current_app.logger.error(f"Generic error fetching currently watched episode for show TVDB ID {show_tvdb_id} and user {plex_username}: {e_watched}")
 
+        if not currently_watched_episode_info:
+            last_row = db.execute(
+                """
+                SELECT title, season_episode, event_timestamp
+                FROM plex_activity_log
+                WHERE plex_username = ?
+                  AND grandparent_rating_key = ?
+                  AND media_type = 'episode'
+                  AND event_type IN ('media.stop', 'media.scrobble')
+                ORDER BY event_timestamp DESC
+                LIMIT 1
+                """,
+                (plex_username, str(show_tvdb_id))
+            ).fetchone()
+            if last_row:
+                last_watched_episode_info = dict(last_row)
+
     return render_template('show_detail.html',
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
-                           currently_watched_episode_info=currently_watched_episode_info)
+                           currently_watched_episode_info=currently_watched_episode_info,
+                           last_watched_episode_info=last_watched_episode_info)
+
+@main_bp.route('/show/<int:tmdb_id>/season/<int:season_number>/episode/<int:episode_number>')
+@login_required
+def episode_detail(tmdb_id, season_number, episode_number):
+    db = database.get_db()
+    show_row = db.execute('SELECT id, title, tmdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
+    if not show_row:
+        abort(404)
+    show_id = show_row['id']
+    season_row = db.execute('SELECT id FROM sonarr_seasons WHERE show_id=? AND season_number=?', (show_id, season_number)).fetchone()
+    if not season_row:
+        abort(404)
+    episode_row = db.execute('SELECT * FROM sonarr_episodes WHERE season_id=? AND episode_number=?', (season_row['id'], episode_number)).fetchone()
+    if not episode_row:
+        abort(404)
+    return render_template('episode_detail.html', show=dict(show_row), episode=dict(episode_row), season_number=season_number)
 
 @main_bp.route('/image_proxy')
 @login_required
