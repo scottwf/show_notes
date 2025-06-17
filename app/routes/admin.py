@@ -141,8 +141,7 @@ def settings():
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
             ollama_url=?, pushover_key=?, pushover_token=?,
-            plex_client_id=?, tautulli_url=?, tautulli_api_key=?
-            WHERE id=?''', (
+            plex_client_id=?, tautulli_url=?, tautulli_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('sonarr_url'),
