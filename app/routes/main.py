@@ -72,7 +72,7 @@ def _get_plex_event_details(plex_event_row, db):
     elif media_type == 'episode':
         item_details['item_type_for_url'] = 'show'
         # Store original episode title before potentially overriding with show title
-        item_details['episode_title'] = plex_event_row.get('title') # Corrected: use plex_event_row
+        item_details['episode_title'] = dict(plex_event_row).get('title') # Corrected: use plex_event_row
 
         if grandparent_rating_key: # This is TVDB ID
             show_info = db.execute(
@@ -89,11 +89,11 @@ def _get_plex_event_details(plex_event_row, db):
         # If grandparent_rating_key is missing, we might not be able to reliably get show's TMDB ID for poster/link
 
     # Fallback for poster_url if not found via Radarr/Sonarr lookup but was in Plex event (less likely to be what we want)
-    # if item_details.get('poster_url') is None and plex_event_row.get('poster_url'):
-    #     item_details['poster_url'] = plex_event_row.get('poster_url') # This is often a low-res Plex thumb
+    # if item_details.get('poster_url') is None and dict(plex_event_row).get('poster_url'):
+    #     item_details['poster_url'] = dict(plex_event_row).get('poster_url') # This is often a low-res Plex thumb
 
     # Ensure some title exists, default to original from plex_event_row if no enrichment happened
-    item_details.setdefault('title', plex_event_row.get('title'))
+    item_details.setdefault('title', dict(plex_event_row).get('title'))
     item_details.setdefault('year', None)
 
     return item_details

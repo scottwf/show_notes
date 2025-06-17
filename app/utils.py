@@ -102,23 +102,31 @@ def _clean_title(title):
 
 # --- Connection Test Functions --- 
 
-def _test_service_connection(service_name, url_setting_name, api_key_setting_name=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None):
+def _test_service_connection(service_name, url_setting_name, api_key_setting_name=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None, url_override=None, api_key_override=None):
     """Generic helper to test service connection."""
     service_url = None
     api_key = None
 
     with current_app.app_context():
-        service_url = database.get_setting(url_setting_name)
+        if url_override:
+            service_url = url_override
+        else:
+            service_url = database.get_setting(url_setting_name)
         if api_key_setting_name:
-            api_key = database.get_setting(api_key_setting_name)
+            if api_key_override:
+                api_key = api_key_override
+            else:
+                api_key = database.get_setting(api_key_setting_name)
 
     if not service_url:
-        current_app.logger.info(f"_test_service_connection: {service_name} URL ('{url_setting_name}') not configured.")
-        return False
+        msg = f"{service_name} URL ('{url_setting_name}') not configured."
+        current_app.logger.info(f"_test_service_connection: {msg}")
+        return False, msg
     
     if api_key_setting_name and not api_key:
-        current_app.logger.info(f"_test_service_connection: {service_name} API key ('{api_key_setting_name}') not configured, but required.")
-        return False
+        msg = f"{service_name} API key ('{api_key_setting_name}') not configured, but required."
+        current_app.logger.info(f"_test_service_connection: {msg}")
+        return False, msg
 
     full_endpoint_url = f"{service_url.rstrip('/')}{endpoint}"
     headers = headers_extra or {}
@@ -134,19 +142,23 @@ def _test_service_connection(service_name, url_setting_name, api_key_setting_nam
         response = requests.request(method, full_endpoint_url, headers=headers, params=params, timeout=5)
         if response.status_code == expected_status:
             current_app.logger.info(f"_test_service_connection: {service_name} connection successful to {full_endpoint_url}.")
-            return True
+            return True, "Connection successful."
         else:
-            current_app.logger.warning(f"_test_service_connection: {service_name} connection test to {full_endpoint_url} failed with status {response.status_code}. Response: {response.text[:200]}")
-            return False
+            msg = f"Connection test to {full_endpoint_url} failed with status {response.status_code}. Response: {response.text[:200]}"
+            current_app.logger.warning(f"_test_service_connection: {service_name} {msg}")
+            return False, msg
     except requests.exceptions.Timeout:
-        current_app.logger.error(f"_test_service_connection: Timeout connecting to {service_name} at {full_endpoint_url}")
-        return False
+        msg = f"Timeout connecting to {service_name} at {full_endpoint_url}"
+        current_app.logger.error(f"_test_service_connection: {msg}")
+        return False, msg
     except requests.exceptions.ConnectionError:
-        current_app.logger.error(f"_test_service_connection: Connection error for {service_name} at {full_endpoint_url}")
-        return False
+        msg = f"Connection error for {service_name} at {full_endpoint_url}"
+        current_app.logger.error(f"_test_service_connection: {msg}")
+        return False, msg
     except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"_test_service_connection: Generic error for {service_name} at {full_endpoint_url}: {e}")
-        return False
+        msg = f"Generic error for {service_name} at {full_endpoint_url}: {e}"
+        current_app.logger.error(f"_test_service_connection: {msg}")
+        return False, msg
 
 def test_sonarr_connection():
     return _test_service_connection("Sonarr", 'sonarr_url', 'sonarr_api_key', '/api/v3/system/status')

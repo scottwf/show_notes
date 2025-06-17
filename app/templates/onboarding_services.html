@@ -1,0 +1,122 @@
+{% extends "layout.html" %}
+{% block page_title %}Service Setup{% endblock %}
+{% block search_bar %}{% endblock %}
+
+{% block page_content %}
+<div class="max-w-lg mx-auto mt-8 sm:mt-12 mb-8">
+  <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-6 sm:p-8">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2 text-center">Step 2: Configure Services</h2>
+    <form method="post" id="services-form" class="space-y-5 sm:space-y-6">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="base_url">Base URL (e.g., http://your-server)</label>
+        <input type="text" id="base_url" name="base_url" placeholder="http://192.168.1.100 or https://example.com" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.base_url if env_settings else '' }}">
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter your main server address. Service URLs below will be auto-filled with default ports.</p>
+      </div>
+
+      <!-- Radarr -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Radarr</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr URL</label>
+            <input type="text" id="radarr_url" name="radarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_url if env_settings else '' }}">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_api_key">Radarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="radarr_api_key" name="radarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_api_key if env_settings else '' }}">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="radarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="radarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Sonarr -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Sonarr (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr URL</label>
+            <input type="text" id="sonarr_url" name="sonarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_url if env_settings else '' }}">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_api_key">Sonarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="sonarr_api_key" name="sonarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_api_key if env_settings else '' }}">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="sonarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="sonarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Bazarr -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Bazarr (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">Bazarr URL</label>
+            <input type="text" id="bazarr_url" name="bazarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_url if env_settings else '' }}">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_api_key">Bazarr API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="bazarr_api_key" name="bazarr_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_api_key if env_settings else '' }}">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="bazarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="bazarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Ollama -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Ollama (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">Ollama URL</label>
+            <div class="flex items-center space-x-2">
+              <input type="text" id="ollama_url" name="ollama_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.ollama_url if env_settings else '' }}">
+              <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="ollama_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Pushover -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Pushover (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_user_key">Pushover User Key</label>
+            <input type="text" id="pushover_user_key" name="pushover_user_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.pushover_user_key if env_settings else '' }}">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_api_token">Pushover API Token</label>
+            <input type="text" id="pushover_api_token" name="pushover_api_token" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.pushover_api_token if env_settings else '' }}">
+          </div>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+            <button type="button" data-service="pushover" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+          </div>
+          <span id="pushover_status" class="ml-2 text-xs"></span>
+        </div>
+      </fieldset>
+
+      <div class="flex justify-end mt-6">
+        <button type="submit" class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-sky-500 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 dark:ring-offset-slate-800">
+          Finish Setup
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+  <script src="{{ url_for('static', filename='onboarding_services.js') }}"></script>
+{% endblock %}

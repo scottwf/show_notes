@@ -3,7 +3,6 @@
 {% block title %}{{ show.title }} - Show Details{% endblock %}
 
 {% block page_content %}
-<<<<<<< HEAD
 <div class="relative min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
 
     <!-- Hero Section with Background Image -->
@@ -100,7 +99,7 @@
             {% if seasons_with_episodes %}
                 {% for season in seasons_with_episodes %}
                     {% if season.season_number == 0 and not season.episodes %} {# Skip empty specials season #}
-                        {% continue %}
+                        
                     {% endif %}
                     <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if season.season_number == 1 %}open{% endif %}>
                         <summary class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
@@ -146,128 +145,6 @@
             {% else %}
                 <p class="text-gray-500 dark:text-gray-400">No season or episode information available for this show yet.</p>
             {% endif %}
-=======
-<div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-    <!-- Hero Section -->
-    <div 
-        class="relative bg-cover bg-center py-12 md:py-16 lg:py-24 xl:py-32"
-        style="{% if show.fanart_display_url %}background-image: url('{{ show.fanart_display_url }}');{% else %}background-color: #2d3748;{% endif %}"
-    >
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div class="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="md:flex md:items-start md:space-x-8 lg:space-x-12">
-                <!-- Poster -->
-                <div class="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0 mb-6 md:mb-0 relative z-10">
-                    {% if show.poster_display_url %}
-                        <img src="{{ show.poster_display_url }}" alt="Poster for {{ show.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover">
-                    {% else %}
-                        <div class="rounded-lg shadow-2xl w-full aspect-[2/3] bg-gray-700/80 flex items-center justify-center">
-                            <span class="text-gray-400">No Poster</span>
-                        </div>
-                    {% endif %}
-                </div>
-                <!-- Title, Year, Overview -->
-                <div class="text-center md:text-left relative z-10 flex-grow">
-                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-2 tracking-tight">{{ show.title }}</h1>
-                    {% if show.year %}
-                    <p class="text-xl sm:text-2xl text-gray-300 mb-6 font-light">{{ show.year }}</p>
-                    {% endif %}
-                    <p class="text-gray-200 leading-relaxed max-w-none line-clamp-6 sm:line-clamp-none pt-4 sm:pt-6">
-                        {{ show.overview | default('No overview available.') }}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Details Section -->
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
-            <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Details</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                {% if show.status %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Status:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.status | title }}</span>
-                </div>
-                {% endif %}
-                {% if show.year %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Year:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.year }}</span>
-                </div>
-                {% endif %}
-                {% if show.season_count %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Seasons:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.season_count }}</span>
-                </div>
-                {% endif %}
-                {% if show.episode_count %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Episodes:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.episode_count }}</span>
-                </div>
-                {% endif %}
-                {% if show.ended is not none %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Ended:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.ended | string | title }}</span>
-                </div>
-                {% endif %}
-                {% if show.imdb_id %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">IMDb:</span>
-                    <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500 hover:underline">View on IMDb</a>
-                </div>
-                {% endif %}
-                {% if show.tvdb_id %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">TVDB:</span>
-                    <a href="https://thetvdb.com/?id={{ show.tvdb_id }}&tab=series" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500 hover:underline">View on TVDB</a>
-                </div>
-                {% endif %}
-                {% if show.tmdb_id %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">TMDB:</span>
-                    <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-500 hover:underline">View on TMDB</a>
-                </div>
-                {% endif %}
-                {% if show.original_language_name %}
-                <div>
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Original Language:</span>
-                    <span class="text-gray-600 dark:text-gray-400">{{ show.original_language_name | title }}</span>
-                </div>
-                {% endif %}
-                {% if show.genres %}
-                <div class="sm:col-span-2">
-                    <span class="font-medium text-gray-700 dark:text-gray-300 block mb-1">Genres:</span>
-                    <span class="text-gray-600 dark:text-gray-400">
-                        {% if show.genres is string %}
-                            {% set genres_list = [] %}
-                            {% if show.genres.startswith('[') and show.genres.endswith(']') %}
-                                {% set trimmed_genres = show.genres[1:-1] %}
-                                {% if trimmed_genres %}
-                                    {% for genre_item in trimmed_genres.split(',') %}
-                                        {% set genre_name = genre_item.strip()[1:-1] if genre_item.strip().startswith('"') and genre_item.strip().endswith('"') else genre_item.strip() %}
-                                        {% if genres_list.append(genre_name) %}{% endif %}
-                                    {% endfor %}
-                                {% endif %}
-                            {% else %}
-                                {% for genre_item in show.genres.split(',') %}
-                                     {% if genres_list.append(genre_item.strip()) %}{% endif %}
-                                {% endfor %}
-                            {% endif %}
-                            {{ genres_list | join(', ') if genres_list else 'N/A' }}
-                        {% elif show.genres is iterable and show.genres is not string %}
-                            {{ show.genres | join(', ') }}
-                        {% else %}
-                            {{ show.genres | default('N/A') }}
-                        {% endif %}
-                    </span>
-                </div>
-                {% endif %}
-            </div>
->>>>>>> 7088e5b (Redesign TV show detail page to match movie detail/Jellyseerr style, add full show metadata, robust poster/fanart handling, and fix show detail SQL for tmdb_id. Prepare for future local image caching.)
         </div>
     </div>
 </div>

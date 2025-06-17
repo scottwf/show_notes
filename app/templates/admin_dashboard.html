@@ -11,6 +11,23 @@
         This is the central hub for managing your ShowNotes application. 
         Use the sidebar to navigate to different administrative sections.
     </p>
+    <div class="my-6 flex flex-col sm:flex-row items-center gap-4">
+        <button id="admin-link-plex" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base flex items-center justify-center space-x-2">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10zm-1.5-6.056V8.056h3v7.906l3.536-3.535.707.707L12 18.414l-5.743-5.743.707-.707L10.5 15.944z"/></svg>
+            <span>Link Plex Account</span>
+        </button>
+        <span id="plex-link-status" class="text-sm text-slate-600 dark:text-slate-300"></span>
+    </div>
+    <script>
+    document.getElementById('admin-link-plex').addEventListener('click', async function() {
+        document.getElementById('plex-link-status').textContent = 'Connecting to Plex...';
+        const resp = await fetch('/admin/link-plex/start');
+        const data = await resp.json();
+        const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
+        // Optionally poll for completion, or let backend handle callback
+        document.getElementById('plex-link-status').textContent = 'Complete the Plex login in the popup.';
+    });
+    </script>
     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Placeholder for stats cards -->
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">

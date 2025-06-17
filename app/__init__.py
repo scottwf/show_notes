@@ -9,6 +9,7 @@ from .utils import format_datetime_simple # Added import for the filter
 
 login_manager = LoginManager()
 
+print("DEBUG: Starting create_app() in app/__init__.py")
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
@@ -18,6 +19,8 @@ def create_app(test_config=None):
         DATABASE=os.path.join(app.instance_path, 'shownotes.sqlite3'),
     )
 
+    print("DEBUG: Finished configuration setup")
+
     if test_config is None:
         # Load the instance config, if it exists, when not testing
         app.config.from_pyfile('config.py', silent=True)
@@ -25,11 +28,15 @@ def create_app(test_config=None):
         # Load the test config if passed in
         app.config.from_mapping(test_config)
 
+    print("DEBUG: Finished loading config")
+
     # Ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
     except OSError:
         pass # Already exists
+
+    print("DEBUG: Instance folder exists")
 
     # --- Logging Configuration ---
     # Place logs in a 'logs' directory at the project root
@@ -38,28 +45,35 @@ def create_app(test_config=None):
     log_file = os.path.join(log_dir, 'shownotes.log')
 
     # Rotating file handler: 5MB per file, 5 backup files
-    file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
-    formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO) # Set level for the handler
+    # file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
+    # formatter = logging.Formatter(
+    #     '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    # )
+    # file_handler.setFormatter(formatter)
+    # file_handler.setLevel(logging.INFO) # Set level for the handler
     
     # Add handler to Flask's logger and the root logger
-    app.logger.addHandler(file_handler)
-    app.logger.setLevel(logging.INFO) # Set level for Flask's logger
-    
-    # Configure root logger to also use this handler (optional, but good practice)
-    # This ensures libraries also log through our setup if they use standard logging
-    logging.getLogger().addHandler(file_handler)
-    logging.getLogger().setLevel(logging.INFO)
+    # app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)    # Set up logging to file if desired
+    # LOGGING TO FILE DISABLED FOR DEBUGGING
+    # if not app.debug:
+    #     import logging
+    #     from logging.handlers import RotatingFileHandler
+    #     file_handler = RotatingFileHandler('logs/flask_app.log', maxBytes=10240, backupCount=10)
+    #     file_handler.setLevel(logging.INFO)
+    #     app.logger.addHandler(file_handler)
+    #     app.logger.setLevel(logging.INFO)
+    #     app.logger.info('ShowNotes startup')
+    print("DEBUG: Logging to file is DISABLED; logs will go to terminal.")
 
-    app.logger.info('ShowNotes application startup: Logging configured.')
+    print("DEBUG: Finished logging setup")
 
     # --- Database Setup ---
     # The init_app function in database_clean.py will register CLI commands like 'init-db'
     # It does NOT automatically create the database on app start anymore.
     database.init_app(app)
+    print("DEBUG: Finished database setup")
+
     cli.init_app(app) # Register CLI commands from app/cli.py
 
     # --- Login Manager Setup ---
@@ -101,9 +115,6 @@ def create_app(test_config=None):
     from .routes.admin import admin_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
-    # If you have other blueprints, register them here
-    # Example: from . import admin_routes
-    #          app.register_blueprint(admin_routes.admin_bp, url_prefix='/admin')
 
     # Register Jinja filters
     app.jinja_env.filters['format_datetime'] = format_datetime_simple
