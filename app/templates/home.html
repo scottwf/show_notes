@@ -35,7 +35,9 @@
                 {{ current_plex_event.title }} {# This is Show Title from _get_plex_event_details #}
               </a>
               <p class="text-md sm:text-lg font-semibold text-slate-700 dark:text-slate-200 mb-1 truncate" title="{{ current_plex_event.episode_title }}">
-                {{ current_plex_event.season_episode }}: {{ current_plex_event.episode_title }}
+                <a href="{{ current_plex_event.episode_detail_url }}" class="hover:underline">
+                  {{ current_plex_event.season_episode }}: {{ current_plex_event.episode_title }}
+                </a>
               </p>
             {% elif current_plex_event.item_type_for_url == 'movie' and current_plex_event.link_tmdb_id %}
               <a href="{{ url_for('main.movie_detail', tmdb_id=current_plex_event.link_tmdb_id) }}"
@@ -97,7 +99,9 @@
                    <a href="{{ url_for('main.show_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
                     {{ item.title }} {# Show Title #}
                   </a>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ item.episode_title }}">{{ item.season_episode }}: {{ item.episode_title }}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ item.episode_title }}">
+                    <a href="{{ item.episode_detail_url }}" class="hover:underline">{{ item.season_episode }}: {{ item.episode_title }}</a>
+                  </p>
                 {% elif item.item_type_for_url == 'movie' and item.link_tmdb_id %}
                   <a href="{{ url_for('main.movie_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
                     {{ item.title }}

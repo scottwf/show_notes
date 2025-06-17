@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}{{ show.title }} - {{ episode.title }}{% endblock %}
+{% block page_content %}
+<div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+  <div class="relative bg-cover bg-center py-12" style="{% if show.fanart_url %}background-image: url('/static/background/{{ show.tmdb_id }}.jpg');{% else %}background-color:#1a202c;{% endif %}">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="md:flex md:items-start md:space-x-8">
+        <div class="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0 mb-6 md:mb-0">
+          <img src="/static/poster/{{ show.tmdb_id }}.jpg" alt="Poster" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover" onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
+        </div>
+        <div class="text-center md:text-left flex-grow">
+          <h1 class="text-3xl font-extrabold text-white mb-2">{{ show.title }} - {{ episode.title }}</h1>
+          <p class="text-gray-300 mb-4">Season {{ season_number }} Episode {{ episode.episode_number }}</p>
+          <p class="text-gray-200">{{ episode.overview or 'No overview available.' }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

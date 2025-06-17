@@ -57,14 +57,17 @@ def process_image_queue(limit, delay, max_attempts):
 
     click.echo(f"Found {len(tasks)} images to process.")
 
-    cache_dir_base = os.path.join(current_app.static_folder, 'poster_cache') # Matches image_proxy
-    os.makedirs(cache_dir_base, exist_ok=True)
+    poster_dir = os.path.join(current_app.static_folder, 'poster')
+    background_dir = os.path.join(current_app.static_folder, 'background')
+    os.makedirs(poster_dir, exist_ok=True)
+    os.makedirs(background_dir, exist_ok=True)
 
     for task in tasks:
         task_id = task['id']
         image_url = task['image_url']
         target_filename = task['target_filename']
-        item_type = task['item_type'] # 'show' or 'movie'
+        item_type = task['item_type']  # 'show' or 'movie'
+        image_kind = task['image_kind']
 
         click.echo(f"Processing task ID {task_id}: {image_url} -> {target_filename}")
 
@@ -113,7 +116,12 @@ def process_image_queue(limit, delay, max_attempts):
             response = requests.get(image_url, stream=True, headers=headers, timeout=20) # Increased timeout for downloads
             response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
 
-            image_path = os.path.join(cache_dir_base, target_filename)
+            if image_kind == 'background':
+                dest_dir = background_dir
+            else:
+                dest_dir = poster_dir
+
+            image_path = os.path.join(dest_dir, target_filename)
 
             with open(image_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):

@@ -81,7 +81,9 @@
             <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
                 <h3 class="text-lg font-semibold text-sky-400 mb-2">Currently Watching</h3>
                 <p class="text-gray-200">
-                    {{ currently_watched_episode_info.season_episode }}: {{ currently_watched_episode_info.title }}
+                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=currently_watched_episode_info.season_episode[1:3]|int, episode_number=currently_watched_episode_info.season_episode[4:6]|int) }}" class="hover:underline">
+                        {{ currently_watched_episode_info.season_episode }}: {{ currently_watched_episode_info.title }}
+                    </a>
                 </p>
                 {% if currently_watched_episode_info.progress_percent is defined %}
                 <div class="w-full bg-gray-600 rounded-full h-2.5 mt-2">
@@ -89,6 +91,15 @@
                 </div>
                 <p class="text-xs text-gray-400 text-right">{{ currently_watched_episode_info.progress_percent }}% watched (approx.)</p>
                 {% endif %}
+            </div>
+            {% elif last_watched_episode_info %}
+            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold text-sky-400 mb-2">Last Watched</h3>
+                <p class="text-gray-200">
+                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=last_watched_episode_info.season_episode[1:3]|int, episode_number=last_watched_episode_info.season_episode[4:6]|int) }}" class="hover:underline">
+                        {{ last_watched_episode_info.season_episode }}: {{ last_watched_episode_info.title }}
+                    </a>
+                </p>
             </div>
             {% endif %}
         </div>
@@ -115,7 +126,9 @@
                                         <div class="flex justify-between items-start">
                                             <div>
                                                 <h4 class="font-medium text-gray-800 dark:text-gray-100">
-                                                    {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
+                                                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}" class="hover:underline">
+                                                        {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
+                                                    </a>
                                                 </h4>
                                                 {% if episode.overview %}
                                                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">

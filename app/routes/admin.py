@@ -19,7 +19,7 @@ from ..utils import (
     test_sonarr_connection_with_params, test_radarr_connection_with_params, 
     test_bazarr_connection_with_params, test_ollama_connection_with_params,
     test_pushover_notification_with_params,
-    # Placeholders for Tautulli functions to be created in utils.py
+    sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params
 )
 
@@ -61,6 +61,35 @@ def tasks():
 @admin_required
 def logs_view():
     return render_template('admin_logs.html', title='View Logs')
+
+@admin_bp.route('/logbook')
+@login_required
+@admin_required
+def logbook_view():
+    category = request.args.get('category')
+    db = database.get_db()
+    sync_logs = []
+    plex_logs = []
+    if not category or category in ['sync', 'all']:
+        sync_logs = db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()
+    if not category or category in ['plex', 'all']:
+        plex_logs = db.execute('SELECT plex_username, event_type, title, event_timestamp FROM plex_activity_log ORDER BY event_timestamp DESC, id DESC LIMIT 20').fetchall()
+    return render_template('admin_logbook.html', sync_logs=sync_logs, plex_logs=plex_logs, category=category)
+
+@admin_bp.route('/users')
+@login_required
+@admin_required
+def users_list():
+    db = database.get_db()
+    users = db.execute('SELECT id, username, plex_username, plex_user_id, last_login_at FROM users').fetchall()
+    user_latest = {}
+    for u in users:
+        latest = db.execute('''SELECT title, season_episode FROM plex_activity_log
+                              WHERE plex_username = ? AND event_type IN ('media.stop','media.scrobble')
+                              ORDER BY event_timestamp DESC LIMIT 1''', (u['plex_username'],)).fetchone()
+        user_latest[u['id']] = latest
+    plex_token = database.get_setting('plex_token')
+    return render_template('admin_users.html', users=users, user_latest=user_latest, plex_token=plex_token)
 
 @admin_bp.route('/logs/list', methods=['GET'])
 @login_required
@@ -279,9 +308,15 @@ def test_pushover_connection_route():
     else:
         return jsonify({'success': False, 'error': error_message or 'Pushover test failed'}), 400
 
-@admin_bp.route('/sync-tautulli-placeholder', methods=['POST'])
+@admin_bp.route('/sync-tautulli', methods=['POST'])
 @login_required
 @admin_required
-def sync_tautulli_placeholder():
-    flash("Tautulli sync functionality is not yet implemented.", "info")
+def sync_tautulli():
+    flash("Tautulli watch history sync started...", "info")
+    try:
+        count = sync_tautulli_watch_history()
+        flash(f"Tautulli sync completed. {count} events processed.", "success")
+    except Exception as e:
+        flash(f"Error during Tautulli sync: {str(e)}", "error")
+        current_app.logger.error(f"Tautulli sync error: {e}", exc_info=True)
     return redirect(url_for('admin.tasks'))

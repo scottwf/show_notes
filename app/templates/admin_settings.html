@@ -13,33 +13,36 @@
 <form method="post" class="space-y-8 max-w-2xl mx-auto">
   <!-- Service Settings Group -->
     <!-- Ollama -->
-    <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-      <div class="flex items-center gap-x-3 mb-2">
+    <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6" >
+      <summary class="flex items-center gap-x-3 cursor-pointer">
         <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
           <img src="{{ url_for('static', filename='logos/ollama-light.png') }}" alt="Ollama logo" class="w-full h-full object-contain dark:hidden">
           <img src="{{ url_for('static', filename='logos/ollama-dark.png') }}" alt="Ollama logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Ollama</span>
         <span id="ollama_status_dot" class="ml-2 {% if ollama_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if ollama_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
+      </summary>
+      <div class="mt-4">
+        <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Ollama provides AI-powered features for enhanced automation and recommendations.</p>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">URL</label>
+        <input type="text" id="ollama_url" name="ollama_url" value="{{ settings.ollama_url }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+        <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-3 text-sm font-medium">Test</button>
       </div>
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Ollama provides AI-powered features for enhanced automation and recommendations.</p>
-      <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="ollama_url">URL</label>
-      <input type="text" id="ollama_url" name="ollama_url" value="{{ settings.ollama_url }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-      <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-3 text-sm font-medium">Test</button>
-    </div>
+    </details>
 
     <!-- Plex OAuth Settings -->
-    <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600 shadow-lg rounded-lg p-4 sm:p-6 mb-8">
-      <div class="flex items-center gap-x-3 mb-3">
+    <details class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600 shadow-lg rounded-lg p-4 sm:p-6 mb-8">
+      <summary class="flex items-center gap-x-3 cursor-pointer">
         <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
           <img src="{{ url_for('static', filename='logos/plex-light.png') }}" alt="Plex logo" class="w-full h-full object-contain dark:hidden">
           <img src="{{ url_for('static', filename='logos/plex-dark.png') }}" alt="Plex logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <h3 class="text-xl font-bold text-yellow-700 dark:text-yellow-400">Plex OAuth Authentication</h3>
-      </div>
-      <div class="text-sm text-yellow-800 dark:text-yellow-300 mb-4">
-        <p>Set up Plex OAuth to enable user authentication with Plex accounts. You do <strong>not</strong> need to register your app with Plex—just use a unique Client ID for your app. See <a href="https://forums.plex.tv/t/authenticating-with-plex/609370" class="text-sky-600 dark:text-sky-400 underline" target="_blank">Plex OAuth Guide</a> for details.</p>
-      </div>
+      </summary>
+      <div class="mt-4">
+        <div class="text-sm text-yellow-800 dark:text-yellow-300 mb-4">
+          <p>Set up Plex OAuth to enable user authentication with Plex accounts. You do <strong>not</strong> need to register your app with Plex—just use a unique Client ID for your app. See <a href="https://forums.plex.tv/t/authenticating-with-plex/609370" class="text-sky-600 dark:text-sky-400 underline" target="_blank">Plex OAuth Guide</a> for details.</p>
+        </div>
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="plex_client_id">
@@ -63,18 +66,20 @@
           }
         });
       </script>
-    </div>
+      </div>
+    </details>
 
     <!-- Pushover -->
-    <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-      <div class="flex items-center gap-x-3 mb-2">
+    <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+      <summary class="flex items-center gap-x-3 cursor-pointer">
         <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
           <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover logo" class="w-full h-full object-contain dark:hidden">
           <img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Pushover</span>
         <span id="pushover_status" class="ml-auto text-sm text-slate-600 dark:text-slate-300"></span>
-      </div>
+      </summary>
+      <div class="mt-4">
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Pushover sends notifications to your device when important events occur.</p>
       <div class="space-y-3">
         <div>
@@ -90,11 +95,12 @@
         </div>
       </div>
       <button type="button" id="pushover-test-btn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Send Test Notification</button>
-    </div>
+      </div>
+    </details>
 
     <!-- Tautulli -->
-    <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-      <div class="flex items-center gap-x-3 mb-2">
+    <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+      <summary class="flex items-center gap-x-3 cursor-pointer">
         <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
           {# Placeholder for Tautulli logo - assuming a tautulli.png might exist or be added later #}
           <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli logo" class="w-full h-full object-contain dark:hidden">
@@ -102,7 +108,8 @@
         </span>
         <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Tautulli</span>
         <span id="tautulli_status_dot" class="ml-2 {% if tautulli_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if tautulli_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
-      </div>
+      </summary>
+      <div class="mt-4">
       <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Tautulli provides detailed Plex media server statistics and watch history.</p>
       <div class="space-y-3">
         <div>
@@ -115,10 +122,12 @@
         </div>
       </div>
       <button type="button" data-service="tautulli" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
-    </div>
+      </div>
+    </details>
 
     <!-- Sonarr, Radarr, Bazarr Grouped Card -->
-    <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+    <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+      <summary class="flex items-center gap-x-3 cursor-pointer font-semibold text-xl text-slate-800 dark:text-slate-100">Sonarr / Radarr / Bazarr</summary>
       <!-- Sonarr -->
       <div class="mb-6 sm:mb-8">
         <div class="flex items-center gap-x-3 mb-2">
@@ -205,7 +214,7 @@
         </div>
         <button type="button" data-service="bazarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
       </div>
-    </div>
+    </details>
   <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-8 flex items-center justify-center">Save Changes</button>
 </form>
 

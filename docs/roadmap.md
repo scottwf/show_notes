@@ -27,9 +27,10 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Logo Display Fixes:** Corrected display of Sonarr and Radarr logos on the `/admin/tasks` page for proper visibility in both light and dark modes.
 - [x] **Flask Route Modularization:** Refactored application routes into Admin (`/admin`) and Main blueprints for improved organization and maintainability.
 - [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
+- [x] **Tautulli Integration:** Watch history synchronization via Tautulli API with connection testing.
+- [x] **Admin Logbook & User List:** Added logbook page and basic Plex user listing.
 
 ## Next Steps
-- [ ] **Tautulli Integration (Full):** Complete implementation of Tautulli watch history synchronization and API interaction (stubs currently in place).
 - [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)
 - [ ] Consider showing a more detailed history/list of recent events per user on a dedicated page.
 - [ ] Add more metadata from Sonarr/Radarr to homepage cards if needed (current display is quite rich).
