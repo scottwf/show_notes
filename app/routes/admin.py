@@ -66,20 +66,79 @@ def logs_view():
 @login_required
 @admin_required
 def logbook_view():
+    # Renders the interactive logbook page (tables, filters, JS)
+    return render_template('admin_logbook.html')
+
+@admin_bp.route('/logbook/data')
+@login_required
+@admin_required
+def logbook_data():
     category = request.args.get('category')
+    user = request.args.get('user')
+    show = request.args.get('show')
     db = database.get_db()
     sync_logs = []
     plex_logs = []
+    # Service Sync logs
     if not category or category in ['sync', 'all']:
-        sync_logs = db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()
+        sync_logs = [dict(row) for row in db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()]
+    # Plex Activity logs
     if not category or category in ['plex', 'all']:
-        plex_logs = db.execute('SELECT plex_username, event_type, title, event_timestamp FROM plex_activity_log ORDER BY event_timestamp DESC, id DESC LIMIT 20').fetchall()
-    return render_template('admin_logbook.html', sync_logs=sync_logs, plex_logs=plex_logs, category=category)
-
-@admin_bp.route('/users')
-@login_required
-@admin_required
-def users_list():
+        query = 'SELECT * FROM plex_activity_log WHERE 1=1'
+        params = []
+        if user:
+            query += ' AND plex_username = ?'
+            params.append(user)
+        if show:
+            query += ' AND (title LIKE ? OR grandparentTitle LIKE ? OR grandparent_title LIKE ?)'  # support different column names
+            params.extend([f'%{show}%']*3)
+        query += ' ORDER BY event_timestamp DESC, id DESC LIMIT 50'
+        rows = db.execute(query, params).fetchall()
+        # Enrich with episode detail URL and formatted time
+        for row in rows:
+            row_dict = dict(row)
+            # Try to build episode_detail_url if possible
+            season_episode = row_dict.get('season_episode')
+            tmdb_id = row_dict.get('tmdb_id')
+            episode_detail_url = None
+            if season_episode and tmdb_id:
+                import re
+                match = re.match(r'S(\d+)E(\d+)', season_episode)
+                if match:
+                    season_number = int(match.group(1))
+                    episode_number = int(match.group(2))
+                    episode_detail_url = url_for('main.episode_detail', tmdb_id=tmdb_id, season_number=season_number, episode_number=episode_number)
+            row_dict['episode_detail_url'] = episode_detail_url
+            # Format timestamp
+            import datetime
+            ts = row_dict.get('event_timestamp')
+            if ts:
+                try:
+                    dt = datetime.datetime.fromtimestamp(float(ts))
+                    row_dict['event_timestamp_fmt'] = dt.strftime('%Y-%m-%d %H:%M')
+                except Exception:
+                    row_dict['event_timestamp_fmt'] = str(ts)
+            # Format event type
+            event_type = row_dict.get('event_type')
+            if event_type:
+                event_type_map = {
+                    'media.play': 'Play',
+                    'media.pause': 'Pause',
+                    'media.stop': 'Stop',
+                    'media.scrobble': 'Scrobble'
+                }
+                row_dict['event_type_fmt'] = event_type_map.get(event_type, event_type)
+            # Get show title and episode title
+            show_title = row_dict.get('grandparentTitle') or row_dict.get('grandparent_title')
+            episode_title = row_dict.get('title')
+            row_dict['display_title'] = f'{show_title} – {episode_title}'
+            # Get correct TMDB ID from sonarr_shows
+            if tmdb_id:
+                sonarr_show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE tmdb_id=?', (tmdb_id,)).fetchone()
+                if sonarr_show:
+                    row_dict['tmdb_id'] = sonarr_show['tmdb_id']
+            plex_logs.append(row_dict)
+    return jsonify({'sync_logs': sync_logs, 'plex_logs': plex_logs})
     db = database.get_db()
     users = db.execute('SELECT id, username, plex_username, plex_user_id, last_login_at FROM users').fetchall()
     user_latest = {}
