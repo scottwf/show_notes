@@ -11,8 +11,15 @@
         </div>
         <div class="text-center md:text-left flex-grow">
           <h1 class="text-3xl font-extrabold text-white mb-2">{{ show.title }} - {{ episode.title }}</h1>
-          <p class="text-gray-300 mb-4">Season {{ season_number }} Episode {{ episode.episode_number }}</p>
+          <p class="text-gray-300 mb-2">Season {{ season_number }} Episode {{ episode.episode_number }}</p>
+          {% if episode.air_date_utc %}
+          <p class="text-sm text-gray-400 mb-2">Aired {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}</p>
+          {% endif %}
+          {% if episode.has_file %}
+          <span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300 mb-2">Available</span>
+          {% endif %}
           <p class="text-gray-200">{{ episode.overview or 'No overview available.' }}</p>
+          <p class="mt-4"><a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="text-sky-400 hover:underline">&larr; Back to show</a></p>
         </div>
       </div>
     </div>
