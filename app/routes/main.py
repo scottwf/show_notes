@@ -22,6 +22,12 @@ main_bp = Blueprint('main', __name__)
 last_plex_event = None
 
 def is_onboarding_complete():
+    """
+    Checks if the initial admin user and settings have been created.
+
+    Returns:
+        bool: True if onboarding is complete, False otherwise.
+    """
     try:
         db = database.get_db()
         admin_user = db.execute('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').fetchone()
@@ -32,6 +38,14 @@ def is_onboarding_complete():
 
 @main_bp.before_app_request
 def check_onboarding():
+    """
+    Redirects to onboarding page if setup is not complete.
+
+    This function runs before each request. If onboarding is not complete
+    (admin user and settings not created), it redirects to the onboarding
+    page, unless the current request is for an exempt endpoint (like
+    onboarding itself, login, static files).
+    """
     if request.endpoint and 'static' not in request.endpoint:
         # Allow access to specific endpoints even if onboarding is not complete
         exempt_endpoints = [
@@ -46,6 +60,17 @@ def check_onboarding():
             return redirect(url_for('main.onboarding'))
 
 def _get_plex_event_details(plex_event_row, db):
+    """
+    Enriches a Plex event row with details from local Sonarr/Radarr databases.
+
+    Args:
+        plex_event_row (sqlite3.Row): A row from the plex_activity_log table.
+        db (sqlite3.Connection): The database connection.
+
+    Returns:
+        dict: A dictionary containing enriched item details, including cached image URLs
+              and links to detail pages, or None if input is None.
+    """
     if not plex_event_row:
         return None
 
@@ -104,6 +129,21 @@ def _get_plex_event_details(plex_event_row, db):
             item_details['episode_number'] = int(match.group(2))
             item_details['episode_detail_url'] = url_for('main.episode_detail', tmdb_id=item_details['link_tmdb_id'], season_number=item_details['season_number'], episode_number=item_details['episode_number'])
 
+    # Generate cached image URLs
+    if item_details.get('tmdb_id_for_poster'):
+        item_details['cached_poster_url'] = url_for('static', filename=f"poster/{item_details['tmdb_id_for_poster']}.jpg")
+        # For Plex events, fanart might be less common or derived from the same ID.
+        # Assuming tmdb_id_for_poster can also be used for a potential background.
+        item_details['cached_fanart_url'] = url_for('static', filename=f"background/{item_details['tmdb_id_for_poster']}.jpg")
+    else:
+        item_details['cached_poster_url'] = None
+        item_details['cached_fanart_url'] = None
+        # Fallback to any poster_url that might have been set directly from Sonarr/Radarr if tmdb_id_for_poster was missing
+        # but this is less ideal as we want to use cached images.
+        # if item_details.get('poster_url'):
+        #     item_details['cached_poster_url'] = item_details['poster_url']
+
+
     return item_details
 
 @main_bp.route('/')
@@ -115,7 +155,7 @@ def home():
     previous_items_list = []
 
     if s_username:
-        # 1. Fetch Current Item
+        # 1. Fetch Current Item (actively playing, paused, or resumed)
         current_event_row = db.execute(
             """
             SELECT * FROM plex_activity_log
@@ -131,7 +171,7 @@ def home():
             current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
 
 
-        # 2. Fetch Previous Items
+        # 2. Fetch Previous Items (recently stopped or scrobbled)
         recent_stopped_scrobbled_events = db.execute(
             """
             SELECT * FROM plex_activity_log
@@ -175,6 +215,13 @@ def home():
 
 @main_bp.route('/plex/webhook', methods=['POST'])
 def plex_webhook():
+    """
+    Handles incoming webhook events from Plex.
+
+    Parses Plex webhook payloads, logs relevant media activity (play, pause,
+    resume, stop, scrobble) to the `plex_activity_log` table.
+    This data is used to display user activity on the homepage and show details.
+    """
     try:
         if request.is_json:
             payload = request.get_json()
@@ -235,6 +282,13 @@ def plex_webhook():
 
 @main_bp.route('/login')
 def login():
+    """
+    Initiates the Plex OAuth login process.
+
+    Redirects the user to Plex.tv to authenticate and authorize the application.
+    It first obtains a PIN from Plex, stores its ID in the session, and then
+    constructs the authentication URL.
+    """
     client_id = database.get_setting('plex_client_id')
     if not client_id:
         flash("Plex Client ID is not configured in settings.", "danger")
@@ -254,6 +308,13 @@ def login():
 
 @main_bp.route('/callback')
 def callback():
+    """
+    Handles the callback from Plex after user authentication.
+
+    Polls Plex using the PIN ID to get an authentication token. If successful,
+    retrieves user information from Plex, finds the corresponding user in the
+    local database, and logs them in.
+    """
     pin_id = session.get('plex_pin_id')
     client_id = database.get_setting('plex_client_id')
     if not pin_id or not client_id:
@@ -312,6 +373,7 @@ def callback():
 @main_bp.route('/logout')
 @login_required
 def logout():
+    """Logs out the current user and clears the session."""
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
@@ -319,6 +381,13 @@ def logout():
 
 @main_bp.route('/onboarding', methods=['GET', 'POST'])
 def onboarding():
+    """
+    Handles the initial application setup (admin user and basic settings).
+
+    If onboarding is already complete, redirects to the homepage.
+    On GET, displays the onboarding form.
+    On POST, creates the admin user and saves initial settings to the database.
+    """
     if is_onboarding_complete():
         return redirect(url_for('main.home'))
 
@@ -378,7 +447,17 @@ def search():
         "SELECT title, 'movie' as type, tmdb_id, year, poster_url, fanart_url FROM radarr_movies WHERE title LIKE ?", ('%' + query + '%',)
     ).fetchall()
 
-    results = [dict(row) for row in sonarr_results + radarr_results]
+    results = []
+    for row in sonarr_results + radarr_results:
+        item = dict(row)
+        if item.get('tmdb_id'):
+            item['poster_url'] = url_for('static', filename=f"poster/{item['tmdb_id']}.jpg")
+            item['fanart_url'] = url_for('static', filename=f"background/{item['tmdb_id']}.jpg")
+        else:
+            # Set to placeholder or None if no tmdb_id, so templates don't break
+            item['poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+            item['fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
+        results.append(item)
     
     # Sort results by title
     results.sort(key=lambda x: x['title'])
@@ -388,11 +467,28 @@ def search():
 @main_bp.route('/movie/<int:tmdb_id>')
 @login_required
 def movie_detail(tmdb_id):
+    """
+    Displays the detail page for a specific movie.
+
+    Args:
+        tmdb_id (int): The TMDB ID of the movie.
+
+    Returns:
+        flask.Response: Rendered movie detail template with movie information,
+                        including cached image URLs, or 404 if not found.
+    """
     db = database.get_db()
     movie = db.execute('SELECT * FROM radarr_movies WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
     if not movie:
         abort(404)
-    return render_template('movie_detail.html', movie=movie)
+    movie_dict = dict(movie)
+    if movie_dict.get('tmdb_id'):
+        movie_dict['cached_poster_url'] = url_for('static', filename=f"poster/{movie_dict['tmdb_id']}.jpg")
+        movie_dict['cached_fanart_url'] = url_for('static', filename=f"background/{movie_dict['tmdb_id']}.jpg")
+    else:
+        movie_dict['cached_poster_url'] = None
+        movie_dict['cached_fanart_url'] = None
+    return render_template('movie_detail.html', movie=movie_dict)
 
 @main_bp.route('/show/<int:tmdb_id>')
 @login_required
@@ -403,7 +499,9 @@ def show_detail(tmdb_id):
         tmdb_id (int): TMDB identifier for the show.
 
     Returns:
-        flask.Response: Rendered show detail template.
+        flask.Response: Rendered show detail template with show information,
+                        season/episode lists, cached image URLs, next aired episode,
+                        and featured (recently/currently watched) episode details.
     """
     db = database.get_db()
     show_dict = None
@@ -413,6 +511,12 @@ def show_detail(tmdb_id):
         current_app.logger.warning(f"Show with TMDB ID {tmdb_id} not found in sonarr_shows.")
         abort(404)
     show_dict = dict(show_row)
+    if show_dict.get('tmdb_id'):
+        show_dict['cached_poster_url'] = url_for('static', filename=f"poster/{show_dict['tmdb_id']}.jpg")
+        show_dict['cached_fanart_url'] = url_for('static', filename=f"background/{show_dict['tmdb_id']}.jpg")
+    else:
+        show_dict['cached_poster_url'] = None
+        show_dict['cached_fanart_url'] = None
     show_db_id = show_dict['id']
 
     seasons_rows = db.execute(
@@ -528,8 +632,84 @@ def show_detail(tmdb_id):
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
-                           currently_watched_episode_info=currently_watched_episode_info,
-                           last_watched_episode_info=last_watched_episode_info)
+                           # currently_watched_episode_info=currently_watched_episode_info, # Replaced by featured_episode
+                           # last_watched_episode_info=last_watched_episode_info, # Replaced by featured_episode
+                           featured_episode=prepare_featured_episode(currently_watched_episode_info, last_watched_episode_info, show_dict)
+                           )
+
+def prepare_featured_episode(currently_watched, last_watched, show_info):
+    """
+    Prepares a dictionary for the "featured episode" (currently or recently watched).
+
+    This function consolidates information from either the currently watched or
+    last watched episode data, formats it, and includes necessary details for
+    display on the show detail page.
+
+    Args:
+        currently_watched (dict, None): Data for an episode being actively watched.
+        last_watched (dict, None): Data for the last scrobbled/stopped episode.
+        show_info (dict): Dictionary containing details of the parent show,
+                          including 'tmdb_id' and 'cached_poster_url'.
+
+    Returns:
+        dict, None: A dictionary with formatted episode details for the template,
+                    or None if no relevant watch activity is found.
+    """
+    featured_episode_data = None
+    source_info = None
+    is_currently_watching = False
+
+    if currently_watched:
+        source_info = currently_watched
+        is_currently_watching = True
+    elif last_watched:
+        source_info = last_watched
+
+    if source_info:
+        season_episode_str = source_info.get('season_episode')
+        season_number = None
+        episode_number = None
+        match = re.match(r'S(\d+)E(\d+)', season_episode_str) if season_episode_str else None
+        if match:
+            season_number = int(match.group(1))
+            episode_number = int(match.group(2))
+
+        if season_number is not None and episode_number is not None:
+            episode_detail_url = url_for('main.episode_detail',
+                                         tmdb_id=show_info['tmdb_id'],
+                                         season_number=season_number,
+                                         episode_number=episode_number)
+
+            # Format timestamp
+            raw_timestamp = source_info.get('event_timestamp')
+            formatted_timestamp = "Unknown"
+            if raw_timestamp:
+                try:
+                    if isinstance(raw_timestamp, str):
+                        # Attempt to parse from ISO format, common from DB
+                        dt_obj = datetime.datetime.fromisoformat(raw_timestamp.replace('Z', '+00:00'))
+                    elif isinstance(raw_timestamp, (int, float)): # Handle Unix timestamps
+                        dt_obj = datetime.datetime.fromtimestamp(raw_timestamp, tz=timezone.utc)
+                    else: # Assuming it's already a datetime object
+                        dt_obj = raw_timestamp
+                    formatted_timestamp = dt_obj.strftime("%b %d, %Y %I:%M %p")
+                except (ValueError, TypeError) as e:
+                    current_app.logger.warning(f"Could not parse timestamp '{raw_timestamp}': {e}")
+                    formatted_timestamp = str(raw_timestamp) # Fallback
+
+            featured_episode_data = {
+                'title': source_info.get('title'),
+                'season_episode_str': season_episode_str,
+                'season_number': season_number,
+                'episode_number': episode_number,
+                'poster_url': show_info.get('cached_poster_url'), # Use show's poster
+                'event_timestamp': raw_timestamp,
+                'formatted_timestamp': formatted_timestamp,
+                'progress_percent': source_info.get('progress_percent') if is_currently_watching else None,
+                'episode_detail_url': episode_detail_url,
+                'is_currently_watching': is_currently_watching
+            }
+    return featured_episode_data
 
 @main_bp.route('/show/<int:tmdb_id>/season/<int:season_number>/episode/<int:episode_number>')
 @login_required
@@ -542,20 +722,61 @@ def episode_detail(tmdb_id, season_number, episode_number):
         episode_number (int): Episode number within the season.
 
     Returns:
-        flask.Response: Episode detail template.
+        flask.Response: Rendered episode detail template with show and episode
+                        information, including cached image URLs, formatted dates,
+                        and availability status.
     """
     db = database.get_db()
     show_row = db.execute('SELECT id, title, tmdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
     if not show_row:
         abort(404)
-    show_id = show_row['id']
+    show_dict = dict(show_row)
+    # Use consistent names for cached URLs as expected by the new template.
+    if show_dict.get('tmdb_id'):
+        show_dict['cached_poster_url'] = url_for('static', filename=f"poster/{show_dict['tmdb_id']}.jpg")
+        show_dict['cached_fanart_url'] = url_for('static', filename=f"background/{show_dict['tmdb_id']}.jpg") # Optional for episode page bg
+    else:
+        show_dict['cached_poster_url'] = None
+        show_dict['cached_fanart_url'] = None
+
+    show_id = show_dict['id']
     season_row = db.execute('SELECT id FROM sonarr_seasons WHERE show_id=? AND season_number=?', (show_id, season_number)).fetchone()
     if not season_row:
         abort(404)
+
+    # Fetch all columns for the episode
     episode_row = db.execute('SELECT * FROM sonarr_episodes WHERE season_id=? AND episode_number=?', (season_row['id'], episode_number)).fetchone()
     if not episode_row:
         abort(404)
-    return render_template('episode_detail.html', show=dict(show_row), episode=dict(episode_row), season_number=season_number)
+
+    episode_dict = dict(episode_row)
+
+    # Format air date
+    if episode_dict.get('air_date_utc'):
+        try:
+            # Ensure Z is handled for UTC parsing if present
+            air_date_str = episode_dict['air_date_utc']
+            if 'Z' in air_date_str.upper() and not '+' in air_date_str and not '-' in air_date_str[10:]: # Simple check for Zulu time
+                 air_date_str = air_date_str.upper().replace('Z', '+00:00')
+
+            air_dt = datetime.datetime.fromisoformat(air_date_str)
+            episode_dict['formatted_air_date'] = air_dt.strftime('%B %d, %Y')
+        except ValueError as e:
+            current_app.logger.warning(f"Could not parse air_date_utc '{episode_dict['air_date_utc']}' for episode: {e}")
+            episode_dict['formatted_air_date'] = episode_dict['air_date_utc'] # Fallback
+    else:
+        episode_dict['formatted_air_date'] = 'N/A'
+
+    # Ensure 'is_available' based on 'has_file'
+    episode_dict['is_available'] = episode_dict.get('has_file', False)
+
+    # Add runtime if available (example field name, adjust if different in your schema)
+    # episode_dict['runtime_minutes'] = episode_dict.get('runtime', None)
+
+    return render_template('episode_detail.html',
+                           show=show_dict,
+                           episode=episode_dict,
+                           season_number=season_number)
 
 @main_bp.route('/image_proxy')
 @login_required

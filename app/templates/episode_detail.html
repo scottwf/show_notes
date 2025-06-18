@@ -1,28 +1,85 @@
 {% extends "layout.html" %}
-{% block title %}{{ show.title }} - {{ episode.title }}{% endblock %}
-{% block page_content %}
-<div class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-  <div class="relative bg-cover bg-center py-12" style="{% if show.fanart_url %}background-image: url('/static/background/{{ show.tmdb_id }}.jpg');{% else %}background-color:#1a202c;{% endif %}">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-    <div class="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="md:flex md:items-start md:space-x-8">
-        <div class="flex-shrink-0 w-40 sm:w-48 md:w-56 mx-auto md:mx-0 mb-6 md:mb-0">
-          <img src="/static/poster/{{ show.tmdb_id }}.jpg" alt="Poster" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover" onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
-        </div>
-        <div class="text-center md:text-left flex-grow">
-          <h1 class="text-3xl font-extrabold text-white mb-2">{{ show.title }} - {{ episode.title }}</h1>
-          <p class="text-gray-300 mb-2">Season {{ season_number }} Episode {{ episode.episode_number }}</p>
-          {% if episode.air_date_utc %}
-          <p class="text-sm text-gray-400 mb-2">Aired {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}</p>
-          {% endif %}
-          {% if episode.has_file %}
-          <span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300 mb-2">Available</span>
-          {% endif %}
-          <p class="text-gray-200">{{ episode.overview or 'No overview available.' }}</p>
-          <p class="mt-4"><a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="text-sky-400 hover:underline">&larr; Back to show</a></p>
-        </div>
-      </div>
+
+{% block page_title %}{{ episode.title }} - {{ show.title }}{% endblock %}
+{% block title %}{{ episode.title }} - {{ show.title }}{% endblock %} {# More specific title for the tab/window #}
+
+{% block content %}
+<div class="container mx-auto px-2 sm:px-4 py-6 sm:py-8">
+    <div class="mb-4">
+        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors duration-150 text-sm sm:text-base">
+            &larr; Back to {{ show.title }}
+        </a>
     </div>
-  </div>
+
+    <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg overflow-hidden">
+        {# Optional Fanart Background for a header section - can be added if desired #}
+        {# For example:
+        <div class="h-48 sm:h-64 md:h-72 bg-cover bg-center" style="background-image: url('{{ show.cached_fanart_url if show.cached_fanart_url else url_for('static', filename='logos/placeholder_background.png') }}');">
+             <div class="absolute inset-0 bg-gradient-to-t from-slate-800 via-slate-800/70 to-transparent"></div>
+        </div>
+        #}
+
+        <div class="p-4 sm:p-6 md:p-8">
+            <div class="md:flex md:space-x-6 lg:space-x-8">
+                <div class="md:w-1/3 lg:w-1/4 flex-shrink-0 mb-6 md:mb-0">
+                    <img src="{{ show.cached_poster_url if show.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';"
+                         alt="Poster for {{ show.title }}"
+                         class="rounded-lg shadow-md w-full aspect-[2/3] object-cover">
+                </div>
+                <div class="md:w-2/3 lg:w-3/4 min-w-0"> {# Ensure flex child can shrink #}
+                    <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-1 truncate" title="{{ episode.title }}">{{ episode.title }}</h1>
+                    <p class="text-md sm:text-lg text-gray-600 dark:text-gray-400 mb-3">
+                        Season {{ season_number }}, Episode {{ episode.episode_number }}
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4 text-sm sm:text-base">
+                        {% if episode.is_available %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                <svg class="-ml-0.5 mr-1 h-4 w-4 text-green-500 dark:text-green-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"></circle></svg>
+                                Available
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-medium bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                Not Available
+                            </span>
+                        {% endif %}
+                        <span class="text-gray-500 dark:text-gray-400">
+                            <strong class="font-medium text-gray-700 dark:text-gray-300">Air Date:</strong> {{ episode.formatted_air_date }}
+                        </span>
+                        {# Add runtime if available from sonarr_episodes.runtime (INTEGER, minutes) #}
+                        {% if episode.runtime %}
+                        <span class="text-gray-500 dark:text-gray-400">
+                           <strong class="font-medium text-gray-700 dark:text-gray-300">Runtime:</strong> {{ episode.runtime }} min
+                        </span>
+                        {% endif %}
+                        {# Add rating if available from sonarr_episodes.ratings_value (REAL) #}
+                        {% if episode.ratings_value and episode.ratings_value > 0 %}
+                        <span class="text-gray-500 dark:text-gray-400">
+                           <strong class="font-medium text-gray-700 dark:text-gray-300">Rating:</strong> {{ "%.1f" | format(episode.ratings_value) }}/10
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mt-5 sm:mt-6 mb-2">Summary</h2>
+                    <p class="text-gray-700 dark:text-gray-300 leading-relaxed prose dark:prose-invert max-w-none">
+                        {{ episode.overview | default('No summary available for this episode.') }}
+                    </p>
+
+                    {# Placeholder for future watch status/actions - More complex, requires user-specific data and actions #}
+                    {#
+                    <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">Your Watch Status</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Feature coming soon: Track your watched status and progress.</p>
+                        <div class="flex space-x-3 mt-3">
+                            <button class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 focus:outline-none dark:focus:ring-blue-800">Mark as Watched</button>
+                            <button class="px-4 py-2 text-sm font-medium text-gray-900 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700">Set Progress</button>
+                        </div>
+                    </div>
+                    #}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

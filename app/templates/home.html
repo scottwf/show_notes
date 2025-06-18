@@ -16,18 +16,12 @@
           {% endif %}
         </h2>
         <div class="bg-slate-100 dark:bg-slate-800 shadow-xl rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-3 sm:gap-5">
-          {% if current_plex_event.tmdb_id_for_poster %}
-            <a href="{{ url_for('main.' + current_plex_event.item_type_for_url + '_detail', tmdb_id=current_plex_event.link_tmdb_id) if current_plex_event.item_type_for_url and current_plex_event.link_tmdb_id else '#' }}" class="flex-shrink-0">
-              <img class="w-32 sm:w-40 md:w-48 aspect-[2/3] object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-lg transition-shadow duration-150"
-                   src="/static/poster/{{ current_plex_event.tmdb_id_for_poster }}.jpg"
-                   alt="Poster for {{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}"
-                   onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
-            </a>
-          {% else %}
-            <div class="flex-shrink-0 w-32 sm:w-40 md:w-48 aspect-[2/3] bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center border border-slate-300 dark:border-slate-700 shadow-sm">
-              <span class="text-slate-500 dark:text-slate-400 text-xs px-2 text-center">No Poster Available</span>
-            </div>
-          {% endif %}
+          <a href="{{ url_for('main.' + current_plex_event.item_type_for_url + '_detail', tmdb_id=current_plex_event.link_tmdb_id) if current_plex_event.item_type_for_url and current_plex_event.link_tmdb_id else '#' }}" class="flex-shrink-0">
+            <img class="w-32 sm:w-40 md:w-48 aspect-[2/3] object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-lg transition-shadow duration-150"
+                 src="{{ current_plex_event.cached_poster_url if current_plex_event.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                 alt="Poster for {{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}"
+                 onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+          </a>
           <div class="flex-1 min-w-0"> {# Added min-w-0 for flex truncation #}
             {% if current_plex_event.item_type_for_url == 'show' and current_plex_event.link_tmdb_id %}
               <a href="{{ url_for('main.show_detail', tmdb_id=current_plex_event.link_tmdb_id) }}"
@@ -82,16 +76,10 @@
           {% for item in previous_items_list %}
             <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg overflow-hidden transition-transform duration-150 ease-in-out hover:scale-105">
               <a href="{{ url_for('main.' + item.item_type_for_url + '_detail', tmdb_id=item.link_tmdb_id) if item.item_type_for_url and item.link_tmdb_id else '#' }}">
-                {% if item.tmdb_id_for_poster %}
-                  <img class="w-full aspect-[2/3] object-cover"
-                       src="/static/poster/{{ item.tmdb_id_for_poster }}.jpg"
-                       alt="Poster for {{ item.title if item.media_type == 'movie' else item.episode_title }}"
-                       onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
-                {% else %}
-                  <div class="w-full aspect-[2/3] bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                    <span class="text-slate-500 dark:text-slate-400 text-xs p-2 text-center">No Poster</span>
-                  </div>
-                {% endif %}
+                <img class="w-full aspect-[2/3] object-cover"
+                     src="{{ item.cached_poster_url if item.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                     alt="Poster for {{ item.title if item.media_type == 'movie' else item.episode_title }}"
+                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
               </a>
               <div class="p-2 sm:p-3">
                 {% set display_title = (item.title if item.media_type == 'movie' else item.episode_title) %}
