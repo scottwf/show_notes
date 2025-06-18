@@ -7,7 +7,7 @@
 
     <!-- Hero Section with Background Image -->
     <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-no-repeat bg-cover bg-center"
-         style="{% if show.fanart_url %}background-image: url('/static/background/{{ show.tmdb_id }}.jpg');{% else %}background-color: #1a202c;{% endif %}">
+         style="background-image: url('{{ show.cached_fanart_url if show.cached_fanart_url else url_for('static', filename='logos/placeholder_background.png') }}'); {% if not show.cached_fanart_url %}background-color: #1a202c;{% endif %}">
     </div>
     <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
 
@@ -17,10 +17,10 @@
         <div class="md:flex md:items-start md:space-x-8 lg:space-x-12 mb-8">
             <!-- Poster -->
             <div class="flex-shrink-0 w-48 sm:w-56 md:w-64 mx-auto md:mx-0 mb-6 md:mb-0">
-                <img src="/static/poster/{{ show.tmdb_id }}.jpg"
+                <img src="{{ show.cached_poster_url if show.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
                      alt="Poster for {{ show.title }}"
                      class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
-                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='img/placeholder_poster.png') }}';">
+                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
             </div>
 
             <!-- Details: Title, Year, Overview, Metadata -->
@@ -63,8 +63,40 @@
             </div>
         </div>
 
-        <!-- Notifications: Next Aired / Currently Watching -->
+        <!-- Featured Episode Card & Next Aired -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {% if featured_episode %}
+            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
+              <h3 class="text-lg font-semibold text-sky-400 mb-2">
+                {% if featured_episode.is_currently_watching %}Currently Watching{% else %}Recently Watched{% endif %}
+              </h3>
+              <div class="flex items-start space-x-4">
+                <div class="flex-shrink-0">
+                  <img src="{{ featured_episode.poster_url if featured_episode.poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                       alt="Show Poster"
+                       class="w-20 sm:w-24 aspect-[2/3] object-cover rounded-md shadow"
+                       onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                </div>
+                <div class="flex-grow min-w-0">
+                  <h4 class="font-bold text-gray-100 truncate" title="{{ featured_episode.title }}">{{ featured_episode.title }}</h4>
+                  <p class="text-sm text-gray-300">{{ featured_episode.season_episode_str }}</p>
+                  <p class="text-xs text-gray-400 mt-1">
+                    Last activity: {{ featured_episode.formatted_timestamp if featured_episode.formatted_timestamp else (featured_episode.event_timestamp | format_datetime('%b %d, %Y %I:%M %p')) }}
+                  </p>
+                  {% if featured_episode.progress_percent %}
+                  <div class="w-full bg-gray-600 rounded-full h-2 mt-2">
+                    <div class="bg-sky-500 h-2 rounded-full" style="width: {{ featured_episode.progress_percent }}%"></div>
+                  </div>
+                  <p class="text-xs text-gray-400 text-right">{{ featured_episode.progress_percent }}%</p>
+                  {% endif %}
+                  <a href="{{ featured_episode.episode_detail_url }}" class="text-sky-400 hover:text-sky-300 text-sm mt-2 inline-block hover:underline">
+                    Go to Episode &rarr;
+                  </a>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
             {% if next_aired_episode_info %}
             <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
                 <h3 class="text-lg font-semibold text-sky-400 mb-2">Next Episode Airing</h3>
@@ -76,33 +108,13 @@
                 </p>
             </div>
             {% endif %}
-
-            {% if currently_watched_episode_info %}
-            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
-                <h3 class="text-lg font-semibold text-sky-400 mb-2">Currently Watching</h3>
-                <p class="text-gray-200">
-                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=currently_watched_episode_info.season_episode[1:3]|int, episode_number=currently_watched_episode_info.season_episode[4:6]|int) }}" class="hover:underline">
-                        {{ currently_watched_episode_info.season_episode }}: {{ currently_watched_episode_info.title }}
-                    </a>
-                </p>
-                {% if currently_watched_episode_info.progress_percent is defined %}
-                <div class="w-full bg-gray-600 rounded-full h-2.5 mt-2">
-                    <div class="bg-sky-500 h-2.5 rounded-full" style="width: {{ currently_watched_episode_info.progress_percent }}%"></div>
-                </div>
-                <p class="text-xs text-gray-400 text-right">{{ currently_watched_episode_info.progress_percent }}% watched (approx.)</p>
-                {% endif %}
-            </div>
-            {% elif last_watched_episode_info %}
-            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
-                <h3 class="text-lg font-semibold text-sky-400 mb-2">Last Watched</h3>
-                <p class="text-gray-200">
-                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=last_watched_episode_info.season_episode[1:3]|int, episode_number=last_watched_episode_info.season_episode[4:6]|int) }}" class="hover:underline">
-                        {{ last_watched_episode_info.season_episode }}: {{ last_watched_episode_info.title }}
-                    </a>
-                </p>
-            </div>
-            {% endif %}
         </div>
+
+        {% if not featured_episode and not next_aired_episode_info %}
+        <!-- This div is to ensure consistent spacing if neither featured nor next_aired is present, remove if not desired -->
+        <div class="mb-8"></div>
+        {% endif %}
+
 
         <!-- Seasons and Episodes Section -->
         <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6">

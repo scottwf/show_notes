@@ -22,6 +22,26 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - **Episode Detail Pages:** Individual episode pages now show air date and an "Available" label when the file exists.
 - **Episode Lists:** Season 0 is hidden from show pages and episodes indicate availability instead of download status.
 
+---
+### 🚀 Latest Enhancements
+- **UI/UX Consistency:**
+    - Standardized header appearance between the main application and the admin panel. The admin panel header is now full-width for better space utilization.
+    - Improved main site search bar responsiveness on mobile devices, featuring a modal display for results.
+- **Image Handling:**
+    - Ensured all primary content images (posters, backdrops) consistently use locally cached static paths (e.g., `/static/poster/[id].jpg`).
+    - Implemented robust image fallbacks using `onerror` attributes, pointing to generic placeholder images for missing posters or backdrops.
+- **Content Discovery & Navigation:**
+    - **Show Detail Page:**
+        - Confirmed Season 0 ("Specials") is hidden from episode lists.
+        - Added a "Recently/Currently Watched" card to highlight the user's latest interacted episode, including progress and a direct link.
+        - Episodes are clearly marked as "Available" if the media file exists.
+    - **Episode Detail Page:**
+        - Revamped to display comprehensive information: show's poster, episode title, season/episode number, formatted air date, availability status, overview, runtime, and rating (when available).
+        - Includes a "Back to Show" link for easy navigation.
+- **Admin Panel:**
+    - **Unified Search:** Introduced a new search bar in the admin header, allowing administrators to search across Shows, Movies (linking to main site details), and Admin panel routes (e.g., Dashboard, Settings).
+---
+
 ### Admin Panel & Service Management
 - **Dynamic Service Status:** The admin services page (`/admin/settings`) now features real-time status indicators.
   - On page load, dots are colored green or red based on an initial connection test.

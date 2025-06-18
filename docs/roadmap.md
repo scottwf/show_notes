@@ -29,8 +29,20 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
 - [x] **Tautulli Integration:** Watch history synchronization via Tautulli API with connection testing.
 - [x] **Admin Logbook & User List:** Added logbook page and basic Plex user listing.
-- [x] **Episode Detail Pages:** Added standalone episode pages with air date and availability label.
-- [x] **Episode List Cleanup:** Season 0 hidden by default; episodes show "Available" when files exist.
+- [x] **Episode Detail Pages:** Added standalone episode pages with air date and availability label. (Further enhanced - see below)
+- [x] **Episode List Cleanup:** Season 0 hidden by default; episodes show "Available" when files exist. (Further enhanced - see below)
+- [x] **Header Consistency and Layout (Main and Admin):** Standardized header appearance; admin header now full-width.
+- [x] **Search Bar Responsiveness (Mobile):** Main site search results now use a modal display on mobile.
+- [x] **Image Caching and Display:** Ensured consistent use of locally cached static images with proper fallbacks.
+- [x] **Episodes List Improvements (Show Detail Page):**
+    - [x] Confirmed Season 0 ("Specials") hidden.
+    - [x] Added "Most Recently Watched" / "Currently Watching" card.
+    - [x] "Available" label for episodes confirmed.
+- [x] **Episode Detail Pages (Content and Links):** Revamped with comprehensive information (poster, air date, summary, availability, runtime, rating) and "Back to Show" link.
+- [x] **Admin Search Functionality:** Implemented unified search in the admin panel for shows, movies, and admin routes.
+- [x] **README and Roadmap updates:** Documentation updated to reflect recent changes (this item).
+- [x] **Descriptive comments:** Added docstrings and inline comments to key Python files (this item).
+
 
 ## Next Steps
 - [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)

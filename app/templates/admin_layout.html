@@ -6,27 +6,73 @@
   {{ super() }} {# Includes Alpine.js and darkmode.js from base.html #}
   <link rel="stylesheet" href="{{ url_for('static', filename='admin_layout.css') }}">
   {% block admin_extra_css %}{% endblock %}
+  {% block admin_extra_js %}
+    <script src="{{ url_for('static', filename='admin_search.js') }}" defer></script>
+  {% endblock %}
 {% endblock %}
 
 {% block content %}
-<div x-data="{ sidebarOpen: false }" class="flex h-screen bg-slate-100 dark:bg-slate-900">
-    <!-- Sidebar -->
-    <aside 
-        class="fixed inset-y-0 left-0 z-30 flex flex-col flex-shrink-0 w-64 max-h-screen overflow-y-auto transition-all duration-300 ease-in-out transform bg-slate-800 dark:bg-gray-800 lg:static lg:translate-x-0"
-        :class="{'-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen}"
-    >
-        <!-- Sidebar header -->
-        <div class="flex items-center justify-between h-16 px-4 py-2 bg-slate-900 dark:bg-gray-900">
-            <a href="{{ url_for('admin.dashboard') }}" class="text-xl font-semibold text-white hover:text-sky-400">
-                Admin Panel
-            </a>
-            <button @click="sidebarOpen = false" class="text-gray-400 lg:hidden hover:text-white focus:outline-none">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+<div x-data="{ sidebarOpen: false }" class="flex flex-col h-screen bg-slate-100 dark:bg-slate-900">
+    <!-- Top bar - MOVED OUTSIDE and made full width -->
+    <header class="relative flex items-center justify-between h-16 px-4 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700 w-full z-10 shrink-0">
+        <div class="flex items-center space-x-3">
+            <!-- Mobile menu button for sidebar -->
+            <button @click="sidebarOpen = !sidebarOpen" class="text-gray-500 lg:hidden focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
+            <!-- Brand Link -->
+            <a href="{{ url_for('main.home') }}" class="text-lg font-semibold text-slate-800 dark:text-slate-100 hover:text-sky-500 dark:hover:text-sky-400 transition-colors">ShowNotes</a>
         </div>
 
-        <!-- Sidebar links -->
-        <nav class="flex-1 px-2 py-4 space-y-2 text-sm text-gray-400">
+        <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">
+            {% block admin_page_header %}{% endblock %}
+        </div>
+
+        <!-- Admin Search Bar (New) -->
+        <div class="flex-grow max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl mx-4">
+          <form id="admin-search-form" class="relative">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                    </svg>
+                </div>
+                <input id="admin-search-input" type="text" placeholder="Search (Ctrl+K)" class="block w-full pl-10 pr-3 py-1.5 text-sm rounded-md text-gray-900 dark:text-gray-100 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-colors duration-150" autocomplete="off">
+            </div>
+            <div id="admin-search-results" class="absolute left-0 right-0 mt-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-md z-[100] hidden overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700">
+              <!-- Results will be populated by JavaScript -->
+            </div>
+          </form>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <!-- Dark Mode Toggle -->
+            <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            </button>
+            <!-- Admin User Menu if needed -->
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden"> <!-- New container for sidebar and main content -->
+        <!-- Sidebar -->
+        <aside
+            class="fixed inset-y-0 left-0 z-20 flex flex-col flex-shrink-0 w-64 max-h-screen overflow-y-auto transition-all duration-300 ease-in-out transform bg-slate-800 dark:bg-gray-800 lg:static lg:translate-x-0 lg:pt-0 pt-16"
+            :class="{'-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen}"
+        >
+            <!-- Sidebar header -->
+            <div class="flex items-center justify-between h-16 px-4 py-2 bg-slate-900 dark:bg-gray-900 lg:hidden">
+                <a href="{{ url_for('admin.dashboard') }}" class="text-xl font-semibold text-white hover:text-sky-400">
+                    Admin Panel
+                </a>
+                <button @click="sidebarOpen = false" class="text-gray-400 lg:hidden hover:text-white focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Sidebar links -->
+            <nav class="flex-1 px-2 py-4 space-y-2 text-sm text-gray-400">
             <a href="{{ url_for('admin.dashboard') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.dashboard' %}bg-slate-700 text-white{% endif %}">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
                 Dashboard
@@ -74,33 +120,8 @@
         </div>
     </aside>
 
-    <!-- Main content -->
-    <div class="flex flex-col flex-1 w-full overflow-x-hidden overflow-y-auto">
-        <!-- Top bar -->
-        <header class="relative flex items-center justify-between h-16 px-4 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700">
-            <div class="flex items-center space-x-3">
-                <!-- Mobile menu button -->
-                <button @click="sidebarOpen = !sidebarOpen" class="text-gray-500 lg:hidden focus:outline-none">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                </button>
-                <!-- Brand Link -->
-                <a href="{{ url_for('main.home') }}" class="text-lg font-semibold text-slate-800 dark:text-slate-100 hover:text-sky-500 dark:hover:text-sky-400 transition-colors">ShowNotes</a>
-            </div>
-
-            <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                {% block admin_page_header %}{% endblock %}
-            </div>
-
-            <div class="flex items-center space-x-3">
-                <!-- Dark Mode Toggle -->
-                <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
-                </button>
-            </div>
-        </header>
-
-        <!-- Page content -->
+    <!-- Main content area -->
+    <div class="flex flex-col flex-1 w-full overflow-x-hidden overflow-y-auto lg:pt-0 pt-16">
         <main class="flex-1 p-4 sm:p-6">
             {# Flash messages are inherited from base.html and will appear at the top of base.html's body #}
             {% block admin_page_content %}{% endblock %}
