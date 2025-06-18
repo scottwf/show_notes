@@ -39,6 +39,7 @@ def admin_required(f):
 @login_required
 @admin_required
 def dashboard():
+    """Admin dashboard summarizing counts of key objects."""
     db = database.get_db()
     movie_count = db.execute('SELECT COUNT(*) FROM radarr_movies').fetchone()[0]
     show_count = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0]
@@ -54,19 +55,21 @@ def dashboard():
 @login_required
 @admin_required
 def tasks():
+    """Render the admin tasks page."""
     return render_template('admin_tasks.html', title='Admin Tasks')
 
 @admin_bp.route('/logs', methods=['GET'])
 @login_required
 @admin_required
 def logs_view():
+    """Display the log viewer page."""
     return render_template('admin_logs.html', title='View Logs')
 
 @admin_bp.route('/logbook')
 @login_required
 @admin_required
 def logbook_view():
-    # Renders the interactive logbook page (tables, filters, JS)
+    """Render the interactive logbook with filtering by user or show."""
     return render_template('admin_logbook.html')
 
 @admin_bp.route('/logbook/data')
@@ -213,6 +216,7 @@ def stream_log_content(filename):
 @login_required
 @admin_required
 def settings():
+    """Display and save service configuration settings."""
     db = database.get_db()
     user = db.execute('SELECT * FROM users WHERE is_admin=1 LIMIT 1').fetchone()
     settings = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
