@@ -108,6 +108,7 @@ def _get_plex_event_details(plex_event_row, db):
 
 @main_bp.route('/')
 def home():
+    """Render the homepage with recent Plex activity for the user."""
     db = database.get_db()
     s_username = session.get('username')
     current_plex_event = None
@@ -357,6 +358,10 @@ def onboarding():
 @main_bp.route('/search')
 @login_required
 def search():
+    """Search for shows and movies by title.
+
+    Returns a JSON list of matching items for autocomplete.
+    """
     query = request.args.get('q', '').strip()
     if not query:
         return jsonify([])
@@ -392,6 +397,14 @@ def movie_detail(tmdb_id):
 @main_bp.route('/show/<int:tmdb_id>')
 @login_required
 def show_detail(tmdb_id):
+    """Display a show's seasons and episodes.
+
+    Args:
+        tmdb_id (int): TMDB identifier for the show.
+
+    Returns:
+        flask.Response: Rendered show detail template.
+    """
     db = database.get_db()
     show_dict = None
 
@@ -410,6 +423,9 @@ def show_detail(tmdb_id):
     all_show_episodes_for_next_aired_check = []
 
     for season_row in seasons_rows:
+        if season_row['season_number'] == 0:
+            # Skip specials/Season 0 from main listing
+            continue
         season_dict = dict(season_row)
         season_db_id = season_dict['id']
 
@@ -518,6 +534,16 @@ def show_detail(tmdb_id):
 @main_bp.route('/show/<int:tmdb_id>/season/<int:season_number>/episode/<int:episode_number>')
 @login_required
 def episode_detail(tmdb_id, season_number, episode_number):
+    """Render the detail page for a single episode.
+
+    Args:
+        tmdb_id (int): TMDB ID of the parent show.
+        season_number (int): Season number of the episode.
+        episode_number (int): Episode number within the season.
+
+    Returns:
+        flask.Response: Episode detail template.
+    """
     db = database.get_db()
     show_row = db.execute('SELECT id, title, tmdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
     if not show_row:
@@ -534,6 +560,7 @@ def episode_detail(tmdb_id, season_number, episode_number):
 @main_bp.route('/image_proxy')
 @login_required
 def image_proxy():
+    """Proxy an external image URL through the application."""
     url = request.args.get('url')
     if not url:
         abort(400)

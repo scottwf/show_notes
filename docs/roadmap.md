@@ -29,6 +29,8 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
 - [x] **Tautulli Integration:** Watch history synchronization via Tautulli API with connection testing.
 - [x] **Admin Logbook & User List:** Added logbook page and basic Plex user listing.
+- [x] **Episode Detail Pages:** Added standalone episode pages with air date and availability label.
+- [x] **Episode List Cleanup:** Season 0 hidden by default; episodes show "Available" when files exist.
 
 ## Next Steps
 - [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)
