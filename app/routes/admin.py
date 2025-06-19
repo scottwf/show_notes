@@ -22,6 +22,12 @@ from ..utils import (
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params
 )
+from ..parse_subtitles import process_all_subtitles
+from .. import prompt_builder
+from .. import prompts # if prompts.py contains directly usable prompt strings
+import inspect
+from ..llm_services import get_llm_response
+
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -50,6 +56,9 @@ ADMIN_SEARCHABLE_ROUTES = [
     {'title': 'Admin Tasks (Sync)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.tasks')},
     {'title': 'Logbook', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logbook_view')},
     {'title': 'View Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logs_view')},
+    {'title': 'API Usage Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.api_usage_logs')},
+    {'title': 'View Prompts', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.view_prompts')},
+    {'title': 'Test LLM Summary', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.test_llm_summary')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -372,7 +381,8 @@ def settings():
             radarr_url=?, radarr_api_key=?,
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
-            ollama_url=?, pushover_key=?, pushover_token=?,
+            ollama_url=?, openai_api_key=?, preferred_llm_provider=?,
+            pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
@@ -381,12 +391,14 @@ def settings():
             request.form.get('bazarr_url'),
             request.form.get('bazarr_api_key'),
             request.form.get('ollama_url'),
+            request.form.get('openai_api_key'),
+            request.form.get('preferred_llm_provider'),
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
             request.form.get('plex_client_id'),
             request.form.get('tautulli_url'),
             request.form.get('tautulli_api_key'),
-            settings['id'] if settings else 1
+            settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
         ))
         db.commit()
         flash('Settings updated successfully.', 'success')
@@ -405,8 +417,12 @@ def settings():
         'plex_redirect_uri': redirect_uri,
     }
     merged_settings = dict(settings) if settings else {}
+    # Ensure new fields are present in merged_settings, even if None initially from DB
+    merged_settings.setdefault('openai_api_key', None)
+    merged_settings.setdefault('preferred_llm_provider', None)
+
     for k, v in defaults.items():
-        if not merged_settings.get(k):
+        if not merged_settings.get(k): # This will only apply to plex_client_id, secret, redirect_uri if not set
             merged_settings[k] = v
     site_url = request.url_root.rstrip('/')
     plex_webhook_url = url_for('main.plex_webhook', _external=True)
@@ -443,6 +459,115 @@ def sync_sonarr():
         flash(f"Error during Sonarr sync: {str(e)}", "danger") # Changed to danger for errors
         current_app.logger.error(f"Sonarr sync error: {e}", exc_info=True)
     return redirect(url_for('admin.tasks'))
+
+@admin_bp.route('/test-llm-summary')
+@login_required
+@admin_required
+def test_llm_summary():
+    current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed Test LLM Summary page.")
+
+    test_character = "Walter White"
+    test_show = "Breaking Bad"
+    # Using a season and episode to make the prompt more specific for testing
+    test_season = 1
+    test_episode = 1
+    prompt_options = {
+        'include_relationships': True,
+        'include_motivations': True,
+        'include_quote': True,
+        'tone': 'tv_expert'
+    }
+
+    generated_prompt = prompt_builder.build_character_prompt(
+        character=test_character,
+        show=test_show,
+        season=test_season,
+        episode=test_episode,
+        options=prompt_options
+    )
+
+    # Example of testing a specific model (optional, otherwise uses default for provider)
+    # llm_model_to_test = "gpt-4" # or "llama3" for ollama if available
+    # llm_response, error_message = get_llm_response(prompt_text=generated_prompt,
+    #                                                llm_model_name=llm_model_to_test)
+    llm_response, error_message = get_llm_response(prompt_text=generated_prompt)
+
+    preferred_provider = get_setting("preferred_llm_provider") or "Not Set"
+
+    return render_template('admin_test_llm_summary.html',
+                           test_character=test_character,
+                           test_show=test_show,
+                           test_season=test_season,
+                           test_episode=test_episode,
+                           prompt_options=prompt_options,
+                           generated_prompt=generated_prompt,
+                           llm_response=llm_response,
+                           error_message=error_message,
+                           preferred_provider=preferred_provider,
+                           title="Test LLM Summary Generation")
+
+@admin_bp.route('/view-prompts')
+@login_required
+@admin_required
+def view_prompts():
+    current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed View Prompts page.")
+
+    builder_prompts = []
+    try:
+        builder_functions = inspect.getmembers(prompt_builder, inspect.isfunction)
+        for name, func in builder_functions:
+            if name.startswith('build_'):
+                prompt_text = f"Could not generate example for {name}. Review function signature and test manually."
+                source_info = f'prompt_builder.py - {name}()'
+                docstring = inspect.getdoc(func)
+                if docstring:
+                    prompt_text = f"Docstring:\n{docstring}\n\n{prompt_text}"
+
+                try:
+                    if name == 'build_quote_prompt':
+                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow')
+                    elif name == 'build_relationships_prompt':
+                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow')
+                    elif name == 'build_character_prompt':
+                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow',
+                                           options={'include_quote': True, 'include_relationships': True, 'include_motivations': True})
+                    # Add more specific handlers if other build_ functions have simple, common call patterns
+
+                    builder_prompts.append({'name': name, 'text': prompt_text, 'source': source_info, 'docstring': docstring})
+                except Exception as e:
+                    current_app.logger.warning(f"Could not generate example for prompt function {name}: {e}")
+                    # Keep the docstring and error message if example generation failed
+                    builder_prompts.append({'name': name, 'text': prompt_text, 'source': source_info, 'docstring': docstring, 'error': str(e)})
+
+    except Exception as e:
+        current_app.logger.error(f"Error inspecting prompt_builder.py: {e}", exc_info=True)
+        flash("Error loading prompts from prompt_builder.py.", "danger")
+
+    static_prompts = []
+    try:
+        for var_name, var_value in inspect.getmembers(prompts):
+            if isinstance(var_value, str) and "PROMPT" in var_name.upper(): # Convention
+                static_prompts.append({'name': var_name, 'text': var_value, 'source': 'prompts.py'})
+    except Exception as e:
+        current_app.logger.error(f"Error inspecting prompts.py: {e}", exc_info=True)
+        flash("Error loading prompts from prompts.py.", "danger")
+
+    return render_template('admin_view_prompts.html',
+                           builder_prompts=builder_prompts,
+                           static_prompts=static_prompts,
+                           title="View Prompts")
+
+@admin_bp.route('/api-usage-logs')
+@login_required
+@admin_required
+def api_usage_logs():
+    current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed API usage logs.")
+    db = database.get_db()
+    logs = db.execute(
+        "SELECT id, timestamp, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd "
+        "FROM api_usage ORDER BY timestamp DESC LIMIT 200"
+    ).fetchall()
+    return render_template('admin_api_usage_logs.html', logs=logs, title="API Usage Logs")
 
 @admin_bp.route('/sync-radarr', methods=['POST'])
 @login_required
@@ -537,4 +662,20 @@ def sync_tautulli():
     except Exception as e:
         flash(f"Error during Tautulli sync: {str(e)}", "danger") # Changed to danger for errors
         current_app.logger.error(f"Tautulli sync error: {e}", exc_info=True)
+    return redirect(url_for('admin.tasks'))
+
+@admin_bp.route('/parse-subtitles', methods=['POST'])
+@login_required
+@admin_required
+def parse_all_subtitles_route():
+    current_app.logger.info("Subtitle parsing task triggered by admin.")
+    flash("Subtitle parsing started...", "info")
+    try:
+        # Assuming process_all_subtitles handles its own logging for details
+        process_all_subtitles()
+        flash("Subtitle parsing completed successfully.", "success")
+        current_app.logger.info("Subtitle parsing task completed successfully.")
+    except Exception as e:
+        current_app.logger.error(f"Error during subtitle parsing: {e}", exc_info=True)
+        flash(f"Error during subtitle parsing: {str(e)}", "danger")
     return redirect(url_for('admin.tasks'))

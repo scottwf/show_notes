@@ -45,11 +45,14 @@ def init_db():
 
     logger.info(f"Executing init_db on database: {current_app.config['DATABASE']}. Attempting to drop and recreate all tables.")
     try:
+        # Ensure DROP TABLE statements are definitely present for tables being modified
         db.executescript("""
+            DROP TABLE IF EXISTS settings;
+            DROP TABLE IF EXISTS api_usage;
 
             DROP TABLE IF EXISTS character_summaries;
             DROP TABLE IF EXISTS character_chats;
-            DROP TABLE IF EXISTS api_usage;
+            -- api_usage is dropped above
             DROP TABLE IF EXISTS shows;
             DROP TABLE IF EXISTS season_metadata;
             DROP TABLE IF EXISTS top_characters;
@@ -67,10 +70,11 @@ def init_db():
             DROP TABLE IF EXISTS image_cache_queue;
             DROP TABLE IF EXISTS service_sync_status;
             DROP TABLE IF EXISTS schema_version;
+            DROP TABLE IF EXISTS subtitles;
 
             CREATE TABLE character_summaries ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, season_limit INTEGER, episode_limit INTEGER, raw_summary TEXT, parsed_traits TEXT, parsed_events TEXT, parsed_relationships TEXT, parsed_importance TEXT, parsed_quote TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
             CREATE TABLE character_chats ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, user_message TEXT NOT NULL, character_reply TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
-            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL );
+            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL );
             CREATE TABLE shows ( id INTEGER PRIMARY KEY AUTOINCREMENT, tmdb_id INTEGER UNIQUE, title TEXT NOT NULL, description TEXT, poster_path TEXT, backdrop_path TEXT );
             CREATE TABLE season_metadata ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, season_number INTEGER NOT NULL, name TEXT, overview TEXT, poster_path TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (show_id, season_number) );
             CREATE TABLE top_characters ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, character_name TEXT NOT NULL, actor_name TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id) );
@@ -78,7 +82,7 @@ def init_db():
             CREATE TABLE webhook_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, received_at DATETIME DEFAULT CURRENT_TIMESTAMP, payload TEXT NOT NULL, processed BOOLEAN DEFAULT 0 );
             CREATE TABLE autocomplete_logs ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, search_term TEXT NOT NULL, selected_item TEXT, item_type TEXT );
             CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, plex_user_id TEXT UNIQUE, plex_username TEXT, plex_token TEXT, is_admin INTEGER DEFAULT 0 );
-            CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, sonarr_url TEXT, sonarr_api_key TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT );
+            CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, sonarr_url TEXT, sonarr_api_key TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, openai_api_key TEXT, preferred_llm_provider TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
             
@@ -154,6 +158,25 @@ def init_db():
             CREATE INDEX idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id);
             CREATE INDEX idx_sonarr_shows_title ON sonarr_shows (title);
             CREATE INDEX idx_radarr_movies_radarr_id ON radarr_movies (radarr_id);
+
+            CREATE TABLE subtitles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_tmdb_id INTEGER NOT NULL, -- To link with sonarr_shows.tmdb_id or shows.tmdb_id
+                season_number INTEGER NOT NULL,
+                episode_number INTEGER NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                speaker TEXT,
+                line TEXT NOT NULL,
+                search_blob TEXT NOT NULL, -- For full-text search
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (show_tmdb_id) REFERENCES sonarr_shows (tmdb_id) ON DELETE CASCADE,
+                UNIQUE (show_tmdb_id, season_number, episode_number, start_time, line)
+            );
+
+            CREATE INDEX idx_subtitles_show_tmdb_id ON subtitles (show_tmdb_id);
+            CREATE INDEX idx_subtitles_season_episode ON subtitles (show_tmdb_id, season_number, episode_number);
+            CREATE INDEX idx_subtitles_line_search ON subtitles (search_blob);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))

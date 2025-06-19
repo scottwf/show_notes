@@ -1,0 +1,56 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}View Prompts{% endblock %}
+
+{% block admin_page_header %}View Defined Prompts{% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            Prompts from <code class="text-sm bg-slate-100 dark:bg-slate-700 p-1 rounded">prompt_builder.py</code>
+        </h2>
+        {% if builder_prompts %}
+            {% for prompt in builder_prompts %}
+            <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-700/30 rounded border border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-sky-600 dark:text-sky-500 mb-1">{{ prompt.name }}</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Source: {{ prompt.source }}</p>
+                {% if prompt.error %}
+                <div class="my-2 p-2 bg-red-100 dark:bg-red-800/30 border border-red-300 dark:border-red-600 rounded text-red-700 dark:text-red-300 text-xs">
+                    <p><strong>Error generating example:</strong> {{ prompt.error }}</p>
+                    {% if prompt.docstring %}
+                    <p class="mt-1"><strong>Docstring:</strong></p>
+                    <pre class="text-xs whitespace-pre-wrap p-1 bg-red-50 dark:bg-red-700/20 rounded max-h-40 overflow-y-auto">{{ prompt.docstring }}</pre>
+                    {% endif %}
+                </div>
+                {% elif prompt.docstring and 'Could not generate example' in prompt.text %}
+                 <p class="text-xs text-slate-600 dark:text-slate-400 mb-1 italic">Example generation not available for this function directly. Showing docstring:</p>
+                 <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-60 overflow-y-auto">{{ prompt.docstring }}</pre>
+                {% else %}
+                <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-60 overflow-y-auto">{{ prompt.text }}</pre>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-slate-500 dark:text-slate-400">No dynamic prompts found or an error occurred while loading from <code class="text-sm bg-slate-100 dark:bg-slate-700 p-1 rounded">prompt_builder.py</code>.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            Prompts from <code class="text-sm bg-slate-100 dark:bg-slate-700 p-1 rounded">prompts.py</code>
+        </h2>
+        {% if static_prompts %}
+            {% for prompt in static_prompts %}
+            <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-700/30 rounded border border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-green-600 dark:text-green-500 mb-1">{{ prompt.name }}</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Source: {{ prompt.source }}</p>
+                <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-60 overflow-y-auto">{{ prompt.text }}</pre>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-slate-500 dark:text-slate-400">No static prompts found in <code class="text-sm bg-slate-100 dark:bg-slate-700 p-1 rounded">prompts.py</code>.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -73,5 +73,23 @@
             </button>
         </form>
     </div>
+
+    <!-- Subtitle Processing Card -->
+    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6 mb-6 border border-transparent dark:border-gray-700">
+      <h3 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Subtitle Processing</h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+        Scan the configured subtitle directory (e.g., 'bazarr_subtitles'), parse .srt files, and import them into the database.
+        This allows subtitles to be searchable and used for other features. This process might take some time depending on the number of subtitle files.
+      </p>
+      <form method="post" action="{{ url_for('admin.parse_all_subtitles_route') }}">
+        <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mr-3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+            </svg>
+          Parse All Subtitles
+        </button>
+      </form>
+    </div>
+
 </div>
 {% endblock admin_page_content %}
