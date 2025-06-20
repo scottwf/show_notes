@@ -130,15 +130,22 @@ def admin_search():
 def dashboard():
     """Admin dashboard summarizing counts of key objects."""
     db = database.get_db()
-    movie_count = db.execute('SELECT COUNT(*) FROM radarr_movies').fetchone()[0]
-    show_count = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0]
-    user_count = db.execute('SELECT COUNT(*) FROM users').fetchone()[0]
-    plex_event_count = db.execute('SELECT COUNT(*) FROM plex_events').fetchone()[0]
+    def safe_count(query):
+        try:
+            result = db.execute(query).fetchone()
+            return result[0] if result and result[0] is not None else 0
+        except Exception:
+            return 0
+    movie_count = safe_count('SELECT COUNT(*) FROM radarr_movies')
+    show_count = safe_count('SELECT COUNT(*) FROM sonarr_shows')
+    user_count = safe_count('SELECT COUNT(*) FROM users')
+    plex_event_count = safe_count('SELECT COUNT(*) FROM plex_events')
     return render_template('admin_dashboard.html',
                            movie_count=movie_count,
                            show_count=show_count,
                            user_count=user_count,
                            plex_event_count=plex_event_count)
+
 
 @admin_bp.route('/tasks')
 @login_required
