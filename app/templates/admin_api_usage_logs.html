@@ -1,0 +1,43 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}API Usage Logs{% endblock %}
+
+{% block admin_page_header %}API Usage Logs{% endblock %}
+
+{% block admin_page_content %}
+<div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+    <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">API Usage Details</h2>
+    {% if logs %}
+    <div class="overflow-x-auto">
+        <table class="w-full table-auto">
+            <thead class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/20">
+                <tr>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">ID</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Timestamp</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Endpoint</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Prompt Tokens</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Completion Tokens</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Total Tokens</div></th>
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Cost (USD)</div></th>
+                </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-slate-100 dark:divide-slate-700">
+                {% for log_entry in logs %}
+                <tr>
+                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.id }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log_entry.timestamp else 'N/A' }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.endpoint }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.prompt_tokens if log_entry.prompt_tokens is not none else '-' }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.completion_tokens if log_entry.completion_tokens is not none else '-' }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.total_tokens if log_entry.total_tokens is not none else '-' }}</div></td>
+                    <td class="p-2 whitespace-nowrap"><div class="text-right">${{ "%.5f"|format(log_entry.cost_usd|float) if log_entry.cost_usd is not none else '-' }}</div></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-center text-slate-500 dark:text-slate-400 py-8">No API usage logs found.</p>
+    {% endif %}
+</div>
+{% endblock %}
