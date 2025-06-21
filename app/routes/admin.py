@@ -1,3 +1,24 @@
+"""
+Admin Blueprint for ShowNotes
+
+This module defines the blueprint for the administrative interface of the ShowNotes
+application. It includes routes for all admin-facing pages and functionalities,
+such as the dashboard, settings management, task execution, and log viewing.
+
+All routes in this blueprint are prefixed with `/admin` and require the user to be
+logged in and have administrative privileges, enforced by the `@admin_required`
+decorator.
+
+Key Features:
+- **Dashboard:** A summary page with key statistics about the application's data.
+- **Settings:** A page for configuring connections to external services like
+  Sonarr, Radarr, and LLM providers.
+- **Tasks:** A UI for manually triggering long-running tasks like library syncs.
+- **Log Management:** Tools for viewing and streaming application logs.
+- **LLM Tools:** Pages for testing LLM summaries and viewing prompt templates.
+- **API Endpoints:** Various API endpoints to support the dynamic functionality
+  of the admin interface, such as search and connection testing.
+"""
 import os
 import glob
 import time
@@ -128,7 +149,16 @@ def admin_search():
 @login_required
 @admin_required
 def dashboard():
-    """Admin dashboard summarizing counts of key objects."""
+    """
+    Renders the admin dashboard page.
+
+    This page provides a high-level overview of the application's state by
+    displaying key statistics, such as the number of movies, shows, users,
+    and Plex events currently in the database.
+
+    Returns:
+        A rendered HTML template for the admin dashboard.
+    """
     db = database.get_db()
     def safe_count(query):
         try:
@@ -154,8 +184,12 @@ def tasks():
     """
     Renders the admin tasks page.
 
-    This page provides a UI for administrators to trigger manual tasks
-    such as library synchronization with Sonarr and Radarr.
+    This page provides a UI for administrators to manually trigger various
+    background tasks, such as synchronizing the Sonarr and Radarr libraries or
+    parsing subtitles.
+
+    Returns:
+        A rendered HTML template for the admin tasks page.
     """
     return render_template('admin_tasks.html', title='Admin Tasks')
 
@@ -177,8 +211,12 @@ def logbook_view():
     """
     Renders the interactive logbook page.
 
-    The logbook displays service sync statuses and Plex activity logs,
-    with options for filtering. Data is fetched by a separate '/logbook/data' endpoint.
+    The logbook provides a consolidated view of recent system activities,
+    including service synchronization statuses and Plex watch history. The data
+    for this page is fetched dynamically via the `/logbook/data` endpoint.
+
+    Returns:
+        A rendered HTML template for the logbook.
     """
     return render_template('admin_logbook.html')
 
@@ -283,13 +321,14 @@ def logbook_data():
 @admin_required
 def logs_list():
     """
-    Lists available log files.
+    Provides a list of available log files.
 
-    Scans the log directory for 'shownotes.log*' files and returns
-    a sorted list of their filenames.
+    This API endpoint scans the log directory for files matching the pattern
+    'shownotes.log*' and returns their filenames as a JSON list. This is used
+    by the log viewer to populate the log file selection dropdown.
 
     Returns:
-        flask.Response: JSON list of log filenames.
+        flask.Response: A JSON response containing a sorted list of log filenames.
     """
     log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
     log_files_paths = glob.glob(os.path.join(log_dir, 'shownotes.log*'))
@@ -301,14 +340,18 @@ def logs_list():
 @admin_required
 def get_log_content(filename):
     """
-    Retrieves the last 100 lines of a specified log file.
+    Retrieves the content of a specified log file.
+
+    This API endpoint reads the last 100 lines of a given log file and returns
+    them as a JSON list. It includes a security check to prevent path traversal
+    attacks.
 
     Args:
-        filename (str): The name of the log file.
+        filename (str): The name of the log file to be read, captured from the URL path.
 
     Returns:
-        flask.Response: JSON list of log lines, or an error response
-                        if access is denied, file not found, or read error.
+        flask.Response: A JSON response containing a list of log lines, or an
+                        error response if the file is not found or access is denied.
     """
     log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
     file_path = os.path.join(log_dir, filename)
@@ -333,13 +376,17 @@ def get_log_content(filename):
 @admin_required
 def stream_log_content(filename):
     """
-    Streams log file content in real-time using Server-Sent Events (SSE).
+    Streams the content of a log file in real-time using Server-Sent Events (SSE).
+
+    This endpoint opens a specified log file and continuously sends any new lines
+    to the client. This allows for a "live tail" feature in the log viewer UI.
+    It includes a security check to prevent path traversal.
 
     Args:
-        filename (str): The name of the log file to stream.
+        filename (str): The name of the log file to stream, from the URL path.
 
     Returns:
-        flask.Response: An SSE stream of log lines.
+        flask.Response: An SSE stream that pushes log lines to the client.
     """
     log_dir = os.path.join(os.path.dirname(current_app.root_path), 'logs')
     file_path = os.path.join(log_dir, filename)
@@ -372,7 +419,21 @@ def stream_log_content(filename):
 @login_required
 @admin_required
 def settings():
-    """Display and save service configuration settings."""
+    """
+    Displays and handles updates for the application settings page.
+
+    On a GET request, it renders the settings page, populating it with current
+    values from the database for services like Sonarr, Radarr, Ollama, etc.
+    It also fetches available Ollama models if Ollama is configured.
+
+    On a POST request, it processes the submitted form data, updating the `users`
+    and `settings` tables in the database with the new values. It then redirects
+    back to the settings page with a success message.
+
+    Returns:
+        - A rendered HTML template of the settings page on GET.
+        - A redirect to the settings page on POST.
+    """
     db = database.get_db()
     user = db.execute('SELECT * FROM users WHERE is_admin=1 LIMIT 1').fetchone()
     settings = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
@@ -478,7 +539,16 @@ def settings():
 @login_required
 @admin_required
 def sync_sonarr():
-    """Triggers a Sonarr library synchronization task."""
+    """
+    Triggers a Sonarr library synchronization task.
+
+    This is a POST-only endpoint that initiates the `sync_sonarr_library`
+    utility function. It flashes messages to the user indicating the start,
+    success, or failure of the sync task and then redirects back to the tasks page.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
     flash("Sonarr library sync started...", "info")
     try:
         count = sync_sonarr_library()
@@ -492,6 +562,20 @@ def sync_sonarr():
 @login_required
 @admin_required
 def test_llm_summary():
+    """
+    Renders a page for testing LLM character summary generation.
+
+    This page provides a form where an administrator can input a character, show,
+    and episode details to manually test the summary generation process.
+
+    On a POST request, it builds a prompt using the form data, calls the
+    configured LLM service, and displays the generated prompt and the LLM's
+    response on the page.
+
+    Returns:
+        A rendered HTML template for the LLM test page, including any
+        generated results from a POST request.
+    """
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed Test LLM Summary page.")
 
     # Initialize variables
@@ -554,7 +638,24 @@ def test_llm_summary():
 @login_required
 @admin_required
 def api_test_llm_summary():
-    """API endpoint to run an LLM summary test and return results as JSON."""
+    """
+    API endpoint to run an LLM summary test and return results as JSON.
+
+    This provides the backend functionality for the LLM test page. It accepts
+    test parameters as a JSON payload, builds the prompt, calls the appropriate
+    LLM service, and returns all the inputs and outputs in a JSON response.
+
+    JSON Payload:
+        - test_character (str)
+        - test_show (str)
+        - test_season (int)
+        - test_episode (int)
+        - preferred_provider (str)
+        - prompt_options (dict)
+
+    Returns:
+        flask.Response: A JSON response containing the test results or an error message.
+    """
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid JSON payload'}), 400
@@ -615,6 +716,17 @@ def api_test_llm_summary():
 @login_required
 @admin_required
 def view_prompts():
+    """
+    Displays all available LLM prompt templates.
+
+    This page introspects the `prompt_builder.py` and `prompts.py` modules to
+    find and display the structure and example output of all defined prompts.
+    It helps administrators understand and verify the prompts being sent to the
+    LLM services.
+
+    Returns:
+        A rendered HTML template showing lists of static and builder prompts.
+    """
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed View Prompts page.")
 
     builder_prompts = []
@@ -666,6 +778,16 @@ def view_prompts():
 @login_required
 @admin_required
 def api_usage_logs():
+    """
+    Displays a log of all API calls made to external LLM services.
+
+    This page retrieves records from the `api_usage` table and displays them
+    in a tabular format, showing details like the provider, endpoint, token
+    counts, and cost for each call.
+
+    Returns:
+        A rendered HTML template for the API usage logs page.
+    """
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed API usage logs.")
     db = database.get_db()
     # DEBUG: Log the database path being used
@@ -703,7 +825,16 @@ def api_usage_logs():
 @login_required
 @admin_required
 def sync_radarr():
-    """Triggers a Radarr library synchronization task."""
+    """
+    Triggers a Radarr library synchronization task.
+
+    A POST-only endpoint that calls the `sync_radarr_library` utility function.
+    It flashes status messages to the user and redirects to the tasks page upon
+    completion or failure.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
     flash("Radarr library sync started...", "info")
     try:
         count = sync_radarr_library()
@@ -717,9 +848,19 @@ def sync_radarr():
 @login_required
 @admin_required
 def gen_plex_secret():
-    """Generates a secure URL-safe secret, typically for Plex webhook or similar."""
-    secret = secrets.token_urlsafe(32)
-    return jsonify({'secret': secret})
+    """
+    Generates a new secure secret for the Plex webhook.
+
+    This endpoint creates a new cryptographically secure token, saves it to the
+    database as 'webhook_secret', and returns it as JSON. This is used on the
+    settings page to allow the admin to easily generate a new secret.
+
+    Returns:
+        flask.Response: A JSON response containing the new webhook secret.
+    """
+    new_secret = secrets.token_hex(16)
+    set_setting('webhook_secret', new_secret)
+    return jsonify({'secret': new_secret})
 
 
 @admin_bp.route('/test-api', methods=['POST'])
@@ -784,7 +925,15 @@ def test_pushover_connection_route():
 @login_required
 @admin_required
 def sync_tautulli():
-    """Triggers a Tautulli watch history synchronization task."""
+    """
+    Triggers a Tautulli watch history synchronization task.
+
+    A POST-only endpoint that calls the `sync_tautulli_watch_history` utility.
+    Flashes status messages and redirects to the tasks page.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
     flash("Tautulli watch history sync started...", "info")
     try:
         count = sync_tautulli_watch_history()
@@ -798,6 +947,16 @@ def sync_tautulli():
 @login_required
 @admin_required
 def parse_all_subtitles_route():
+    """
+    Triggers the task to parse all subtitles for all shows.
+
+    This POST-only endpoint initiates the `process_all_subtitles` function,
+    which can be a long-running task. It flashes status messages and redirects
+    to the tasks page.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
     current_app.logger.info("Subtitle parsing task triggered by admin.")
     flash("Subtitle parsing started...", "info")
     try:

@@ -18,39 +18,51 @@ from flask import url_for
 """
 Utility functions for the ShowNotes application.
 
-This module provides helper functions for various tasks including:
-- Interacting with external services (Sonarr, Radarr, Bazarr, Ollama, Tautulli, Pushover).
-- Testing connections to these services.
-- Synchronizing libraries and watch history from these services.
-- Image URL manipulation and proxying (though actual caching is handled by image_proxy route).
-- String cleaning and data transformation.
+This module provides a collection of helper functions that support various operations
+within the application. These utilities are designed to be reusable and encapsulate
+specific functionalities, particularly for interacting with external services and
+handling data transformations.
+
+Key Functionalities:
+- **Service Interaction:** Functions to communicate with external APIs such as
+  Sonarr, Radarr, Bazarr, Ollama, Tautulli, and Pushover. This includes fetching
+  data, synchronizing libraries, and testing service connections.
+- **Data Synchronization:** Core logic for pulling library information (shows, movies,
+  episodes) and watch history from services and storing it in the local database.
+- **Connection Testing:** A suite of functions to validate connectivity and
+  authentication with the configured external services, providing feedback to the user.
+- **Image Handling:** Helper functions to construct URLs for proxying and caching
+  images from external sources, ensuring consistent and efficient image delivery.
+- **Data Transformation:** Utility functions for cleaning strings, formatting
+  datetime objects, and other data manipulations required across the application.
 """
 
 def cache_image(image_url, image_type_folder, cache_key_prefix, source_service):
     """
-    Generates a proxied URL for an image, intended to be fetched via the image_proxy route.
+    Constructs a proxied URL for an image, to be handled by the image_proxy route.
 
-    This function prepares the URL that, when accessed, will be handled by the
-    `image_proxy` route. The `image_proxy` route itself is responsible for fetching
-    the image from the original source and potentially caching it. This function ensures
-    that relative URLs from services like Sonarr/Radarr are made absolute using their
-    configured base URLs.
+    This function takes an image URL from an external service (like Sonarr or Radarr)
+    and prepares a new URL that points to this application's `image_proxy` endpoint.
+    It correctly resolves relative URLs to absolute ones using the service's base
+    URL from the settings.
 
-    Note: This function *does not* perform the caching itself. It constructs the
-    URL that the `image_proxy` endpoint will use.
+    The actual fetching and caching of the image is performed by the `image_proxy`
+    route when this generated URL is accessed by a client (e.g., an `<img>` tag).
 
     Args:
-        image_url (str): The original URL of the image (can be relative or absolute).
-        image_type_folder (str): Contextual information, e.g., 'poster' or 'background'.
-                                 (Not directly used in URL generation here but useful for callers).
-        cache_key_prefix (str): Contextual information for potential future direct caching logic.
-                                (Not directly used in URL generation here).
-        source_service (str): Indicates the origin service ('sonarr', 'radarr') to resolve
-                              base URLs for relative image paths.
+        image_url (str): The original URL of the image, which can be relative (e.g., "/image/4.jpg")
+                         or absolute.
+        image_type_folder (str): A string indicating the type of image (e.g., 'poster', 'background').
+                                 This is primarily for organizational context for the calling function.
+        cache_key_prefix (str): A prefix used to construct a unique cache key, helping to avoid
+                                collisions (e.g., 'show_poster_{tmdb_id}').
+        source_service (str): The originating service ('sonarr' or 'radarr'). This is crucial for
+                              determining the correct base URL and API key to use for resolving
+                              relative paths.
 
     Returns:
-        str or None: A URL string for the `main.image_proxy` endpoint, suitable for use in templates
-                     or for triggering a cache operation. Returns None if `image_url` is empty.
+        str or None: A string containing the relative URL for the `main.image_proxy` endpoint
+                     (e.g., "/image_proxy?url=..."). Returns None if the input `image_url` is empty.
     """
     if not image_url:
         return None
@@ -92,13 +104,19 @@ def cache_image(image_url, image_type_folder, cache_key_prefix, source_service):
 
 def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
     """
-    Makes an internal GET request to the given proxy_image_url to trigger caching.
-    Uses current_app.test_client().
+    Internally requests a proxied image URL to trigger the caching mechanism.
+
+    This function uses the Flask test client to make a GET request to a URL
+    generated by `cache_image`. This is useful for pre-caching images in the
+    background during library syncs, so they are readily available when a user
+    first loads a page.
 
     Args:
-        proxy_image_url (str): The URL generated by `cache_image` or similar,
-                               pointing to the application's `image_proxy` endpoint.
-        item_title_for_logging (str, optional): A descriptive title for logging purposes.
+        proxy_image_url (str): The relative URL for the `image_proxy` endpoint, as
+                               generated by the `cache_image` function.
+        item_title_for_logging (str, optional): A descriptive name of the item being
+                                                cached (e.g., "Poster for 'The Office'")
+                                                for clearer log messages. Defaults to "".
     """
     if not proxy_image_url:
         return
@@ -119,19 +137,20 @@ def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
 
 def _clean_title(title):
     """
-    Cleans a title string for better matching or display consistency.
+    Cleans a title string to provide a simpler, more consistent format for matching.
 
-    Operations:
-    - Removes content within parentheses (e.g., year).
-    - Removes special characters (punctuation), keeping alphanumeric and whitespace.
-    - Normalizes multiple whitespace characters to single spaces.
-    - Strips leading/trailing whitespace.
+    This function performs several operations to normalize a title:
+    1.  Removes content within parentheses (e.g., "(2022)").
+    2.  Strips out special characters and punctuation, leaving only alphanumeric
+        characters and whitespace.
+    3.  Normalizes multiple whitespace characters into a single space.
+    4.  Removes any leading or trailing whitespace.
 
     Args:
-        title (str): The input title string.
+        title (str): The input title string to be cleaned.
 
     Returns:
-        str: The cleaned title string.
+        str: The cleaned and normalized title string.
     """
     # Remove content in parentheses (like year)
     title = re.sub(r'\s*\(.*?\)\s*', '', title)
@@ -145,25 +164,38 @@ def _clean_title(title):
 
 def _test_service_connection(service_name, url_setting_name, api_key_setting_name=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None, url_override=None, api_key_override=None):
     """
-    Generic helper function to test connectivity to a service.
+    A generic helper to test the connection to an external service.
 
-    Retrieves URL and API key (if applicable) from database settings or uses overrides.
-    Makes a request to the specified service endpoint and checks for an expected HTTP status.
+    This function abstracts the logic for testing a service endpoint. It fetches
+    the service URL and API key from the database (or uses provided overrides),
+    constructs the full request URL, and makes an HTTP request. It then checks if the
+    response status code matches the expected code for a successful connection.
+
+    This function is intended to be called by specific test functions like
+    `test_sonarr_connection`.
 
     Args:
-        service_name (str): User-friendly name of the service (e.g., "Sonarr").
-        url_setting_name (str): Name of the database setting for the service URL.
-        api_key_setting_name (str, optional): Name of the DB setting for the API key.
-        endpoint (str, optional): API endpoint path to test.
-        method (str, optional): HTTP method to use (default: 'GET').
-        expected_status (int, optional): Expected HTTP status code for success.
-        params (dict, optional): Query parameters for the request.
-        headers_extra (dict, optional): Extra headers for the request.
-        url_override (str, optional): Direct URL to use instead of fetching from settings.
-        api_key_override (str, optional): Direct API key to use.
+        service_name (str): The user-friendly name of the service (e.g., "Sonarr") for logging.
+        url_setting_name (str): The key for the service's URL in the `settings` table.
+        api_key_setting_name (str, optional): The key for the service's API key in the
+                                              `settings` table. Defaults to None.
+        endpoint (str, optional): The API endpoint path to test (e.g., "/api/v3/system/status").
+                                  Defaults to "".
+        method (str, optional): The HTTP method to use for the test request. Defaults to 'GET'.
+        expected_status (int, optional): The HTTP status code that indicates a successful
+                                         connection. Defaults to 200.
+        params (dict, optional): A dictionary of query parameters for the request. Defaults to None.
+        headers_extra (dict, optional): A dictionary of any extra headers to include. Defaults to None.
+        url_override (str, optional): A specific URL to use instead of fetching from settings.
+                                      This is useful for testing new, unsaved settings. Defaults to None.
+        api_key_override (str, optional): A specific API key to use instead of fetching from settings.
+                                          Defaults to None.
 
     Returns:
-        tuple: (bool, str) indicating success/failure and a message.
+        tuple: A tuple containing:
+               - bool: True if the connection was successful, False otherwise.
+               - str: A user-friendly message describing the result (e.g., "Connection successful."
+                      or an error message).
     """
     service_url = None
     api_key = None
@@ -222,17 +254,29 @@ def _test_service_connection(service_name, url_setting_name, api_key_setting_nam
         return False, msg
 
 def test_sonarr_connection():
+    """Tests the connection to the configured Sonarr service."""
     return _test_service_connection("Sonarr", 'sonarr_url', 'sonarr_api_key', '/api/v3/system/status')
 
 def test_radarr_connection():
+    """Tests the connection to the configured Radarr service."""
     return _test_service_connection("Radarr", 'radarr_url', 'radarr_api_key', '/api/v3/system/status')
 
 def test_bazarr_connection():
+    """
+    Tests the connection to the configured Bazarr service.
+
+    Note: Assumes a common API endpoint and authentication method (X-Api-Key).
+    """
     # Bazarr's API might be at /api/system/status or just /api/status. Let's try /api/system/status first.
     # It also might require authentication differently, but X-Api-Key is a common pattern.
     return _test_service_connection("Bazarr", 'bazarr_url', 'bazarr_api_key', '/api/system/status')
 
 def test_ollama_connection():
+    """
+    Tests the connection to the configured Ollama service.
+    
+    Ollama doesn't require an API key for its standard status endpoints.
+    """
     # Ollama usually doesn't require an API key for basic checks like listing tags or root ping.
     # A GET to the root or /api/tags should work if the server is up.
     return _test_service_connection("Ollama", 'ollama_url', endpoint='/api/tags') # /api/ps or just / might also work
@@ -244,25 +288,34 @@ def test_ollama_connection():
 
 def _test_service_connection_with_params(service_name, service_url, api_key=None, endpoint="", method='GET', expected_status=200, params=None, headers_extra=None, body_json=None):
     """
-    Generic helper to test service connection using explicitly provided parameters.
+    Generic helper to test a service connection using explicitly provided parameters.
+
+    This is similar to `_test_service_connection` but is designed to be used when
+    testing settings that have not yet been saved to the database (e.g., from a
+    web form). It takes the URL and API key as direct arguments instead of
+    fetching them from the database.
 
     Args:
-        service_name (str): User-friendly name of the service.
-        service_url (str): The base URL of the service.
-        api_key (str, optional): The API key for the service.
-        endpoint (str, optional): API endpoint path.
-        method (str, optional): HTTP method (default: 'GET').
-        expected_status (int, optional): Expected success status code.
-        params (dict, optional): Query parameters.
-        headers_extra (dict, optional): Additional headers.
-        body_json (dict, optional): JSON body for POST/PUT requests.
+        service_name (str): User-friendly name of the service for logging.
+        service_url (str): The URL of the service to test.
+        api_key (str, optional): The API key for the service. Defaults to None.
+        endpoint (str, optional): API endpoint path. Defaults to "".
+        method (str, optional): HTTP method. Defaults to 'GET'.
+        expected_status (int, optional): Expected success status code. Defaults to 200.
+        params (dict, optional): Query parameters. Defaults to None.
+        headers_extra (dict, optional): Extra request headers. Defaults to None.
+        body_json (dict, optional): A dictionary to be sent as the JSON body of the
+                                    request (for 'POST' or 'PUT' methods). Defaults to None.
 
     Returns:
-        tuple: (bool, str or None) indicating success and an error message if failed.
+        tuple: A tuple containing:
+               - bool: True on success, False on failure.
+               - str: A message describing the outcome.
     """
     if not service_url:
-        current_app.logger.info(f"_test_service_connection_with_params: {service_name} URL not provided.")
-        return False, f"{service_name} URL not provided."
+        msg = f"{service_name} URL not provided."
+        current_app.logger.info(f"_test_service_connection_with_params: {msg}")
+        return False, msg
     
     required_key_services = ["Sonarr", "Radarr", "Bazarr"]
     if service_name in required_key_services and not api_key:
@@ -298,30 +351,70 @@ def _test_service_connection_with_params(service_name, service_url, api_key=None
         return False, error_message
 
 def test_sonarr_connection_with_params(url, api_key):
+    """
+    Tests the Sonarr connection using a provided URL and API key.
+
+    Args:
+        url (str): The Sonarr URL to test.
+        api_key (str): The Sonarr API key to test.
+
+    Returns:
+        tuple: (bool, str) indicating success and a result message.
+    """
     return _test_service_connection_with_params("Sonarr", url, api_key, '/api/v3/system/status')
 
 def test_radarr_connection_with_params(url, api_key):
+    """
+    Tests the Radarr connection using a provided URL and API key.
+
+    Args:
+        url (str): The Radarr URL to test.
+        api_key (str): The Radarr API key to test.
+
+    Returns:
+        tuple: (bool, str) indicating success and a result message.
+    """
     return _test_service_connection_with_params("Radarr", url, api_key, '/api/v3/system/status')
 
 def test_bazarr_connection_with_params(url, api_key):
+    """
+
+    Tests the Bazarr connection using a provided URL and API key.
+
+    Args:
+        url (str): The Bazarr URL to test.
+        api_key (str): The Bazarr API key to test.
+
+    Returns:
+        tuple: (bool, str) indicating success and a result message.
+    """
     return _test_service_connection_with_params("Bazarr", url, api_key, '/api/system/status')
 
 def test_ollama_connection_with_params(url):
+    """
+    Tests the Ollama connection using a provided URL.
+
+    Args:
+        url (str): The Ollama URL to test.
+
+    Returns:
+        tuple: (bool, str) indicating success and a result message.
+    """
     return _test_service_connection_with_params("Ollama", url, endpoint='/api/tags')
 
 def test_pushover_notification_with_params(token, user_key):
     """
-    Sends a test notification using provided Pushover credentials.
+    Tests the Pushover service by sending a test notification.
 
     Args:
         token (str): The Pushover application API token.
         user_key (str): The Pushover user/group key.
 
     Returns:
-        tuple: (bool, str or None) indicating success and an error message if failed.
+        tuple: (bool, str) indicating success and a result message.
     """
     if not token or not user_key:
-        return False, "Pushover token and user key are required."
+        return False, "Pushover Token and User Key must be provided."
 
     url = "https://api.pushover.net/1/messages.json"
     payload = {
@@ -349,14 +442,15 @@ def test_pushover_notification_with_params(token, user_key):
 
 def get_all_sonarr_shows():
     """
-    Fetches all series from Sonarr's API.
+    Fetches a list of all shows from the configured Sonarr instance.
 
-    Retrieves Sonarr URL and API key from database settings.
-    Handles connection errors and non-200 HTTP responses.
+    This function communicates with the Sonarr API to retrieve the complete list
+    of TV shows in the user's library.
 
     Returns:
-        list: A list of Sonarr series objects (dictionaries) if successful.
-        list: An empty list if Sonarr is not configured or an error occurs.
+        list or None: A list of dictionaries, where each dictionary represents a show
+                      from Sonarr. Returns None if Sonarr is not configured or if
+                      an error occurs during the API call.
     """
     sonarr_url = None
     sonarr_api_key = None
@@ -367,7 +461,7 @@ def get_all_sonarr_shows():
 
     if not sonarr_url or not sonarr_api_key:
         current_app.logger.error("get_all_sonarr_shows: Sonarr URL or API key not configured.")
-        return []
+        return None
 
     endpoint = f"{sonarr_url.rstrip('/')}/api/v3/series"
     headers = {"X-Api-Key": sonarr_api_key}
@@ -378,33 +472,34 @@ def get_all_sonarr_shows():
         return response.json()
     except requests.exceptions.Timeout:
         current_app.logger.error(f"get_all_sonarr_shows: Timeout connecting to Sonarr at {endpoint}")
-        return []
+        return None
     except requests.exceptions.ConnectionError:
         current_app.logger.error(f"get_all_sonarr_shows: Connection error connecting to Sonarr at {endpoint}")
-        return []
+        return None
     except requests.exceptions.HTTPError as e:
         current_app.logger.error(f"get_all_sonarr_shows: HTTP error fetching Sonarr shows: {e}. Response: {e.response.text if e.response else 'No response'}")
-        return []
+        return None
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"get_all_sonarr_shows: Generic error fetching Sonarr shows: {e}")
-        return []
+        return None
     except json.JSONDecodeError as e:
         current_app.logger.error(f"get_all_sonarr_shows: Error decoding Sonarr shows JSON response: {e}")
-        return []
+        return None
 
 def get_sonarr_episodes_for_show(sonarr_series_id):
     """
-    Fetches all episodes for a given Sonarr series ID.
+    Fetches all episodes for a specific Sonarr series ID.
 
-    Retrieves Sonarr URL and API key from database settings.
-    Handles connection errors and non-200 HTTP responses.
+    This function queries the Sonarr API for the episode list of a given show.
+    It's used during the library sync process to gather episode details.
 
     Args:
-        sonarr_series_id (int): The Sonarr series ID.
+        sonarr_series_id (int or str): The unique ID of the series in Sonarr.
 
     Returns:
-        list: A list of Sonarr episode objects (dictionaries) if successful.
-        list: An empty list if Sonarr is not configured or an error occurs.
+        list or None: A list of dictionaries, where each dictionary represents an
+                      episode. Returns None if Sonarr is not configured or if an
+                      error occurs.
     """
     sonarr_url = None
     sonarr_api_key = None
@@ -414,11 +509,11 @@ def get_sonarr_episodes_for_show(sonarr_series_id):
 
     if not sonarr_url or not sonarr_api_key:
         current_app.logger.error(f"get_sonarr_episodes_for_show: Sonarr URL or API key not configured for series ID {sonarr_series_id}.")
-        return []
+        return None
 
     if not sonarr_series_id:
         current_app.logger.error("get_sonarr_episodes_for_show: sonarr_series_id cannot be None or empty.")
-        return []
+        return None
 
     endpoint = f"{sonarr_url.rstrip('/')}/api/v3/episode?seriesId={sonarr_series_id}"
     headers = {"X-Api-Key": sonarr_api_key}
@@ -429,30 +524,29 @@ def get_sonarr_episodes_for_show(sonarr_series_id):
         return response.json()
     except requests.exceptions.Timeout:
         current_app.logger.error(f"get_sonarr_episodes_for_show: Timeout connecting to Sonarr at {endpoint} for series ID {sonarr_series_id}")
-        return []
+        return None
     except requests.exceptions.ConnectionError:
         current_app.logger.error(f"get_sonarr_episodes_for_show: Connection error connecting to Sonarr at {endpoint} for series ID {sonarr_series_id}")
-        return []
+        return None
     except requests.exceptions.HTTPError as e:
         current_app.logger.error(f"get_sonarr_episodes_for_show: HTTP error fetching episodes for series {sonarr_series_id}: {e}. Response: {e.response.text if e.response else 'No response'}")
-        return []
+        return None
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"get_sonarr_episodes_for_show: Generic error fetching episodes for series {sonarr_series_id}: {e}")
-        return []
+        return None
     except json.JSONDecodeError as e:
         current_app.logger.error(f"get_sonarr_episodes_for_show: Error decoding Sonarr episodes JSON response for series {sonarr_series_id}: {e}")
-        return []
+        return None
 
 def get_all_radarr_movies():
     """
-    Fetches all movies from Radarr's API.
+    Fetches a list of all movies from the configured Radarr instance.
 
-    Retrieves Radarr URL and API key from database settings.
-    Handles connection errors and non-200 HTTP responses.
+    Communicates with the Radarr API to retrieve the complete movie library.
 
     Returns:
-        list: A list of Radarr movie objects (dictionaries) if successful.
-        list: An empty list if Radarr is not configured or an error occurs.
+        list or None: A list of dictionaries, where each dictionary represents a movie.
+                      Returns None if Radarr is not configured or an error occurs.
     """
     radarr_url = None
     radarr_api_key = None
@@ -462,7 +556,7 @@ def get_all_radarr_movies():
 
     if not radarr_url or not radarr_api_key:
         current_app.logger.error("get_all_radarr_movies: Radarr URL or API key not configured.")
-        return []
+        return None
 
     endpoint = f"{radarr_url.rstrip('/')}/api/v3/movie"
     headers = {"X-Api-Key": radarr_api_key}
@@ -473,24 +567,39 @@ def get_all_radarr_movies():
         return response.json()
     except requests.exceptions.Timeout:
         current_app.logger.error(f"get_all_radarr_movies: Timeout connecting to Radarr at {endpoint}")
-        return []
+        return None
     except requests.exceptions.ConnectionError:
         current_app.logger.error(f"get_all_radarr_movies: Connection error connecting to Radarr at {endpoint}")
-        return []
+        return None
     except requests.exceptions.HTTPError as e:
         current_app.logger.error(f"get_all_radarr_movies: HTTP error fetching Radarr movies: {e}. Response: {e.response.text if e.response else 'No response'}")
-        return []
+        return None
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"get_all_radarr_movies: Generic error fetching Radarr movies: {e}")
-        return []
+        return None
     except json.JSONDecodeError as e:
         current_app.logger.error(f"get_all_radarr_movies: Error decoding Radarr movies JSON response: {e}")
-        return []
+        return None
 
 def get_sonarr_poster(show_title):
     """
-    Finds a Sonarr show by title and returns its poster URL.
+    Retrieves the poster URL for a specific show from Sonarr's library data.
+
+    This function first fetches all shows from Sonarr and then performs a fuzzy
+    string match on the title to find the correct show and return its poster URL.
+    This can be inefficient and is a candidate for optimization by using a local
+    database cache first.
+
+    Args:
+        show_title (str): The title of the show to search for.
+
+    Returns:
+        str or None: The URL of the show's poster. Returns None if the show is not
+                     found or an error occurs.
     """
+    # This function is inefficient as it fetches all shows.
+    # A better approach would be to query the local `sonarr_shows` table.
+    # Consider this function for deprecation or refactoring.
     current_app.logger.info(f"--- Starting Sonarr Poster Search for: '{show_title}' ---")
     with current_app.app_context():
         sonarr_url = database.get_setting('sonarr_url')
@@ -551,22 +660,25 @@ def get_sonarr_poster(show_title):
                 return final_poster_url
             
             # This path should ideally not be reached if candidate_posters_data was not empty
-            current_app.logger.warning(f"Match found for '{sonarr_title}', but could not determine a final poster URL.")
+            current_app.logger.warning(f"--- Sonarr Poster Search FAILED for: '{show_title}' --- No show met the 90% ratio threshold.")
     
-    current_app.logger.warning(f"--- Sonarr Poster Search FAILED for: '{show_title}' --- No show met the 90% ratio threshold.")
     return None
 
 def get_radarr_poster(movie_title):
     """
-    Finds a Radarr movie by title and returns its poster URL.
-    """
-    current_app.logger.info(f"--- Starting Radarr Poster Search for: '{movie_title}' ---")
-    with current_app.app_context():
-        radarr_url = database.get_setting('radarr_url')
-    if not radarr_url:
-        current_app.logger.error("get_radarr_poster: Radarr URL not configured.")
-        return None
+    Retrieves the poster URL for a specific movie from Radarr's library data.
 
+    Similar to `get_sonarr_poster`, this function fetches all movies from Radarr
+    and uses fuzzy matching to find the correct one. It is also a candidate for
+    optimization.
+
+    Args:
+        movie_title (str): The title of the movie to search for.
+
+    Returns:
+        str or None: The URL of the movie's poster, or None if not found.
+    """
+    # This function is inefficient. Refactor to use the local DB.
     all_movies = get_all_radarr_movies()
     if not all_movies:
         current_app.logger.warning("get_radarr_poster: Got no movies back from Radarr.")
@@ -592,16 +704,26 @@ def get_radarr_poster(movie_title):
 
 
 def sync_sonarr_library():
-    processed_count = 0 # This variable seems unused here, part of a copy-paste?
-    # It's used as a return value if all_shows_data is empty.
     """
-    Fetches all shows, their seasons, and episodes from Sonarr
-    and syncs them with the local database (`sonarr_shows`, `sonarr_seasons`, `sonarr_episodes`).
-    Also queues poster and fanart images for caching.
+    Synchronizes the entire Sonarr library with the local database.
+
+    This comprehensive function performs the following steps:
+    1.  Fetches all shows from the Sonarr API.
+    2.  For each show, it fetches all its episodes.
+    3.  Iterates through each show and episode, and "upserts" their data into the
+        `sonarr_shows` and `sonarr_episodes` tables in the local database.
+    4.  It uses an in-memory cache to avoid redundant database lookups for shows.
+    5.  It queues poster and fanart images for background caching.
+    6.  It maintains a list of Sonarr IDs present in the API response and removes
+        any shows from the local database that are no longer in Sonarr.
+
+    This function is typically triggered manually from the admin panel.
 
     Returns:
-        int: The number of shows successfully processed and synced.
+        int: The number of shows that were successfully processed and synced.
     """
+    processed_count = 0 # This variable seems unused here, part of a copy-paste?
+    # It's used as a return value if all_shows_data is empty.
     current_app.logger.info("Starting Sonarr library sync.")
     shows_synced_count = 0
     episodes_synced_count = 0
@@ -946,17 +1068,18 @@ def sync_sonarr_library():
 
 def sync_radarr_library():
     """
-    Synchronizes Radarr movie library with the local database (`radarr_movies`).
+    Synchronizes the entire Radarr library with the local database.
 
-    Fetches all movies from Radarr, then for each movie:
-    - Extracts relevant information including detailed fields like ratings, genres, etc.
-    - Inserts a new record or updates an existing one in the `radarr_movies` table.
-    - Queues poster and fanart images for caching.
-    - Updates 'last_synced_at' in the `service_sync_status` table upon completion.
+    This function mirrors the functionality of `sync_sonarr_library` but for movies:
+    1.  Fetches all movies from the Radarr API.
+    2.  Iterates through each movie and "upserts" its data into the `radarr_movies` table.
+    3.  Queues poster and fanart images for background caching.
+    4.  Removes any movies from the local database that no longer exist in Radarr.
+
+    This is typically triggered manually from the admin panel.
 
     Returns:
-        dict: A dictionary containing the status of the sync operation,
-              a message, and counts of synced, added, and updated movies.
+        int: The number of movies that were successfully processed and synced.
     """
     current_app.logger.info("Starting Radarr library synchronization with new details...")
     movies_synced_count = 0
@@ -1151,18 +1274,18 @@ import datetime
 
 def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
     """
-    Formats an ISO datetime string or datetime object into a more readable string.
-    Example format: Oct 27, 2023 10:00.
+    Jinja2 filter to format a datetime object into a more readable string.
 
     Args:
-        value (str or datetime.datetime): The datetime string (ISO format preferred) or datetime object.
-        format_str (str, optional): The desired output format string.
+        value (datetime.datetime): The datetime object to format.
+        format_str (str, optional): The format string to use, following standard
+                                    strftime conventions. Defaults to '%b %d, %Y %H:%M'.
 
     Returns:
-        str: The formatted datetime string, or "N/A" / original value on error.
+        str: The formatted datetime string.
     """
-    if not value:
-        return "N/A" # Or an empty string, depending on preference for missing dates
+    if value is None:
+        return ""
 
     dt_obj = None
     if isinstance(value, str):
@@ -1188,7 +1311,27 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
 # --- Tautulli Stubs ---
 
 def sync_tautulli_watch_history():
-    """Sync watch history from Tautulli into the plex_activity_log table."""
+    """
+    Synchronizes recent watch history from Tautulli to the local database.
+
+    This function connects to the Tautulli API to fetch recent watch history
+    and logs relevant events (scrobbles, plays, etc.) into the `plex_activity_log`
+    table. It's designed to enrich the application's understanding of user
+    viewing habits.
+
+    It fetches a configurable number of records and avoids duplicating entries
+    by checking for existing records based on session key and timestamp.
+
+    Returns:
+        int: The number of new watch history events successfully inserted into the database.
+    
+    Raises:
+        Exception: Propagates exceptions if Tautulli is not configured or if there's
+                   an API communication error.
+    """
+    db_conn = database.get_db()
+    cursor = db_conn.cursor()
+
     with current_app.app_context():
         tautulli_url = database.get_setting('tautulli_url')
         api_key = database.get_setting('tautulli_api_key')
@@ -1211,11 +1354,10 @@ def sync_tautulli_watch_history():
         current_app.logger.error(f"Error fetching Tautulli history: {e}")
         return 0
 
-    db = database.get_db()
     inserted = 0
     for item in history_items:
         try:
-            db.execute(
+            db_conn.execute(
                 """INSERT INTO plex_activity_log (
                        event_type, plex_username, player_title, player_uuid, session_key,
                        rating_key, parent_rating_key, grandparent_rating_key, media_type,
@@ -1247,69 +1389,35 @@ def sync_tautulli_watch_history():
             current_app.logger.warning(f"Failed to insert Tautulli history item: {e}")
             continue
 
-    db.commit()
+    db_conn.commit()
     current_app.logger.info(f"Tautulli sync complete. {inserted} events added.")
     return inserted
 
 def test_tautulli_connection():
-    """Check if Tautulli API is reachable using saved settings."""
-    with current_app.app_context():
-        tautulli_url = database.get_setting('tautulli_url')
-        api_key = database.get_setting('tautulli_api_key')
-
-    if not tautulli_url or not api_key:
-        return False # Indicates connection cannot be tested due to missing config
-
-    try:
-        resp = requests.get(
-            f"{tautulli_url.rstrip('/')}/api/v2",
-            params={'apikey': api_key, 'cmd': 'get_server_info'}, # A lightweight command
-            timeout=5,
-        )
-        if resp.status_code == 200 and resp.json().get('response', {}).get('result') == 'success':
-            return True # Connection successful
-    except Exception as e:
-        current_app.logger.warning(f"Tautulli connection failed: {e}")
-    return False # Default to False if any issue
+    """Tests the connection to the configured Tautulli service."""
+    # Tautulli's get_history endpoint with a limit of 1 is a good way to test.
+    # It requires the API key.
+    return _test_service_connection(
+        "Tautulli",
+        'tautulli_url',
+        'tautulli_api_key',
+        endpoint='/api/v2?cmd=get_history&length=1'
+    )
 
 def test_tautulli_connection_with_params(url, api_key):
     """
-    Tests Tautulli connection using provided URL and API key.
+    Tests the Tautulli connection using a provided URL and API key.
 
     Args:
-        url (str): The Tautulli URL.
-        api_key (str): The Tautulli API key.
+        url (str): The Tautulli URL to test.
+        api_key (str): The Tautulli API key to test.
 
     Returns:
-        tuple: (bool, str or None) indicating success and an error message if failed.
+        tuple: (bool, str) indicating success and a result message.
     """
-    if not url:
-        return False, "Tautulli URL not provided."
-    if not api_key:
-        return False, "Tautulli API key not provided."
-    try:
-        resp = requests.get(
-            f"{url.rstrip('/')}/api/v2",
-            params={'apikey': api_key, 'cmd': 'get_server_info'}, # Lightweight check
-            timeout=5,
-        )
-        resp.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-        data = resp.json()
-        if data.get('response', {}).get('result') == 'success':
-            return True, None
-        else:
-            # Tautulli API might return 200 but with an error message in JSON
-            error_detail = data.get('response', {}).get('message', 'API error, but no specific message.')
-            return False, f"API reported an error: {error_detail}"
-    except requests.exceptions.HTTPError as e:
-        current_app.logger.error(f"Tautulli connection test HTTP error to {url}: {e}. Response: {e.response.text[:200] if e.response else 'No response'}")
-        return False, f"HTTP {e.response.status_code}: {e.response.reason}"
-    except requests.exceptions.RequestException as e: # Catches ConnectionError, Timeout, etc.
-        current_app.logger.error(f"Tautulli connection test error to {url}: {e}")
-        return False, f"Connection error: {str(e)}"
-    except json.JSONDecodeError:
-        current_app.logger.error(f"Tautulli connection test error to {url}: Invalid JSON response.")
-        return False, "Invalid JSON response from Tautulli."
-    except Exception as e: # Catch any other unexpected errors
-        current_app.logger.error(f"Unexpected error during Tautulli connection test to {url}: {e}")
-        return False, f"Unexpected error: {str(e)}"
+    return _test_service_connection_with_params(
+        "Tautulli",
+        url,
+        api_key,
+        endpoint='/api/v2?cmd=get_history&length=1'
+    )

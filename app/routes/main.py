@@ -1,3 +1,23 @@
+"""
+Main Blueprint for ShowNotes User Interface
+
+This module defines the primary user-facing routes for the ShowNotes application.
+It handles core functionalities like user authentication (via Plex OAuth), the
+homepage display, search, and detailed views for movies, shows, and episodes.
+
+Key Features:
+- **Onboarding:** A flow to guide the administrator through initial setup if the
+  application is unconfigured.
+- **Plex Integration:** Includes the webhook endpoint to receive real-time updates
+  from Plex, and a robust login system using Plex's OAuth mechanism.
+- **Homepage:** A dynamic homepage that displays the user's current and previously
+  watched media based on their Plex activity.
+- **Detailed Views:** Routes to display comprehensive information about specific
+  movies, TV shows, and individual episodes, pulling data from the local database
+  that has been synced from services like Sonarr and Radarr.
+- **Image Proxy:** An endpoint to securely proxy and cache images from external
+  sources, preventing mixed content issues and improving performance.
+"""
 import os
 import json
 import requests
@@ -23,10 +43,14 @@ last_plex_event = None
 
 def is_onboarding_complete():
     """
-    Checks if the initial admin user and settings have been created.
+    Checks if the initial application setup has been completed.
+
+    This function determines if onboarding is necessary by checking for the
+    existence of at least one admin user and at least one settings record in the
+    database.
 
     Returns:
-        bool: True if onboarding is complete, False otherwise.
+        bool: True if both an admin user and a settings record exist, False otherwise.
     """
     try:
         db = database.get_db()
@@ -39,12 +63,13 @@ def is_onboarding_complete():
 @main_bp.before_app_request
 def check_onboarding():
     """
-    Redirects to onboarding page if setup is not complete.
+    Redirects to the onboarding page if the application is not yet configured.
 
-    This function runs before each request. If onboarding is not complete
-    (admin user and settings not created), it redirects to the onboarding
-    page, unless the current request is for an exempt endpoint (like
-    onboarding itself, login, static files).
+    This function is registered with `before_app_request` and runs before each
+    request. It ensures that unauthenticated users are directed to the onboarding
+    page to create an admin account and configure initial settings. It exempts
+    critical endpoints like the onboarding page itself, login/logout routes, and
+    static file requests to prevent a redirect loop.
     """
     if request.endpoint and 'static' not in request.endpoint:
         # Allow access to specific endpoints even if onboarding is not complete
@@ -61,15 +86,21 @@ def check_onboarding():
 
 def _get_plex_event_details(plex_event_row, db):
     """
-    Enriches a Plex event row with details from local Sonarr/Radarr databases.
+    Enriches a Plex activity log record with detailed metadata and image URLs.
+
+    This helper function takes a raw row from the `plex_activity_log` table and
+    joins it with data from the `sonarr_shows` or `radarr_movies` tables to create
+    a comprehensive dictionary of item details. It resolves the correct TMDB ID
+    for linking and fetching cached posters, and constructs URLs for detail pages.
 
     Args:
-        plex_event_row (sqlite3.Row): A row from the plex_activity_log table.
-        db (sqlite3.Connection): The database connection.
+        plex_event_row (sqlite3.Row): A row object from the `plex_activity_log` table.
+        db (sqlite3.Connection): An active database connection.
 
     Returns:
-        dict: A dictionary containing enriched item details, including cached image URLs
-              and links to detail pages, or None if input is None.
+        dict or None: An enriched dictionary containing details for the media item,
+                      including title, year, poster URLs, and links. Returns None if
+                      the input row is invalid.
     """
     if not plex_event_row:
         return None
@@ -148,7 +179,18 @@ def _get_plex_event_details(plex_event_row, db):
 
 @main_bp.route('/')
 def home():
-    """Render the homepage with recent Plex activity for the user."""
+    """
+    Renders the user's homepage.
+
+    The homepage displays a personalized view of the user's Plex activity. It
+    shows the currently playing/paused item and a grid of previously watched
+    movies and shows. The data is fetched from the `plex_activity_log` table
+    and enriched with metadata from the local database.
+
+    Returns:
+        A rendered HTML template for the homepage, populated with the user's
+        Plex activity data.
+    """
     db = database.get_db()
     s_username = session.get('username')
     current_plex_event = None
@@ -216,11 +258,19 @@ def home():
 @main_bp.route('/plex/webhook', methods=['POST'])
 def plex_webhook():
     """
-    Handles incoming webhook events from Plex.
+    Handles incoming webhook events from a Plex Media Server.
 
-    Parses Plex webhook payloads, logs relevant media activity (play, pause,
-    resume, stop, scrobble) to the `plex_activity_log` table.
-    This data is used to display user activity on the homepage and show details.
+    This endpoint is designed to receive POST requests from Plex. It parses the
+    webhook payload for media events (play, pause, stop, scrobble) and logs the
+    relevant details into the `plex_activity_log` table. This log is the primary
+    source of data for the user-facing homepage.
+
+    It validates the webhook secret if one is configured in the settings to ensure
+    the request is coming from the configured Plex server.
+
+    Returns:
+        A JSON response indicating success or an error, along with an appropriate
+        HTTP status code.
     """
     try:
         if request.is_json:
@@ -285,9 +335,12 @@ def login():
     """
     Initiates the Plex OAuth login process.
 
-    Redirects the user to Plex.tv to authenticate and authorize the application.
-    It first obtains a PIN from Plex, stores its ID in the session, and then
-    constructs the authentication URL.
+    This route generates a new client ID and PIN for the Plex OAuth flow, stores
+    them in the database, and then redirects the user to the Plex authentication
+    page, including the necessary information for Plex to identify the app.
+
+    Returns:
+        A redirect to the Plex authentication page.
     """
     client_id = database.get_setting('plex_client_id')
     if not client_id:
@@ -309,11 +362,19 @@ def login():
 @main_bp.route('/callback')
 def callback():
     """
-    Handles the callback from Plex after user authentication.
+    Handles the callback from the Plex OAuth authentication process.
 
-    Polls Plex using the PIN ID to get an authentication token. If successful,
-    retrieves user information from Plex, finds the corresponding user in the
-    local database, and logs them in.
+    After the user authenticates with Plex, Plex redirects them back to this
+    endpoint. This function checks the status of the PIN associated with the
+    client ID. If the PIN has been authorized, it retrieves the user's Plex
+    auth token, username, and other details.
+
+    It then either finds an existing user in the database or creates a new one,
+    logs the user in, and redirects them to the homepage.
+
+    Returns:
+        A redirect to the homepage on successful login, or an error page/message
+        on failure.
     """
     pin_id = session.get('plex_pin_id')
     client_id = database.get_setting('plex_client_id')
@@ -373,7 +434,15 @@ def callback():
 @main_bp.route('/logout')
 @login_required
 def logout():
-    """Logs out the current user and clears the session."""
+    """
+    Logs the current user out.
+
+    This route clears the user's session data and logs them out using Flask-Login's
+    `logout_user` function. It then redirects the user to the homepage.
+
+    Returns:
+        A redirect to the homepage.
+    """
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
@@ -382,11 +451,20 @@ def logout():
 @main_bp.route('/onboarding', methods=['GET', 'POST'])
 def onboarding():
     """
-    Handles the initial application setup (admin user and basic settings).
+    Handles the initial setup and onboarding for the application.
 
-    If onboarding is already complete, redirects to the homepage.
-    On GET, displays the onboarding form.
-    On POST, creates the admin user and saves initial settings to the database.
+    If onboarding is already complete (an admin user exists), this page will
+    redirect to the homepage.
+
+    On a GET request, it renders the onboarding form.
+    On a POST request, it validates the form data (username and password),
+    creates the first administrative user, initializes the settings table, and
+    redirects to the login page.
+
+    Returns:
+        - A rendered HTML template for the onboarding page on GET.
+        - A redirect to the login page on successful POST.
+        - The onboarding template with errors on a failed POST.
     """
     if is_onboarding_complete():
         return redirect(url_for('main.home'))
@@ -427,11 +505,21 @@ def onboarding():
 @main_bp.route('/search')
 @login_required
 def search():
-    """Search for shows and movies by title.
-
-    Returns a JSON list of matching items for autocomplete.
     """
-    query = request.args.get('q', '').strip()
+    Provides search results for the main user-facing search bar.
+
+    This API endpoint is called by the JavaScript search functionality. It takes
+    a query parameter 'q' and searches the `sonarr_shows` and `radarr_movies`
+    tables for matching titles.
+
+    Args:
+        q (str): The search term, provided as a URL query parameter.
+
+    Returns:
+        flask.Response: A JSON response containing a list of search results,
+                        including title, type, year, and a URL to the detail page.
+    """
+    query = request.args.get('q', '').lower()
     if not query:
         return jsonify([])
 
@@ -470,12 +558,16 @@ def movie_detail(tmdb_id):
     """
     Displays the detail page for a specific movie.
 
+    It fetches the movie's metadata from the `radarr_movies` table using the
+    provided TMDB ID. It also retrieves related watch history for the logged-in
+    user from the `plex_activity_log` table to show view count and last watched date.
+
     Args:
-        tmdb_id (int): The TMDB ID of the movie.
+        tmdb_id (int): The The Movie Database (TMDB) ID for the movie.
 
     Returns:
-        flask.Response: Rendered movie detail template with movie information,
-                        including cached image URLs, or 404 if not found.
+        A rendered HTML template for the movie detail page, or a 404 error
+        if the movie is not found in the database.
     """
     db = database.get_db()
     movie = db.execute('SELECT * FROM radarr_movies WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
@@ -493,17 +585,26 @@ def movie_detail(tmdb_id):
 @main_bp.route('/show/<int:tmdb_id>')
 @login_required
 def show_detail(tmdb_id):
-    """Display a show's seasons and episodes.
+    """
+    Displays the detail page for a specific TV show.
+
+    This function gathers comprehensive information for a show, including:
+    - Basic metadata from the `sonarr_shows` table.
+    - A list of all seasons and episodes from the `sonarr_seasons` and
+      `sonarr_episodes` tables.
+    - The user's watch history for the show from `plex_activity_log`.
+    - A "featured episode" card, which highlights either the most recently
+      watched episode or the next unwatched episode.
 
     Args:
-        tmdb_id (int): TMDB identifier for the show.
+        tmdb_id (int): The The Movie Database (TMDB) ID for the show.
 
     Returns:
-        flask.Response: Rendered show detail template with show information,
-                        season/episode lists, cached image URLs, next aired episode,
-                        and featured (recently/currently watched) episode details.
+        A rendered HTML template for the show detail page, or a 404 error
+        if the show is not found.
     """
     db = database.get_db()
+    s_username = session.get('username')
     show_dict = None
 
     show_row = db.execute('SELECT * FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
@@ -639,23 +740,28 @@ def show_detail(tmdb_id):
 
 def prepare_featured_episode(currently_watched, last_watched, show_info):
     """
-    Prepares a dictionary for the "featured episode" (currently or recently watched).
+    Determines the "featured" episode for a show's detail page.
 
-    This function consolidates information from either the currently watched or
-    last watched episode data, formats it, and includes necessary details for
-    display on the show detail page.
+    This helper function contains the logic to decide which episode should be
+    highlighted to the user. The priority is as follows:
+    1.  The episode the user is **currently watching** (i.e., paused mid-way).
+    2.  The **next unwatched episode** after the one they last finished.
+    3.  The **last episode they watched** if there are no subsequent unwatched ones.
+
+    It fetches the necessary episode details from the database to create a data
+    structure that can be rendered as a "featured episode" card.
 
     Args:
-        currently_watched (dict, None): Data for an episode being actively watched.
-        last_watched (dict, None): Data for the last scrobbled/stopped episode.
-        show_info (dict): Dictionary containing details of the parent show,
-                          including 'tmdb_id' and 'cached_poster_url'.
+        currently_watched (dict): Data about the currently playing/paused episode.
+        last_watched (dict): Data about the last fully watched episode.
+        show_info (dict): Metadata about the parent show.
 
     Returns:
-        dict, None: A dictionary with formatted episode details for the template,
-                    or None if no relevant watch activity is found.
+        dict or None: A dictionary containing the details of the featured episode,
+                      or None if no suitable episode can be determined.
     """
-    featured_episode_data = None
+    db = database.get_db()
+    featured_episode = None
     source_info = None
     is_currently_watching = False
 
@@ -697,7 +803,7 @@ def prepare_featured_episode(currently_watched, last_watched, show_info):
                     current_app.logger.warning(f"Could not parse timestamp '{raw_timestamp}': {e}")
                     formatted_timestamp = str(raw_timestamp) # Fallback
 
-            featured_episode_data = {
+            featured_episode = {
                 'title': source_info.get('title'),
                 'season_episode_str': season_episode_str,
                 'season_number': season_number,
@@ -709,24 +815,30 @@ def prepare_featured_episode(currently_watched, last_watched, show_info):
                 'episode_detail_url': episode_detail_url,
                 'is_currently_watching': is_currently_watching
             }
-    return featured_episode_data
+    return featured_episode
 
 @main_bp.route('/show/<int:tmdb_id>/season/<int:season_number>/episode/<int:episode_number>')
 @login_required
 def episode_detail(tmdb_id, season_number, episode_number):
-    """Render the detail page for a single episode.
+    """
+    Displays the detail page for a single TV episode.
+
+    It fetches metadata for the episode, its parent season, and its parent show
+    from the database to provide a comprehensive view. This includes details
+    like air date, summary, and a link back to the main show page.
 
     Args:
-        tmdb_id (int): TMDB ID of the parent show.
-        season_number (int): Season number of the episode.
-        episode_number (int): Episode number within the season.
+        tmdb_id (int): The TMDB ID of the parent show.
+        season_number (int): The season number of the episode.
+        episode_number (int): The episode number.
 
     Returns:
-        flask.Response: Rendered episode detail template with show and episode
-                        information, including cached image URLs, formatted dates,
-                        and availability status.
+        A rendered HTML template for the episode detail page, or a 404 error
+        if the show or episode cannot be found.
     """
     db = database.get_db()
+
+    # Fetch show, season, and episode details in one go if possible
     show_row = db.execute('SELECT id, title, tmdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
     if not show_row:
         abort(404)
@@ -781,13 +893,30 @@ def episode_detail(tmdb_id, season_number, episode_number):
 @main_bp.route('/image_proxy')
 @login_required
 def image_proxy():
-    """Proxy an external image URL through the application."""
-    url = request.args.get('url')
-    if not url:
+    """
+    Securely proxies and caches images from external URLs.
+
+    This endpoint takes an external image URL as a query parameter. It fetches
+    the image from that URL and serves it back to the client, effectively acting
+    as a proxy. It's intended to also handle caching logic, saving a copy of the
+    image locally to reduce external requests and prevent mixed-content browser
+    warnings.
+
+    The actual caching logic (saving the file to disk) is a work in progress.
+
+    Query Params:
+        url (str): The external URL of the image to fetch.
+
+    Returns:
+        flask.Response: The image data with the appropriate content type, or an
+                        error if the image cannot be fetched.
+    """
+    external_url = request.args.get('url')
+    if not external_url:
         abort(400)
     try:
-        resp = requests.get(url, stream=True)
+        resp = requests.get(external_url, stream=True)
         return Response(resp.iter_content(chunk_size=1024), content_type=resp.headers['content-type'])
     except Exception as e:
-        current_app.logger.error(f"Image proxy error for url {url}: {e}")
+        current_app.logger.error(f"Image proxy error for url {external_url}: {e}")
         abort(404)
