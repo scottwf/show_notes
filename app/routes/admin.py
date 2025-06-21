@@ -160,21 +160,44 @@ def dashboard():
         A rendered HTML template for the admin dashboard.
     """
     db = database.get_db()
-    def safe_count(query):
+    def safe_value(query):
+        """Execute a scalar SQL query and return a numeric result or 0."""
         try:
             result = db.execute(query).fetchone()
             return result[0] if result and result[0] is not None else 0
         except Exception:
             return 0
-    movie_count = safe_count('SELECT COUNT(*) FROM radarr_movies')
-    show_count = safe_count('SELECT COUNT(*) FROM sonarr_shows')
-    user_count = safe_count('SELECT COUNT(*) FROM users')
-    plex_event_count = safe_count('SELECT COUNT(*) FROM plex_events')
-    return render_template('admin_dashboard.html',
-                           movie_count=movie_count,
-                           show_count=show_count,
-                           user_count=user_count,
-                           plex_event_count=plex_event_count)
+
+    movie_count = safe_value('SELECT COUNT(*) FROM radarr_movies')
+    show_count = safe_value('SELECT COUNT(*) FROM sonarr_shows')
+    user_count = safe_value('SELECT COUNT(*) FROM users')
+    plex_event_count = safe_value('SELECT COUNT(*) FROM plex_events')
+
+    radarr_week_count = safe_value(
+        "SELECT COUNT(*) FROM radarr_movies WHERE last_synced_at >= DATETIME('now', '-7 days')"
+    )
+    sonarr_week_count = safe_value(
+        "SELECT COUNT(*) FROM sonarr_shows WHERE last_synced_at >= DATETIME('now', '-7 days')"
+    )
+
+    openai_cost_week = safe_value(
+        "SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
+    )
+    ollama_avg_ms = safe_value(
+        "SELECT AVG(processing_time_ms) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
+    )
+
+    return render_template(
+        'admin_dashboard.html',
+        movie_count=movie_count,
+        show_count=show_count,
+        user_count=user_count,
+        plex_event_count=plex_event_count,
+        radarr_week_count=radarr_week_count,
+        sonarr_week_count=sonarr_week_count,
+        openai_cost_week=openai_cost_week,
+        ollama_avg_ms=ollama_avg_ms,
+    )
 
 
 @admin_bp.route('/tasks')
