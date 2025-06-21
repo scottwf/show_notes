@@ -1,3 +1,25 @@
+"""
+LLM Service Abstraction Layer
+
+This module provides a unified interface for interacting with various Large Language
+Model (LLM) providers, such as OpenAI and Ollama. It abstracts the provider-specific
+logic for sending prompts and handling responses, allowing the rest of the application
+to use a single, consistent function to get LLM-generated content.
+
+Key Features:
+- **Provider Switching:** Dynamically selects the LLM provider based on application
+  settings, allowing administrators to switch between services like OpenAI and a
+  self-hosted Ollama instance without code changes.
+- **Unified Response Handling:** The main `get_llm_response` function returns a
+  consistent tuple `(response_text, error_message)`, regardless of the provider used.
+- **API Usage Logging:** Automatically logs every LLM API call to the local database,
+  capturing details like the provider, model, token counts, processing time, and
+  estimated cost (for applicable services). This is crucial for monitoring and
+  cost management.
+- **Error Handling:** Gracefully handles common errors such as configuration issues
+  (missing API keys/URLs), connection timeouts, and API-specific errors, providing
+  clear log messages and error feedback.
+"""
 import json
 import requests
 from openai import OpenAI # Ensure 'openai>=1.0' (e.g., openai>=1.3.0) is in requirements.txt
@@ -5,7 +27,22 @@ from flask import current_app
 from .database import get_db, get_setting # For settings and logging to api_usage
 
 def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens=None, total_tokens=None, cost_usd=None, processing_time_ms=None):
-    """Helper function to log API usage to the database."""
+    """
+    Logs the details of an LLM API call to the database.
+
+    This private helper function is called after every attempt to communicate with an
+    LLM provider. It records key metrics for monitoring and analysis.
+
+    Args:
+        db (sqlite3.Connection): An active database connection object.
+        provider (str): The name of the LLM provider (e.g., 'openai', 'ollama').
+        endpoint (str): The specific model or endpoint used (e.g., 'gpt-3.5-turbo').
+        prompt_tokens (int, optional): The number of tokens in the prompt.
+        completion_tokens (int, optional): The number of tokens in the generated response.
+        total_tokens (int, optional): The total tokens used in the API call.
+        cost_usd (float, optional): The estimated cost of the API call in USD.
+        processing_time_ms (int, optional): The time taken for the API call in milliseconds.
+    """
     try:
         cursor = db.cursor()
         cursor.execute(
@@ -24,15 +61,25 @@ def get_llm_response(prompt_text, llm_model_name=None, provider=None):
     """
     Gets a response from the configured LLM provider.
 
+    This is the primary function for interacting with LLMs. It determines which
+    provider to use based on application settings, constructs the appropriate
+    API request, sends the prompt, and logs the usage details.
+
     Args:
         prompt_text (str): The text prompt to send to the LLM.
-        llm_model_name (str, optional): Specific model name to use (e.g., 'gpt-4', 'llama3').
-                                         If None, defaults will be used based on the provider.
+        llm_model_name (str, optional): The specific model name to use (e.g., 'gpt-4', 'llama3').
+                                         If None, the function will use the default model configured
+                                         for the selected provider. Defaults to None.
+        provider (str, optional): The specific provider to use ('openai' or 'ollama').
+                                  If None, the function will use the `preferred_llm_provider`
+                                  from the application settings. Defaults to None.
 
     Returns:
-        tuple: (response_text, error_message)
-               response_text is the string from the LLM, or None if an error occurred.
-               error_message is a string describing the error, or None if successful.
+        tuple: A tuple containing `(response_text, error_message)`.
+               - `response_text` (str or None): The content of the LLM's response.
+                 This is None if an error occurred.
+               - `error_message` (str or None): A description of the error if one
+                 occurred, otherwise None.
     """
     db = get_db() # Ensure this is called within an active Flask app context
     if provider is None:
