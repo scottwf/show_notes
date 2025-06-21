@@ -53,12 +53,14 @@
             <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">{{ sonarr_week_count if sonarr_week_count is not none else '--' }}</p>
         </div>
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">OpenAI Cost (7d)</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">${{ '%.5f'|format(openai_cost_week|float) if openai_cost_week is not none else '--' }}</p>
+            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">OpenAI Usage (7d)</h3>
+            <p class="text-sm text-slate-600 dark:text-slate-300">Calls: {{ openai_call_count_week }}</p>
+            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">${{ '%.5f'|format(openai_cost_week|float) if openai_cost_week is not none else '--' }}</p>
         </div>
         <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Ollama Avg Time (ms, 7d)</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ ollama_avg_ms|round|int if ollama_avg_ms is not none else '--' }}</p>
+            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Ollama Avg Time (7d)</h3>
+            <p class="text-sm text-slate-600 dark:text-slate-300">Calls: {{ ollama_call_count_week }}</p>
+            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">{{ ollama_avg_ms|format_ms if ollama_avg_ms is not none else '--' }}</p>
         </div>
     </div>
 </div>

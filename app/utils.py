@@ -1308,6 +1308,18 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
         return dt_obj.strftime(format_str)
     return value # Should not be reached if logic is correct, but as a fallback
 
+def format_milliseconds(value):
+    """Format a millisecond duration as ``MM:SS.mmm``."""
+    if value is None:
+        return ""
+    try:
+        ms = int(value)
+        seconds, milliseconds = divmod(ms, 1000)
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+    except Exception:
+        return str(value)
+
 # --- Tautulli Stubs ---
 
 def sync_tautulli_watch_history():

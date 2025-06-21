@@ -5,7 +5,7 @@ from flask import Flask
 from flask_login import LoginManager
 from . import database
 from . import cli
-from .utils import format_datetime_simple # Added import for the filter
+from .utils import format_datetime_simple, format_milliseconds
 
 login_manager = LoginManager()
 
@@ -118,6 +118,7 @@ def create_app(test_config=None):
 
     # Register Jinja filters
     app.jinja_env.filters['format_datetime'] = format_datetime_simple
+    app.jinja_env.filters['format_ms'] = format_milliseconds
 
     app.logger.info('ShowNotes application successfully created.')
     return app
