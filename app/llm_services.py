@@ -4,14 +4,14 @@ from openai import OpenAI # Ensure 'openai>=1.0' (e.g., openai>=1.3.0) is in req
 from flask import current_app
 from .database import get_db, get_setting # For settings and logging to api_usage
 
-def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens=None, total_tokens=None, cost_usd=None):
+def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens=None, total_tokens=None, cost_usd=None, processing_time_ms=None):
     """Helper function to log API usage to the database."""
     try:
         cursor = db.cursor()
         cursor.execute(
-            """INSERT INTO api_usage (timestamp, provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd)
-               VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)""",
-            (provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd)
+            """INSERT INTO api_usage (timestamp, provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd, processing_time_ms)
+               VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)""",
+            (provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd, processing_time_ms)
         )
         db.commit()
         current_app.logger.info(f"Logged API usage for {provider} - {endpoint}.")
@@ -20,7 +20,7 @@ def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens
         # Not rolling back here as logging failure shouldn't typically halt the main operation,
         # but the calling function might decide to based on its own error handling.
 
-def get_llm_response(prompt_text, llm_model_name=None):
+def get_llm_response(prompt_text, llm_model_name=None, provider=None):
     """
     Gets a response from the configured LLM provider.
 
@@ -35,17 +35,20 @@ def get_llm_response(prompt_text, llm_model_name=None):
                error_message is a string describing the error, or None if successful.
     """
     db = get_db() # Ensure this is called within an active Flask app context
-    provider = get_setting("preferred_llm_provider")
+    if provider is None:
+        provider = get_setting("preferred_llm_provider")
     openai_api_key = get_setting("openai_api_key")
     ollama_url = get_setting("ollama_url")
 
     # Default model names (could be moved to settings or config file later)
     default_openai_model = "gpt-3.5-turbo"
-    default_ollama_model = "llama2" # Make sure this model is available in the user's Ollama instance
+    # Use the admin-configured model if present, else fallback
+    default_ollama_model = get_setting("ollama_model_name") or "llama2" # Make sure this model is available in the user's Ollama instance
 
     response_text = None
     error_message = None
 
+    import time
     if provider == "openai":
         if not openai_api_key:
             error_message = "OpenAI API key is not configured in settings."
@@ -56,25 +59,28 @@ def get_llm_response(prompt_text, llm_model_name=None):
         chosen_model = llm_model_name if llm_model_name else default_openai_model
         current_app.logger.info(f"Sending request to OpenAI API. Model: {chosen_model}")
         try:
+            start_time = time.perf_counter()
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt_text}],
                 model=chosen_model,
             )
+            end_time = time.perf_counter()
             response_text = chat_completion.choices[0].message.content
             usage = chat_completion.usage
             # Basic cost calculation for gpt-3.5-turbo (example, can be expanded)
             cost = 0
             if chosen_model == "gpt-3.5-turbo": # Example, expand for other models or use a pricing API/library
                 cost = (usage.prompt_tokens * 0.0005 / 1000) + (usage.completion_tokens * 0.0015 / 1000)
-
+            processing_time_ms = int((end_time - start_time) * 1000)
             _log_api_usage(
                 db, "openai", chosen_model,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
                 total_tokens=usage.total_tokens,
-                cost_usd=cost if cost > 0 else None
+                cost_usd=cost if cost > 0 else None,
+                processing_time_ms=processing_time_ms
             )
-            current_app.logger.info(f"Received response from OpenAI. Model: {chosen_model}, Tokens: {usage.total_tokens}, Cost: ${cost:.5f}")
+            current_app.logger.info(f"Received response from OpenAI. Model: {chosen_model}, Tokens: {usage.total_tokens}, Cost: ${cost:.5f}, Processing Time: {processing_time_ms}ms")
         except Exception as e:
             error_message = f"OpenAI API request failed: {e}"
             current_app.logger.error(error_message, exc_info=True)
@@ -97,7 +103,9 @@ def get_llm_response(prompt_text, llm_model_name=None):
             "stream": False # Get full response at once
         }
         try:
+            start_time = time.perf_counter()
             response = requests.post(ollama_api_endpoint, json=payload, timeout=120) # 120s timeout
+            end_time = time.perf_counter()
             response.raise_for_status()
 
             ollama_data = response.json()
@@ -110,13 +118,14 @@ def get_llm_response(prompt_text, llm_model_name=None):
             total_tokens = None
             if prompt_tokens is not None and completion_tokens is not None:
                  total_tokens = prompt_tokens + completion_tokens
-
+            processing_time_ms = int((end_time - start_time) * 1000)
             _log_api_usage(db, "ollama", chosen_model,
                            prompt_tokens=prompt_tokens,
                            completion_tokens=completion_tokens,
                            total_tokens=total_tokens, # This might be an approximation
-                           cost_usd=0) # Ollama is typically self-hosted, cost is effectively 0 from API perspective
-            current_app.logger.info(f"Received response from Ollama for model {chosen_model}.")
+                           cost_usd=0, # Ollama is typically self-hosted, cost is effectively 0 from API perspective
+                           processing_time_ms=processing_time_ms)
+            current_app.logger.info(f"Received response from Ollama for model {chosen_model}. Processing Time: {processing_time_ms}ms")
 
         except requests.exceptions.RequestException as e:
             error_message = f"Ollama API request failed: {e}"

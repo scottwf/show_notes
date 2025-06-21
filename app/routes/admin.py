@@ -388,7 +388,7 @@ def settings():
             radarr_url=?, radarr_api_key=?,
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
-            ollama_url=?, openai_api_key=?, preferred_llm_provider=?,
+            ollama_url=?, ollama_model_name=?, openai_api_key=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
@@ -398,6 +398,7 @@ def settings():
             request.form.get('bazarr_url'),
             request.form.get('bazarr_api_key'),
             request.form.get('ollama_url'),
+            request.form.get('ollama_model_name'),
             request.form.get('openai_api_key'),
             request.form.get('preferred_llm_provider'),
             request.form.get('pushover_key'),
@@ -427,6 +428,7 @@ def settings():
     # Ensure new fields are present in merged_settings, even if None initially from DB
     merged_settings.setdefault('openai_api_key', None)
     merged_settings.setdefault('preferred_llm_provider', None)
+    merged_settings.setdefault('ollama_model_name', None)
 
     for k, v in defaults.items():
         if not merged_settings.get(k): # This will only apply to plex_client_id, secret, redirect_uri if not set
@@ -440,6 +442,18 @@ def settings():
     ollama_status = test_ollama_connection()
     tautulli_status = test_tautulli_connection() # Added Tautulli status
 
+    # Fetch available Ollama models for dropdown
+    ollama_models = []
+    ollama_url = merged_settings.get('ollama_url')
+    if ollama_url:
+        try:
+            import requests
+            resp = requests.get(ollama_url.rstrip('/') + '/api/tags', timeout=5)
+            if resp.ok:
+                data = resp.json()
+                ollama_models = [m['model'] for m in data.get('models', [])]
+        except Exception as e:
+            current_app.logger.warning(f"Could not fetch Ollama models: {e}")
     return render_template(
         'admin_settings.html',
         user=user,
@@ -450,7 +464,8 @@ def settings():
         radarr_status=radarr_status,
         bazarr_status=bazarr_status,
         ollama_status=ollama_status,
-        tautulli_status=tautulli_status # Added Tautulli status
+        tautulli_status=tautulli_status, # Added Tautulli status
+        ollama_models=ollama_models
     )
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
@@ -467,24 +482,47 @@ def sync_sonarr():
         current_app.logger.error(f"Sonarr sync error: {e}", exc_info=True)
     return redirect(url_for('admin.tasks'))
 
-@admin_bp.route('/test-llm-summary')
+@admin_bp.route('/test-llm-summary', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def test_llm_summary():
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed Test LLM Summary page.")
 
-    test_character = "Walter White"
-    test_show = "Breaking Bad"
-    # Using a season and episode to make the prompt more specific for testing
-    test_season = 1
-    test_episode = 1
-    prompt_options = {
+    # Defaults
+    default_character = "Walter White"
+    default_show = "Breaking Bad"
+    default_season = 1
+    default_episode = 1
+    default_provider = get_setting('preferred_llm_provider') or 'ollama'
+    default_options = {
         'include_relationships': True,
         'include_motivations': True,
         'include_quote': True,
         'tone': 'tv_expert'
     }
 
+    if request.method == 'POST':
+        test_character = request.form.get('test_character', default_character)
+        test_show = request.form.get('test_show', default_show)
+        test_season = int(request.form.get('test_season', default_season))
+        test_episode = int(request.form.get('test_episode', default_episode))
+        preferred_provider = request.form.get('preferred_provider', default_provider)
+        # Prompt options (checkboxes)
+        prompt_options = {
+            'include_relationships': bool(request.form.get('include_relationships')),
+            'include_motivations': bool(request.form.get('include_motivations')),
+            'include_quote': bool(request.form.get('include_quote')),
+            'tone': request.form.get('tone', 'tv_expert')
+        }
+    else:
+        test_character = default_character
+        test_show = default_show
+        test_season = default_season
+        test_episode = default_episode
+        preferred_provider = default_provider
+        prompt_options = default_options
+
+    # Build prompt
     generated_prompt = prompt_builder.build_character_prompt(
         character=test_character,
         show=test_show,
@@ -493,13 +531,16 @@ def test_llm_summary():
         options=prompt_options
     )
 
-    # Example of testing a specific model (optional, otherwise uses default for provider)
-    # llm_model_to_test = "gpt-4" # or "llama3" for ollama if available
-    # llm_response, error_message = get_llm_response(prompt_text=generated_prompt,
-    #                                                llm_model_name=llm_model_to_test)
-    llm_response, error_message = get_llm_response(prompt_text=generated_prompt)
-
-    preferred_provider = get_setting("preferred_llm_provider") or "Not Set"
+    llm_response = None
+    error_message = None
+    card_data = None
+    if request.method == 'POST':
+        # Call LLM only on submit
+        llm_response, error_message = get_llm_response(generated_prompt, llm_model_name=None, provider=preferred_provider)
+        # Optionally parse the LLM response for card preview
+        if llm_response:
+            # For demo: just pass the raw response. You can parse to dict if format is known.
+            card_data = llm_response
 
     return render_template('admin_test_llm_summary.html',
                            test_character=test_character,
@@ -511,6 +552,7 @@ def test_llm_summary():
                            llm_response=llm_response,
                            error_message=error_message,
                            preferred_provider=preferred_provider,
+                           card_data=card_data,
                            title="Test LLM Summary Generation")
 
 @admin_bp.route('/view-prompts')
@@ -570,11 +612,36 @@ def view_prompts():
 def api_usage_logs():
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed API usage logs.")
     db = database.get_db()
+    # DEBUG: Log the database path being used
+    try:
+        db_path = db.execute("PRAGMA database_list;").fetchone()[2]
+        current_app.logger.warning(f"[API Usage Logs] Using database file: {db_path}")
+        # DEBUG: Check if api_usage table exists and row count
+        table_exists = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='api_usage';").fetchone()
+        if not table_exists:
+            current_app.logger.warning("[API Usage Logs] Table 'api_usage' does NOT exist in this database.")
+        else:
+            row_count = db.execute("SELECT COUNT(*) FROM api_usage;").fetchone()[0]
+            current_app.logger.warning(f"[API Usage Logs] Table 'api_usage' exists. Row count: {row_count}")
+    except Exception as e:
+        current_app.logger.error(f"[API Usage Logs] Debug DB check failed: {e}", exc_info=True)
+    import datetime
     logs = db.execute(
-        "SELECT id, timestamp, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd "
+        "SELECT id, timestamp, provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd, processing_time_ms "
         "FROM api_usage ORDER BY timestamp DESC LIMIT 200"
     ).fetchall()
-    return render_template('admin_api_usage_logs.html', logs=logs, title="API Usage Logs")
+    # Convert timestamps to datetime objects for Jinja2 compatibility
+    processed_logs = []
+    for log in logs:
+        log_dict = dict(log)
+        ts = log_dict.get('timestamp')
+        if ts and isinstance(ts, str):
+            try:
+                log_dict['timestamp'] = datetime.datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+            except Exception:
+                log_dict['timestamp'] = None
+        processed_logs.append(log_dict)
+    return render_template('admin_api_usage_logs.html', logs=processed_logs, title="API Usage Logs")
 
 @admin_bp.route('/sync-radarr', methods=['POST'])
 @login_required

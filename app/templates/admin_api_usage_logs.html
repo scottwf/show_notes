@@ -14,10 +14,18 @@
                 <tr>
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">ID</div></th>
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Timestamp</div></th>
+<<<<<<< HEAD
+=======
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Provider</div></th>
+>>>>>>> 09d0ff4 (feat: finalize API usage logging, provider selection, and admin UI improvements for LLM calls)
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Endpoint</div></th>
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Prompt Tokens</div></th>
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Completion Tokens</div></th>
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Total Tokens</div></th>
+<<<<<<< HEAD
+=======
+                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Processing Time (ms)</div></th>
+>>>>>>> 09d0ff4 (feat: finalize API usage logging, provider selection, and admin UI improvements for LLM calls)
                     <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Cost (USD)</div></th>
                 </tr>
             </thead>
@@ -26,6 +34,10 @@
                 <tr>
                     <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.id }}</div></td>
                     <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log_entry.timestamp else 'N/A' }}</div></td>
+<<<<<<< HEAD
+=======
+                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.provider if log_entry.provider else '-' }}</div></td>
+>>>>>>> 09d0ff4 (feat: finalize API usage logging, provider selection, and admin UI improvements for LLM calls)
                     <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.endpoint }}</div></td>
                     <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.prompt_tokens if log_entry.prompt_tokens is not none else '-' }}</div></td>
                     <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.completion_tokens if log_entry.completion_tokens is not none else '-' }}</div></td>

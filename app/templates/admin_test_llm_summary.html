@@ -6,8 +6,60 @@
 
 {% block admin_page_content %}
 <div class="space-y-6">
+    <!-- Editable form for test parameters -->
+    <form method="POST" class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6 space-y-4">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-1">Test LLM Summary - Parameters</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="test_character" class="block text-sm font-medium">Character</label>
+                <input type="text" id="test_character" name="test_character" value="{{ test_character }}" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+            </div>
+            <div>
+                <label for="test_show" class="block text-sm font-medium">Show</label>
+                <input type="text" id="test_show" name="test_show" value="{{ test_show }}" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+            </div>
+            <div>
+                <label for="test_season" class="block text-sm font-medium">Season</label>
+                <input type="number" min="1" id="test_season" name="test_season" value="{{ test_season }}" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+            </div>
+            <div>
+                <label for="test_episode" class="block text-sm font-medium">Episode</label>
+                <input type="number" min="1" id="test_episode" name="test_episode" value="{{ test_episode }}" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+            </div>
+            <div>
+                <label for="preferred_provider" class="block text-sm font-medium">Preferred LLM Provider</label>
+                <select id="preferred_provider" name="preferred_provider" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+                    <option value="ollama" {% if preferred_provider == 'ollama' %}selected{% endif %}>Ollama</option>
+                    <option value="openai" {% if preferred_provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                </select>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div>
+                <label class="block text-sm font-medium">Prompt Options</label>
+                <div class="flex flex-col gap-1 mt-1">
+                    <label><input type="checkbox" name="include_relationships" {% if prompt_options.include_relationships %}checked{% endif %}> Include Relationships</label>
+                    <label><input type="checkbox" name="include_motivations" {% if prompt_options.include_motivations %}checked{% endif %}> Include Motivations</label>
+                    <label><input type="checkbox" name="include_quote" {% if prompt_options.include_quote %}checked{% endif %}> Include Quote</label>
+                </div>
+            </div>
+            <div>
+                <label for="tone" class="block text-sm font-medium">Tone</label>
+                <select id="tone" name="tone" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+                    <option value="tv_expert" {% if prompt_options.tone == 'tv_expert' %}selected{% endif %}>TV Expert</option>
+                    <option value="casual" {% if prompt_options.tone == 'casual' %}selected{% endif %}>Casual</option>
+                    <option value="humorous" {% if prompt_options.tone == 'humorous' %}selected{% endif %}>Humorous</option>
+                </select>
+            </div>
+        </div>
+        <div class="mt-4">
+            <button type="submit" class="px-6 py-2 rounded shadow font-semibold border border-sky-700 bg-sky-600 text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 transition-colors duration-150 dark:bg-sky-500 dark:border-sky-300 dark:hover:bg-sky-400">Run Test</button>
+        </div>
+    </form>
+
+    <!-- Display current parameters and generated prompt -->
     <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
-        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-1">Test Parameters</h2>
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-1">Current Test Parameters</h2>
         <p class="text-sm text-slate-600 dark:text-slate-400">Character: <span class="font-medium">{{ test_character }}</span></p>
         <p class="text-sm text-slate-600 dark:text-slate-400">Show: <span class="font-medium">{{ test_show }}</span></p>
         <p class="text-sm text-slate-600 dark:text-slate-400">Season: <span class="font-medium">{{ test_season }}</span></p>
@@ -17,11 +69,11 @@
             <p class="text-sm text-slate-600 dark:text-slate-400 mb-1">Prompt Options Used:</p>
             <pre class="text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1 whitespace-pre-wrap">{{ prompt_options | tojson(indent=2) }}</pre>
         </div>
-
         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-4 mb-2">Generated Prompt:</h3>
         <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-3 bg-slate-100 dark:bg-slate-900 rounded max-h-80 overflow-y-auto">{{ generated_prompt }}</pre>
     </div>
 
+    <!-- LLM Response -->
     <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
         <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">LLM Response:</h3>
         {% if error_message %}
@@ -33,6 +85,18 @@
             <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-3 bg-slate-100 dark:bg-slate-900 rounded max-h-[500px] overflow-y-auto">{{ llm_response }}</pre>
         {% elif not error_message %}
             <p class="text-slate-500 dark:text-slate-400">No response received from LLM (and no error reported). This might mean the provider is not configured, returned an empty response, or "None" is selected as the provider.</p>
+        {% endif %}
+    </div>
+
+    <!-- Character Card Preview -->
+    <div class="bg-slate-50 dark:bg-slate-900 shadow-inner rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6 mt-4">
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Character Card Preview</h3>
+        {% if card_data %}
+            <div class="bg-white dark:bg-slate-800 rounded shadow p-4">
+                <pre class="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ card_data }}</pre>
+            </div>
+        {% else %}
+            <p class="text-slate-500 dark:text-slate-400">No card data to display. Run a test to see the preview.</p>
         {% endif %}
     </div>
 </div>

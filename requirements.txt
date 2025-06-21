@@ -4,3 +4,5 @@ Werkzeug==3.0.3
 Flask-Login==0.6.3
 requests
 thefuzz[speedup]
+openai
+ollama
