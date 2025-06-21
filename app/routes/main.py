@@ -32,7 +32,7 @@ from flask import (
     flash, current_app, Response, abort
 )
 from flask_login import login_user, login_required, logout_user # current_user is not directly used, session is used for username
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
 from ..utils import get_sonarr_poster, get_radarr_poster
@@ -330,18 +330,37 @@ def plex_webhook():
         current_app.logger.error(f"Error processing Plex webhook: {e}", exc_info=True)
         return 'error', 400
 
-@main_bp.route('/login')
+@main_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """
-    Initiates the Plex OAuth login process.
+    Initiates the Plex OAuth login process or handles admin username/password login.
 
-    This route generates a new client ID and PIN for the Plex OAuth flow, stores
-    them in the database, and then redirects the user to the Plex authentication
-    page, including the necessary information for Plex to identify the app.
-
-    Returns:
-        A redirect to the Plex authentication page.
+    On ``GET`` requests, this starts the Plex OAuth flow by requesting a PIN and
+    redirecting the user to Plex for authentication. On ``POST`` requests it
+    validates the provided admin credentials and logs the user in using
+    Flask-Login.
     """
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        db = database.get_db()
+        user_record = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        if user_record and user_record['is_admin'] and user_record['password_hash']:
+            if check_password_hash(user_record['password_hash'], password):
+                user_obj = current_app.login_manager._user_callback(user_record['id'])
+                if user_obj:
+                    login_user(user_obj)
+                    session['user_id'] = user_obj.id
+                    session['username'] = user_obj.username
+                    session['is_admin'] = user_obj.is_admin
+                    db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
+                    db.commit()
+                    flash(f'Welcome back, {user_obj.username}!', 'success')
+                    return redirect(url_for('main.home'))
+        flash('Invalid admin credentials.', 'danger')
+        return redirect(url_for('main.login'))
+
+    # GET request - start Plex OAuth
     client_id = database.get_setting('plex_client_id')
     if not client_id:
         flash("Plex Client ID is not configured in settings.", "danger")
@@ -352,10 +371,10 @@ def login():
     if r.status_code != 201:
         flash('Failed to initiate Plex login.', 'danger')
         return redirect(url_for('main.home'))
-    
+
     pin = r.json()
     session['plex_pin_id'] = pin['id']
-    
+
     plex_auth_url = f"https://app.plex.tv/auth#?clientID={client_id}&code={pin['code']}&forwardUrl={url_for('main.callback', _external=True)}"
     return redirect(plex_auth_url)
 
@@ -421,6 +440,7 @@ def callback():
     user_obj = current_app.login_manager._user_callback(user_record['id'])
     if user_obj:
         login_user(user_obj)
+        session['user_id'] = user_obj.id
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
         db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
