@@ -7,34 +7,69 @@
 {% block admin_page_content %}
 <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
     <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">API Usage Details</h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div class="bg-slate-100 dark:bg-slate-700 p-3 rounded">
+            <p class="text-sm text-slate-600 dark:text-slate-300">Total Cost</p>
+            <p class="text-lg font-semibold">${{ '%.5f'|format(total_cost|float) }}</p>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-3 rounded">
+            <p class="text-sm text-slate-600 dark:text-slate-300">Cost (7d)</p>
+            <p class="text-lg font-semibold">${{ '%.5f'|format(week_cost|float) }}</p>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-3 rounded">
+            <p class="text-sm text-slate-600 dark:text-slate-300">OpenAI Calls</p>
+            <p class="text-lg font-semibold">{{ openai_count }}</p>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-700 p-3 rounded">
+            <p class="text-sm text-slate-600 dark:text-slate-300">Ollama Calls</p>
+            <p class="text-lg font-semibold">{{ ollama_count }}</p>
+        </div>
+    </div>
+
+    <form method="get" class="flex flex-wrap gap-2 mb-4">
+        <select name="provider" class="border rounded p-1 text-sm">
+            <option value="">All Providers</option>
+            <option value="openai" {% if provider_filter=='openai' %}selected{% endif %}>OpenAI</option>
+            <option value="ollama" {% if provider_filter=='ollama' %}selected{% endif %}>Ollama</option>
+        </select>
+        <input type="date" name="start_date" value="{{ start_date }}" class="border rounded p-1 text-sm">
+        <input type="date" name="end_date" value="{{ end_date }}" class="border rounded p-1 text-sm">
+        <button type="submit" class="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1 rounded text-sm">Filter</button>
+    </form>
+
     {% if logs %}
     <div class="overflow-x-auto">
-        <table class="w-full table-auto">
+        <table class="w-full table-auto" id="usage-table">
             <thead class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/20">
                 <tr>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">ID</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Timestamp</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Provider</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-left">Endpoint</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Prompt Tokens</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Completion Tokens</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Total Tokens</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Processing Time (ms)</div></th>
-                    <th class="p-2 whitespace-nowrap"><div class="font-semibold text-right">Cost (USD)</div></th>
+                    <th class="p-2 text-left cursor-pointer">Date</th>
+                    <th class="p-2 text-left cursor-pointer">Provider</th>
+                    <th class="p-2 text-left">Endpoint</th>
+                    <th class="p-2 text-right cursor-pointer">Prompt</th>
+                    <th class="p-2 text-right cursor-pointer">Completion</th>
+                    <th class="p-2 text-right cursor-pointer">Total</th>
+                    <th class="p-2 text-right cursor-pointer">Time</th>
+                    <th class="p-2 text-right cursor-pointer">Cost</th>
                 </tr>
             </thead>
             <tbody class="text-sm divide-y divide-slate-100 dark:divide-slate-700">
                 {% for log_entry in logs %}
                 <tr>
-                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.id }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log_entry.timestamp else 'N/A' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.provider if log_entry.provider else '-' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-left">{{ log_entry.endpoint }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.prompt_tokens if log_entry.prompt_tokens is not none else '-' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.completion_tokens if log_entry.completion_tokens is not none else '-' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.total_tokens if log_entry.total_tokens is not none else '-' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-right">{{ log_entry.processing_time_ms if log_entry.processing_time_ms is not none else '-' }}</div></td>
-                    <td class="p-2 whitespace-nowrap"><div class="text-right">${{ "%.5f"|format(log_entry.cost_usd|float) if log_entry.cost_usd is not none else '-' }}</div></td>
+                    <td class="p-2" title="{{ log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S') if log_entry.timestamp else '' }}">{{ log_entry.timestamp.strftime('%Y-%m-%d') if log_entry.timestamp else 'N/A' }}</td>
+                    <td class="p-2">
+                        {% if log_entry.provider == 'openai' %}
+                        <svg class="w-4 h-4 inline" viewBox="0 0 40.81 40.81" xmlns="http://www.w3.org/2000/svg"><path d="M38.08,0H2.73A2.73,2.73,0,0,0,0,2.73V38.08a2.73,2.73,0,0,0,2.73,2.73H38.08a2.73,2.73,0,0,0,2.73-2.73V2.73A2.73,2.73,0,0,0,38.08,0ZM29.2,16.52a7.2,7.2,0,0,1-2,.32,7.33,7.33,0,0,1-5.48-2.1,7.21,7.21,0,0,1-1.89-5.11,7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,22,2.73a7.2,7.2,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11A7.33,7.33,0,0,1,29.2,16.52Zm-7.68,4.66a7.31,7.31,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11,7.33,7.33,0,0,1-5.48,2.1,7.2,7.2,0,0,1-2-.32,7.33,7.33,0,0,1-5.48-2.1,7.21,7.21,0,0,1-1.89-5.11,7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,16.29,20a7.2,7.2,0,0,1,5.23,1.18ZM11.61,24.27a7.2,7.2,0,0,1-2,.32,7.33,7.33,0,0,1-5.48-2.1A7.21,7.21,0,0,1,2.26,17.4a7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,9.36,10.7a7.2,7.2,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11A7.33,7.33,0,0,1,11.61,24.27Zm15.21-4.66a7.31,7.31,0,0,1-5.23-1.88,7.48,7.48,0,0,1-2-5.63,7.21,7.21,0,0,1,1.89-5.11A7.33,7.33,0,0,1,21.52,6a7.2,7.2,0,0,1,2,.32,7.33,7.33,0,0,1,5.48,2.1,7.21,7.21,0,0,1,1.89,5.11,7.48,7.48,0,0,1-2.23,5.51A7.31,7.31,0,0,1,24.71,20.79a7.2,7.2,0,0,1-5.23-1.18Z" fill="currentColor"/></svg>
+                        {% else %}
+                        <img src="{{ url_for('static', filename='logos/ollama-light.png') }}" alt="ollama" class="w-4 h-4 inline dark:hidden"><img src="{{ url_for('static', filename='logos/ollama-dark.png') }}" alt="ollama" class="w-4 h-4 inline hidden dark:inline">
+                        {% endif %}
+                    </td>
+                    <td class="p-2">{{ log_entry.endpoint }}</td>
+                    <td class="p-2 text-right">{{ log_entry.prompt_tokens if log_entry.prompt_tokens is not none else '-' }}</td>
+                    <td class="p-2 text-right">{{ log_entry.completion_tokens if log_entry.completion_tokens is not none else '-' }}</td>
+                    <td class="p-2 text-right">{{ log_entry.total_tokens if log_entry.total_tokens is not none else '-' }}</td>
+                    <td class="p-2 text-right">{{ log_entry.processing_time_ms|format_ms if log_entry.processing_time_ms is not none else '-' }}</td>
+                    <td class="p-2 text-right">${{ "%.5f"|format(log_entry.cost_usd|float) if log_entry.cost_usd is not none else '-' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -44,4 +79,21 @@
     <p class="text-center text-slate-500 dark:text-slate-400 py-8">No API usage logs found.</p>
     {% endif %}
 </div>
+
+<script>
+// Basic column sorting
+document.querySelectorAll('#usage-table th').forEach(function(th, idx){
+  th.addEventListener('click', function(){
+    const table = th.closest('table');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const asc = th.classList.toggle('asc');
+    rows.sort(function(a,b){
+      const aText = a.children[idx].textContent.trim();
+      const bText = b.children[idx].textContent.trim();
+      return asc ? aText.localeCompare(bText, undefined, {numeric:true}) : bText.localeCompare(aText, undefined, {numeric:true});
+    });
+    rows.forEach(r => table.tBodies[0].appendChild(r));
+  });
+});
+</script>
 {% endblock %}

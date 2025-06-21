@@ -183,8 +183,14 @@ def dashboard():
     openai_cost_week = safe_value(
         "SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
     )
+    openai_call_count_week = safe_value(
+        "SELECT COUNT(*) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
+    )
     ollama_avg_ms = safe_value(
         "SELECT AVG(processing_time_ms) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
+    )
+    ollama_call_count_week = safe_value(
+        "SELECT COUNT(*) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
     )
 
     return render_template(
@@ -196,7 +202,9 @@ def dashboard():
         radarr_week_count=radarr_week_count,
         sonarr_week_count=sonarr_week_count,
         openai_cost_week=openai_cost_week,
+        openai_call_count_week=openai_call_count_week,
         ollama_avg_ms=ollama_avg_ms,
+        ollama_call_count_week=ollama_call_count_week,
     )
 
 
@@ -472,7 +480,7 @@ def settings():
             radarr_url=?, radarr_api_key=?,
             sonarr_url=?, sonarr_api_key=?,
             bazarr_url=?, bazarr_api_key=?,
-            ollama_url=?, ollama_model_name=?, openai_api_key=?, preferred_llm_provider=?,
+            ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
@@ -484,6 +492,7 @@ def settings():
             request.form.get('ollama_url'),
             request.form.get('ollama_model_name'),
             request.form.get('openai_api_key'),
+            request.form.get('openai_model_name'),
             request.form.get('preferred_llm_provider'),
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
@@ -511,6 +520,7 @@ def settings():
     merged_settings = dict(settings) if settings else {}
     # Ensure new fields are present in merged_settings, even if None initially from DB
     merged_settings.setdefault('openai_api_key', None)
+    merged_settings.setdefault('openai_model_name', None)
     merged_settings.setdefault('preferred_llm_provider', None)
     merged_settings.setdefault('ollama_model_name', None)
 
@@ -544,6 +554,12 @@ def settings():
     if saved_model and saved_model not in ollama_models:
         ollama_models.insert(0, saved_model)
 
+    openai_models = [
+        {"name": "gpt-3.5-turbo", "price": "$0.0015 / 1K"},
+        {"name": "gpt-4o", "price": "$0.005 / 1K"},
+        {"name": "gpt-4-turbo", "price": "$0.01 / 1K"},
+    ]
+
     return render_template(
         'admin_settings.html',
         user=user,
@@ -555,7 +571,8 @@ def settings():
         bazarr_status=bazarr_status,
         ollama_status=ollama_status,
         tautulli_status=tautulli_status, # Added Tautulli status
-        ollama_models=ollama_models
+        ollama_models=ollama_models,
+        openai_models=openai_models
     )
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
@@ -827,10 +844,38 @@ def api_usage_logs():
     except Exception as e:
         current_app.logger.error(f"[API Usage Logs] Debug DB check failed: {e}", exc_info=True)
     import datetime
-    logs = db.execute(
+    provider_filter = request.args.get('provider')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    query = (
         "SELECT id, timestamp, provider, endpoint, prompt_tokens, completion_tokens, total_tokens, cost_usd, processing_time_ms "
-        "FROM api_usage ORDER BY timestamp DESC LIMIT 200"
-    ).fetchall()
+        "FROM api_usage WHERE 1=1"
+    )
+    params = []
+    if provider_filter:
+        query += " AND provider=?"
+        params.append(provider_filter)
+    if start_date:
+        query += " AND timestamp>=?"
+        params.append(f"{start_date} 00:00:00")
+    if end_date:
+        query += " AND timestamp<=?"
+        params.append(f"{end_date} 23:59:59")
+    query += " ORDER BY timestamp DESC LIMIT 200"
+    logs = db.execute(query, params).fetchall()
+
+    def safe_value(q, p=None):
+        try:
+            r = db.execute(q, p or []).fetchone()
+            return r[0] if r and r[0] is not None else 0
+        except Exception:
+            return 0
+
+    total_cost = safe_value("SELECT SUM(cost_usd) FROM api_usage")
+    week_cost = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now','-7 days')")
+    openai_count = safe_value("SELECT COUNT(*) FROM api_usage WHERE provider='openai'")
+    ollama_count = safe_value("SELECT COUNT(*) FROM api_usage WHERE provider='ollama'")
     # Convert timestamps to datetime objects for Jinja2 compatibility
     processed_logs = []
     for log in logs:
@@ -842,7 +887,18 @@ def api_usage_logs():
             except Exception:
                 log_dict['timestamp'] = None
         processed_logs.append(log_dict)
-    return render_template('admin_api_usage_logs.html', logs=processed_logs, title="API Usage Logs")
+    return render_template(
+        'admin_api_usage_logs.html',
+        logs=processed_logs,
+        title="API Usage Logs",
+        total_cost=total_cost,
+        week_cost=week_cost,
+        openai_count=openai_count,
+        ollama_count=ollama_count,
+        provider_filter=provider_filter,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 @admin_bp.route('/sync-radarr', methods=['POST'])
 @login_required

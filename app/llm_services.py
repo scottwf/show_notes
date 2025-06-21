@@ -41,7 +41,7 @@ def get_llm_response(prompt_text, llm_model_name=None, provider=None):
     ollama_url = get_setting("ollama_url")
 
     # Default model names (could be moved to settings or config file later)
-    default_openai_model = "gpt-3.5-turbo"
+    default_openai_model = get_setting("openai_model_name") or "gpt-3.5-turbo"
     # Use the admin-configured model if present, else fallback
     default_ollama_model = get_setting("ollama_model_name") or "llama2" # Make sure this model is available in the user's Ollama instance
 
