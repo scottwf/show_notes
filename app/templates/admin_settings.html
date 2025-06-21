@@ -31,7 +31,7 @@
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select the default LLM provider for AI features.</p>
             </div>
             <hr class="my-4 border-slate-200 dark:border-slate-700">
-            <div>
+            <div class="p-4 border rounded-lg {% if settings.preferred_llm_provider == 'ollama' %}border-green-500{% else %}border-transparent{% endif %}">
                 <div class="flex items-center gap-x-2 mb-1">
                     <img src="{{ url_for('static', filename='logos/ollama-light.png') }}" alt="Ollama logo" class="w-5 h-5 object-contain dark:hidden">
                     <img src="{{ url_for('static', filename='logos/ollama-dark.png') }}" alt="Ollama logo dark" class="w-5 h-5 object-contain hidden dark:inline">
@@ -41,15 +41,26 @@
                 <input type="text" id="ollama_url" name="ollama_url" value="{{ settings.ollama_url or '' }}" placeholder="e.g., http://localhost:11434" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
                  <button type="button" data-service="ollama" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-2 text-xs font-medium">Test Ollama</button>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">URL for your self-hosted Ollama instance. Required if Ollama is the preferred provider.</p>
+                <div id="ollama-model-select-container" class="mt-2">
+                    <label for="ollama_model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Ollama Model</label>
+                    <select id="ollama_model_name" name="ollama_model_name" data-saved-model="{{ settings.ollama_model_name }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                        <option value="">-- Select a model --</option>
+                        {% for model in ollama_models %}
+                        <option value="{{ model }}" {% if settings.ollama_model_name == model %}selected{% endif %}>{{ model }}</option>
+                        {% endfor %}
+                    </select>
+                    <p id="ollama-model-warning" class="text-xs text-amber-600 dark:text-amber-400 mt-1" style="display: none;"></p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Choose a model available on your Ollama server.</p>
+                </div>
             </div>
             <hr class="my-4 border-slate-200 dark:border-slate-700">
-            <div>
-                 <div class="flex items-center gap-x-2 mb-1">
+            <div class="p-4 border rounded-lg {% if settings.preferred_llm_provider == 'openai' %}border-green-500{% else %}border-transparent{% endif %}">
+                <div class="flex items-center gap-x-2 mb-1">
                     {# Placeholder for OpenAI logo - consider adding one to static/logos #}
                     <svg class="w-5 h-5 object-contain text-slate-700 dark:text-slate-300" viewBox="0 0 40.81 40.81" xmlns="http://www.w3.org/2000/svg"><path d="M38.08,0H2.73A2.73,2.73,0,0,0,0,2.73V38.08a2.73,2.73,0,0,0,2.73,2.73H38.08a2.73,2.73,0,0,0,2.73-2.73V2.73A2.73,2.73,0,0,0,38.08,0ZM29.2,16.52a7.2,7.2,0,0,1-2,.32,7.33,7.33,0,0,1-5.48-2.1,7.21,7.21,0,0,1-1.89-5.11,7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,22,2.73a7.2,7.2,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11A7.33,7.33,0,0,1,29.2,16.52Zm-7.68,4.66a7.31,7.31,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11,7.33,7.33,0,0,1-5.48,2.1,7.2,7.2,0,0,1-2-.32,7.33,7.33,0,0,1-5.48-2.1,7.21,7.21,0,0,1-1.89-5.11,7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,16.29,20a7.2,7.2,0,0,1,5.23,1.18ZM11.61,24.27a7.2,7.2,0,0,1-2,.32,7.33,7.33,0,0,1-5.48-2.1A7.21,7.21,0,0,1,2.26,17.4a7.48,7.48,0,0,1,2.23-5.51A7.31,7.31,0,0,1,9.36,10.7a7.2,7.2,0,0,1,5.23,1.88,7.48,7.48,0,0,1,2,5.63,7.21,7.21,0,0,1-1.89,5.11A7.33,7.33,0,0,1,11.61,24.27Zm15.21-4.66a7.31,7.31,0,0,1-5.23-1.88,7.48,7.48,0,0,1-2-5.63,7.21,7.21,0,0,1,1.89-5.11A7.33,7.33,0,0,1,21.52,6a7.2,7.2,0,0,1,2,.32,7.33,7.33,0,0,1,5.48,2.1,7.21,7.21,0,0,1,1.89,5.11,7.48,7.48,0,0,1-2.23,5.51A7.31,7.31,0,0,1,24.71,20.79a7.2,7.2,0,0,1-5.23-1.18Z" fill="currentColor"/></svg>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="openai_api_key">OpenAI API Key</label>
                 </div>
-                <input type="password" id="openai_api_key" name="openai_api_key" value="{{ settings.openai_api_key or '' }}" placeholder="sk-..." class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                <input type="password" id="openai_api_key" name="openai_api_key" value="{{ settings.openai_api_key or '' }}" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your API key for OpenAI services. Required if OpenAI is the preferred provider.</p>
             </div>
         </div>

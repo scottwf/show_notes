@@ -454,6 +454,12 @@ def settings():
                 ollama_models = [m['model'] for m in data.get('models', [])]
         except Exception as e:
             current_app.logger.warning(f"Could not fetch Ollama models: {e}")
+
+    # Ensure the saved model is always in the list
+    saved_model = merged_settings.get('ollama_model_name')
+    if saved_model and saved_model not in ollama_models:
+        ollama_models.insert(0, saved_model)
+
     return render_template(
         'admin_settings.html',
         user=user,
@@ -488,58 +494,47 @@ def sync_sonarr():
 def test_llm_summary():
     current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed Test LLM Summary page.")
 
-    # Defaults
-    default_character = "Walter White"
-    default_show = "Breaking Bad"
-    default_season = 1
-    default_episode = 1
-    default_provider = get_setting('preferred_llm_provider') or 'ollama'
-    default_options = {
+    # Initialize variables
+    test_character = ''
+    test_show = ''
+    test_season = 1
+    test_episode = 1
+    preferred_provider = get_setting('preferred_llm_provider') or 'ollama'
+    prompt_options = {
         'include_relationships': True,
         'include_motivations': True,
         'include_quote': True,
         'tone': 'tv_expert'
     }
-
-    if request.method == 'POST':
-        test_character = request.form.get('test_character', default_character)
-        test_show = request.form.get('test_show', default_show)
-        test_season = int(request.form.get('test_season', default_season))
-        test_episode = int(request.form.get('test_episode', default_episode))
-        preferred_provider = request.form.get('preferred_provider', default_provider)
-        # Prompt options (checkboxes)
-        prompt_options = {
-            'include_relationships': bool(request.form.get('include_relationships')),
-            'include_motivations': bool(request.form.get('include_motivations')),
-            'include_quote': bool(request.form.get('include_quote')),
-            'tone': request.form.get('tone', 'tv_expert')
-        }
-    else:
-        test_character = default_character
-        test_show = default_show
-        test_season = default_season
-        test_episode = default_episode
-        preferred_provider = default_provider
-        prompt_options = default_options
-
-    # Build prompt
-    generated_prompt = prompt_builder.build_character_prompt(
-        character=test_character,
-        show=test_show,
-        season=test_season,
-        episode=test_episode,
-        options=prompt_options
-    )
-
+    generated_prompt = ''
     llm_response = None
     error_message = None
     card_data = None
+
     if request.method == 'POST':
-        # Call LLM only on submit
+        # Get values from the submitted form
+        test_character = request.form.get('test_character', '')
+        test_show = request.form.get('test_show', '')
+        test_season = int(request.form.get('test_season', 1))
+        test_episode = int(request.form.get('test_episode', 1))
+        preferred_provider = request.form.get('preferred_provider', preferred_provider)
+        prompt_options = {
+            'include_relationships': 'include_relationships' in request.form,
+            'include_motivations': 'include_motivations' in request.form,
+            'include_quote': 'include_quote' in request.form,
+            'tone': request.form.get('tone', 'tv_expert')
+        }
+
+        # Build prompt and call LLM
+        generated_prompt = prompt_builder.build_character_prompt(
+            character=test_character,
+            show=test_show,
+            season=test_season,
+            episode=test_episode,
+            options=prompt_options
+        )
         llm_response, error_message = get_llm_response(generated_prompt, llm_model_name=None, provider=preferred_provider)
-        # Optionally parse the LLM response for card preview
         if llm_response:
-            # For demo: just pass the raw response. You can parse to dict if format is known.
             card_data = llm_response
 
     return render_template('admin_test_llm_summary.html',
@@ -554,6 +549,67 @@ def test_llm_summary():
                            preferred_provider=preferred_provider,
                            card_data=card_data,
                            title="Test LLM Summary Generation")
+
+@admin_bp.route('/api/test-llm-summary', methods=['POST'])
+@login_required
+@admin_required
+def api_test_llm_summary():
+    """API endpoint to run an LLM summary test and return results as JSON."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    test_character = data.get('test_character', '')
+    test_show = data.get('test_show', '')
+    test_season = int(data.get('test_season', 1))
+    test_episode = int(data.get('test_episode', 1))
+    preferred_provider = data.get('preferred_provider') or get_setting('preferred_llm_provider') or 'ollama'
+    prompt_options = data.get('prompt_options', {
+        'include_relationships': True,
+        'include_motivations': True,
+        'include_quote': True,
+        'tone': 'tv_expert'
+    })
+
+    # Build prompt
+    generated_prompt = prompt_builder.build_character_prompt(
+        character=test_character,
+        show=test_show,
+        season=test_season,
+        episode=test_episode,
+        options=prompt_options
+    )
+
+    # Determine model name if provider is Ollama
+    ollama_model_name = None
+    if preferred_provider == 'ollama':
+        ollama_model_name = get_setting('ollama_model_name')
+        if not ollama_model_name:
+            current_app.logger.error('Ollama is selected, but no Ollama model name is configured in settings.')
+            return jsonify({'error': 'Ollama is selected, but no Ollama model name is configured in settings.'}), 400
+
+    # Call LLM
+    try:
+        llm_response, error_message = get_llm_response(generated_prompt, llm_model_name=ollama_model_name, provider=preferred_provider)
+    except Exception as e:
+        current_app.logger.error(f"Error calling LLM provider {preferred_provider}: {e}", exc_info=True)
+        return jsonify({'error': f'Error calling LLM provider {preferred_provider}: {e}'}), 500
+
+    # Prepare response
+    response_data = {
+        'test_character': test_character,
+        'test_show': test_show,
+        'test_season': test_season,
+        'test_episode': test_episode,
+        'preferred_provider': preferred_provider,
+        'prompt_options': prompt_options,
+        'generated_prompt': generated_prompt,
+        'llm_response': llm_response,
+        'error_message': error_message
+    }
+    if not llm_response and not error_message:
+        response_data['error_message'] = 'No response received from LLM. This may mean the provider is not configured, returned an empty response, or the model is missing.'
+    return jsonify(response_data)
 
 @admin_bp.route('/view-prompts')
 @login_required

@@ -42,6 +42,10 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **Admin Search Functionality:** Implemented unified search in the admin panel for shows, movies, and admin routes.
 - [x] **README and Roadmap updates:** Documentation updated to reflect recent changes (this item).
 - [x] **Descriptive comments:** Added docstrings and inline comments to key Python files (this item).
+- [x] **LLM Integration & Management UI:**
+    - [x] Added admin pages to view and test LLM prompt templates.
+    - [x] Implemented API usage logging with a dedicated page to view provider, token counts, cost, and processing time.
+    - [x] Enhanced the settings page to allow selection between LLM providers (e.g., Ollama, OpenAI) and configure model names.
 
 
 ## Next Steps
@@ -67,9 +71,6 @@ This document outlines the planned features and development stages for the ShowN
 - [ ] **Database Management Page:**
     - [ ] Provide UI controls for manual library synchronization (Sonarr, Radarr, potentially others like Bazarr later).
     - [ ] Display statistics from the local database (e.g., number of shows, movies, episodes, users).
-- [ ] **LLM Model Prompts Management Page:**
-    - [ ] Allow viewing and editing of LLM prompt templates used by the application.
-    - [ ] Display usage statistics for different prompts.
 - [ ] **User Management Page:**
     - [ ] Display a list of registered users and their details.
     - [ ] (Future) Add ability to manage user roles or permissions.
