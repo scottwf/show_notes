@@ -26,6 +26,8 @@ import sqlite3
 import time
 import datetime # Added
 from datetime import timezone # Added
+import urllib.parse
+import logging
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for, session, jsonify,
@@ -108,15 +110,15 @@ def _get_plex_event_details(plex_event_row, db):
     item_details = dict(plex_event_row)
     media_type = item_details.get('media_type')
 
-    plex_tmdb_id = item_details.get('tmdb_id') # This is episode's TMDB ID or movie's TMDB ID from Plex payload
-    grandparent_rating_key = item_details.get('grandparent_rating_key') # This is TVDB ID for shows from Plex payload
+    plex_tmdb_id = item_details.get('tmdb_id')
+    grandparent_rating_key = item_details.get('grandparent_rating_key')
 
     item_details['item_type_for_url'] = None
     item_details['tmdb_id_for_poster'] = None
-    item_details['link_tmdb_id'] = None # TMDB ID for the link to movie/show detail page
+    item_details['link_tmdb_id'] = None
 
     if media_type == 'movie':
-        if plex_tmdb_id: # This should be the movie's TMDB ID
+        if plex_tmdb_id:
             movie_data = db.execute(
                 'SELECT title, poster_url, year, overview FROM radarr_movies WHERE tmdb_id = ?', (plex_tmdb_id,)
             ).fetchone()
@@ -128,28 +130,29 @@ def _get_plex_event_details(plex_event_row, db):
 
     elif media_type == 'episode':
         item_details['item_type_for_url'] = 'show'
-        # Store original episode title before potentially overriding with show title
-        item_details['episode_title'] = dict(plex_event_row).get('title') # Corrected: use plex_event_row
-
-        if grandparent_rating_key: # This is TVDB ID
+        item_details['episode_title'] = dict(plex_event_row).get('title')
+        show_info = None
+        # Try TVDB ID lookup first
+        if grandparent_rating_key:
             show_info = db.execute(
                 'SELECT tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE tvdb_id = ?', (grandparent_rating_key,)
             ).fetchone()
-            if show_info:
-                # Update item_details with show's info, but preserve episode-specific fields like original title
-                # Fields like 'year', 'overview', 'poster_url' will be from the show.
-                # 'title' from show_info is the show's title.
-                item_details.update(dict(show_info))
-                item_details['tmdb_id_for_poster'] = show_info['tmdb_id']
-                item_details['link_tmdb_id'] = show_info['tmdb_id']
-                # item_details['title'] is now show title, original episode title is in item_details['episode_title']
-        # If grandparent_rating_key is missing, we might not be able to reliably get show's TMDB ID for poster/link
+        # Fallback: Try to find by show title if TVDB lookup fails
+        if not show_info:
+            show_title = item_details.get('show_title') or item_details.get('grandparent_title') or item_details.get('title')
+            if show_title:
+                show_info = db.execute(
+                    'SELECT tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE LOWER(title) = ?', (show_title.lower(),)
+                ).fetchone()
+                if show_info:
+                    current_app.logger.warning(f"_get_plex_event_details: Fallback to title lookup for show '{show_title}' (TVDB ID {grandparent_rating_key})")
+        if show_info:
+            item_details.update(dict(show_info))
+            item_details['tmdb_id_for_poster'] = show_info['tmdb_id']
+            item_details['link_tmdb_id'] = show_info['tmdb_id']
+        else:
+            current_app.logger.warning(f"_get_plex_event_details: Could not find show for TVDB ID {grandparent_rating_key} or title '{item_details.get('show_title') or item_details.get('grandparent_title') or item_details.get('title')}'")
 
-    # Fallback for poster_url if not found via Radarr/Sonarr lookup but was in Plex event (less likely to be what we want)
-    # if item_details.get('poster_url') is None and dict(plex_event_row).get('poster_url'):
-    #     item_details['poster_url'] = dict(plex_event_row).get('poster_url') # This is often a low-res Plex thumb
-
-    # Ensure some title exists, default to original from plex_event_row if no enrichment happened
     item_details.setdefault('title', dict(plex_event_row).get('title'))
     item_details.setdefault('year', None)
 
@@ -160,20 +163,12 @@ def _get_plex_event_details(plex_event_row, db):
             item_details['episode_number'] = int(match.group(2))
             item_details['episode_detail_url'] = url_for('main.episode_detail', tmdb_id=item_details['link_tmdb_id'], season_number=item_details['season_number'], episode_number=item_details['episode_number'])
 
-    # Generate cached image URLs
     if item_details.get('tmdb_id_for_poster'):
-        item_details['cached_poster_url'] = url_for('static', filename=f"poster/{item_details['tmdb_id_for_poster']}.jpg")
-        # For Plex events, fanart might be less common or derived from the same ID.
-        # Assuming tmdb_id_for_poster can also be used for a potential background.
-        item_details['cached_fanart_url'] = url_for('static', filename=f"background/{item_details['tmdb_id_for_poster']}.jpg")
+        item_details['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_details['tmdb_id_for_poster'])
+        item_details['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=item_details['tmdb_id_for_poster'])
     else:
-        item_details['cached_poster_url'] = None
-        item_details['cached_fanart_url'] = None
-        # Fallback to any poster_url that might have been set directly from Sonarr/Radarr if tmdb_id_for_poster was missing
-        # but this is less ideal as we want to use cached images.
-        # if item_details.get('poster_url'):
-        #     item_details['cached_poster_url'] = item_details['poster_url']
-
+        item_details['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+        item_details['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
 
     return item_details
 
@@ -293,18 +288,32 @@ def plex_webhook():
             player = payload.get('Player', {})
 
             tmdb_id = None
+            tvdb_id = None
             guids = metadata.get('Guid')
             if isinstance(guids, list):
                 for guid_item in guids:
                     guid_str = guid_item.get('id', '')
                     if guid_str.startswith('tmdb://'):
-                        tmdb_id = int(guid_str.split('//')[1])
-                        break
-            
+                        try:
+                            tmdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            tmdb_id = None
+                    if guid_str.startswith('tvdb://'):
+                        try:
+                            tvdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            tvdb_id = None
+            # Fallback: try to get TVDB ID from grandparentRatingKey if not found
+            if not tvdb_id:
+                try:
+                    tvdb_id = int(metadata.get('grandparentRatingKey'))
+                except Exception:
+                    tvdb_id = None
+
+            season_num = metadata.get('parentIndex')
+            episode_num = metadata.get('index')
             season_episode_str = None
             if metadata.get('type') == 'episode':
-                season_num = metadata.get('parentIndex')
-                episode_num = metadata.get('index')
                 if season_num is not None and episode_num is not None:
                     season_episode_str = f"S{str(season_num).zfill(2)}E{str(episode_num).zfill(2)}"
 
@@ -324,6 +333,30 @@ def plex_webhook():
             db.execute(sql_insert, params)
             db.commit()
             current_app.logger.info(f"Logged event '{event_type}' for '{metadata.get('title')}' to plex_activity_log.")
+
+            # --- Store episode character data if available ---
+            if metadata.get('type') == 'episode' and 'Role' in metadata:
+                episode_rating_key = metadata.get('ratingKey')
+                # Remove old character rows for this episode
+                db.execute('DELETE FROM episode_characters WHERE episode_rating_key = ?', (episode_rating_key,))
+                roles = metadata['Role']
+                for role in roles:
+                    db.execute(
+                        'INSERT INTO episode_characters (show_tmdb_id, show_tvdb_id, season_number, episode_number, episode_rating_key, character_name, actor_name, actor_id, actor_thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        (
+                            tmdb_id,
+                            tvdb_id,
+                            season_num,
+                            episode_num,
+                            episode_rating_key,
+                            role.get('role'),
+                            role.get('tag'),
+                            role.get('id'),
+                            role.get('thumb')
+                        )
+                    )
+                db.commit()
+                current_app.logger.info(f"Stored {len(roles)} episode characters for episode {episode_rating_key} (S{season_num}E{episode_num})")
         
         return '', 200
     except Exception as e:
@@ -559,8 +592,8 @@ def search():
     for row in sonarr_results + radarr_results:
         item = dict(row)
         if item.get('tmdb_id'):
-            item['poster_url'] = url_for('static', filename=f"poster/{item['tmdb_id']}.jpg")
-            item['fanart_url'] = url_for('static', filename=f"background/{item['tmdb_id']}.jpg")
+            item['poster_url'] = url_for('main.image_proxy', type='poster', id=item['tmdb_id'])
+            item['fanart_url'] = url_for('main.image_proxy', type='background', id=item['tmdb_id'])
         else:
             # Set to placeholder or None if no tmdb_id, so templates don't break
             item['poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
@@ -595,11 +628,11 @@ def movie_detail(tmdb_id):
         abort(404)
     movie_dict = dict(movie)
     if movie_dict.get('tmdb_id'):
-        movie_dict['cached_poster_url'] = url_for('static', filename=f"poster/{movie_dict['tmdb_id']}.jpg")
-        movie_dict['cached_fanart_url'] = url_for('static', filename=f"background/{movie_dict['tmdb_id']}.jpg")
+        movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie_dict['tmdb_id'])
+        movie_dict['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=movie_dict['tmdb_id'])
     else:
-        movie_dict['cached_poster_url'] = None
-        movie_dict['cached_fanart_url'] = None
+        movie_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+        movie_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
     return render_template('movie_detail.html', movie=movie_dict)
 
 @main_bp.route('/show/<int:tmdb_id>')
@@ -633,11 +666,11 @@ def show_detail(tmdb_id):
         abort(404)
     show_dict = dict(show_row)
     if show_dict.get('tmdb_id'):
-        show_dict['cached_poster_url'] = url_for('static', filename=f"poster/{show_dict['tmdb_id']}.jpg")
-        show_dict['cached_fanart_url'] = url_for('static', filename=f"background/{show_dict['tmdb_id']}.jpg")
+        show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show_dict['tmdb_id'])
+        show_dict['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=show_dict['tmdb_id'])
     else:
-        show_dict['cached_poster_url'] = None
-        show_dict['cached_fanart_url'] = None
+        show_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+        show_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
     show_db_id = show_dict['id']
 
     seasons_rows = db.execute(
@@ -859,19 +892,22 @@ def episode_detail(tmdb_id, season_number, episode_number):
     db = database.get_db()
 
     # Fetch show, season, and episode details in one go if possible
-    show_row = db.execute('SELECT id, title, tmdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
+    show_row = db.execute('SELECT id, title, tmdb_id, tvdb_id, poster_url, fanart_url FROM sonarr_shows WHERE tmdb_id = ?', (tmdb_id,)).fetchone()
     if not show_row:
         abort(404)
     show_dict = dict(show_row)
     # Use consistent names for cached URLs as expected by the new template.
     if show_dict.get('tmdb_id'):
-        show_dict['cached_poster_url'] = url_for('static', filename=f"poster/{show_dict['tmdb_id']}.jpg")
-        show_dict['cached_fanart_url'] = url_for('static', filename=f"background/{show_dict['tmdb_id']}.jpg") # Optional for episode page bg
+        show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show_dict['tmdb_id'])
+        show_dict['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=show_dict['tmdb_id']) # Optional for episode page bg
     else:
-        show_dict['cached_poster_url'] = None
-        show_dict['cached_fanart_url'] = None
+        show_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+        show_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
 
     show_id = show_dict['id']
+    show_tvdb_id = show_dict.get('tvdb_id')
+    show_tmdb_id = show_dict.get('tmdb_id')
+    show_title = show_dict.get('title')
     season_row = db.execute('SELECT id FROM sonarr_seasons WHERE show_id=? AND season_number=?', (show_id, season_number)).fetchone()
     if not season_row:
         abort(404)
@@ -882,6 +918,67 @@ def episode_detail(tmdb_id, season_number, episode_number):
         abort(404)
 
     episode_dict = dict(episode_row)
+
+    # Try all possible IDs for cast lookup
+    episode_characters = []
+    # 1. Sonarr TVDB ID
+    if show_tvdb_id:
+        episode_characters = db.execute(
+            'SELECT * FROM episode_characters WHERE show_tvdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY id',
+            (show_tvdb_id, season_number, episode_number)
+        ).fetchall()
+        episode_characters = [dict(row) for row in episode_characters]
+    # 2. Sonarr TMDB ID
+    if not episode_characters and show_tmdb_id:
+        episode_characters = db.execute(
+            'SELECT * FROM episode_characters WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY id',
+            (show_tmdb_id, season_number, episode_number)
+        ).fetchall()
+        episode_characters = [dict(row) for row in episode_characters]
+    # 3. Try Plex webhook IDs from most recent plex_activity_log for this episode
+    if not episode_characters:
+        # Try to find the most recent plex_activity_log for this show/season/episode
+        # We'll match by show title and season/episode string (season_episode)
+        season_episode_str = f"S{str(season_number).zfill(2)}E{str(episode_number).zfill(2)}"
+        plex_row = db.execute(
+            'SELECT raw_payload FROM plex_activity_log WHERE show_title = ? AND season_episode = ? ORDER BY event_timestamp DESC LIMIT 1',
+            (show_title, season_episode_str)
+        ).fetchone()
+        plex_tmdb_id = None
+        plex_tvdb_id = None
+        if plex_row:
+            import json
+            try:
+                payload = json.loads(plex_row['raw_payload'])
+                guids = payload.get('Metadata', {}).get('Guid', [])
+                for guid_item in guids:
+                    guid_str = guid_item.get('id', '')
+                    if guid_str.startswith('tmdb://'):
+                        try:
+                            plex_tmdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            plex_tmdb_id = None
+                    if guid_str.startswith('tvdb://'):
+                        try:
+                            plex_tvdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            plex_tvdb_id = None
+            except Exception:
+                pass
+        # 3a. Plex TVDB ID
+        if plex_tvdb_id:
+            episode_characters = db.execute(
+                'SELECT * FROM episode_characters WHERE show_tvdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY id',
+                (plex_tvdb_id, season_number, episode_number)
+            ).fetchall()
+            episode_characters = [dict(row) for row in episode_characters]
+        # 3b. Plex TMDB ID
+        if not episode_characters and plex_tmdb_id:
+            episode_characters = db.execute(
+                'SELECT * FROM episode_characters WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY id',
+                (plex_tmdb_id, season_number, episode_number)
+            ).fetchall()
+            episode_characters = [dict(row) for row in episode_characters]
 
     # Format air date
     if episode_dict.get('air_date_utc'):
@@ -908,35 +1005,168 @@ def episode_detail(tmdb_id, season_number, episode_number):
     return render_template('episode_detail.html',
                            show=show_dict,
                            episode=episode_dict,
-                           season_number=season_number)
+                           season_number=season_number,
+                           episode_characters=episode_characters)
 
-@main_bp.route('/image_proxy')
+@main_bp.route('/image_proxy/<string:type>/<int:id>')
 @login_required
-def image_proxy():
+def image_proxy(type, id):
     """
-    Securely proxies and caches images from external URLs.
+    Securely proxies and caches images from external services (Sonarr/Radarr).
 
-    This endpoint takes an external image URL as a query parameter. It fetches
-    the image from that URL and serves it back to the client, effectively acting
-    as a proxy. It's intended to also handle caching logic, saving a copy of the
-    image locally to reduce external requests and prevent mixed-content browser
-    warnings.
+    This endpoint is responsible for fetching images (posters or backgrounds),
+    caching them locally, and serving them to the client. It prevents mixed-content
+    warnings and improves performance by reducing redundant external requests.
 
-    The actual caching logic (saving the file to disk) is a work in progress.
+    - It first checks if the requested image already exists in the local cache.
+    - If found, it serves the cached file directly.
+    - If not found, it queries the database for the original image URL from
+      Sonarr or Radarr based on the provided TMDB ID.
+    - It then fetches the image from the external URL, saves it to the appropriate
+      local cache directory (`/static/poster` or `/static/background`), and then
+      serves the image.
 
-    Query Params:
-        url (str): The external URL of the image to fetch.
+    Args:
+        type (str): The type of image to fetch ('poster' or 'background').
+        id (int): The The Movie Database (TMDB) ID for the movie or show.
 
     Returns:
-        flask.Response: The image data with the appropriate content type, or an
-                        error if the image cannot be fetched.
+        flask.Response: The image data with the correct content type, a placeholder
+                        image if the original is not found, or a 404 error for
+                        invalid requests.
     """
-    external_url = request.args.get('url')
-    if not external_url:
-        abort(400)
-    try:
-        resp = requests.get(external_url, stream=True)
-        return Response(resp.iter_content(chunk_size=1024), content_type=resp.headers['content-type'])
-    except Exception as e:
-        current_app.logger.error(f"Image proxy error for url {external_url}: {e}")
+    # Validate type
+    if type not in ['poster', 'background']:
         abort(404)
+
+    # Define cache path
+    cache_folder = os.path.join(current_app.static_folder, type)
+    # Sanitize ID to prevent directory traversal
+    safe_filename = f"{str(id)}.jpg"
+    cached_image_path = os.path.join(cache_folder, safe_filename)
+
+    # Create directory if it doesn't exist
+    os.makedirs(cache_folder, exist_ok=True)
+
+    # 1. Check if image is already cached
+    if os.path.exists(cached_image_path):
+        return current_app.send_static_file(f'{type}/{safe_filename}')
+
+    # 2. If not cached, find the image URL from the database
+    db = database.get_db()
+    external_url = None
+    source = None # To determine which service's URL to use for relative paths
+
+    # Check Radarr (movies) first
+    movie_record = db.execute(f"SELECT {'poster_url' if type == 'poster' else 'fanart_url'} as url FROM radarr_movies WHERE tmdb_id = ?", (id,)).fetchone()
+    if movie_record and movie_record['url']:
+        external_url = movie_record['url']
+        source = 'radarr'
+    else:
+        # Check Sonarr (shows)
+        show_record = db.execute(f"SELECT {'poster_url' if type == 'poster' else 'fanart_url'} as url FROM sonarr_shows WHERE tmdb_id = ?", (id,)).fetchone()
+        if show_record and show_record['url']:
+            external_url = show_record['url']
+            source = 'sonarr'
+
+    if not external_url:
+        # Return a placeholder if no URL is found in the database
+        placeholder_path = f'logos/placeholder_{type}.png' if os.path.exists(os.path.join(current_app.static_folder, f'logos/placeholder_{type}.png')) else 'logos/placeholder_poster.png'
+        return current_app.send_static_file(placeholder_path)
+
+
+    # 3. Fetch the image from the external URL
+    try:
+        # Handle relative URLs from Sonarr/Radarr
+        if external_url.startswith('/'):
+            service_url = database.get_setting(f'{source}_url')
+            if service_url:
+                external_url = f"{service_url.rstrip('/')}{external_url}"
+            else:
+                raise ValueError(f"{source} URL not configured, cannot resolve relative image path.")
+
+        # Use a session for potential keep-alive and other benefits
+        with requests.Session() as s:
+            # Add API key if the source requires it for media assets
+            api_key = database.get_setting(f'{source}_api_key')
+            if api_key:
+                s.headers.update({'X-Api-Key': api_key})
+            
+            resp = s.get(external_url, stream=True, timeout=10)
+            resp.raise_for_status() # Raise an exception for bad status codes
+
+        # 4. Save the image to the cache
+        with open(cached_image_path, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        current_app.logger.info(f"Cached image: {cached_image_path}")
+
+        # 5. Serve the newly cached image
+        return current_app.send_static_file(f'{type}/{safe_filename}')
+
+    except (requests.RequestException, ValueError, IOError) as e:
+        current_app.logger.error(f"Failed to fetch or cache image for {type}/{id} from {external_url}. Error: {e}")
+        # If fetching fails, serve the placeholder
+        placeholder_path = f'logos/placeholder_{type}.png' if os.path.exists(os.path.join(current_app.static_folder, f'logos/placeholder_{type}.png')) else 'logos/placeholder_poster.png'
+        return current_app.send_static_file(placeholder_path)
+
+@main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:actor_id>')
+def character_detail(show_id, season_number, episode_number, actor_id):
+    db = database.get_db()
+    # Try Sonarr TMDB ID first
+    char_row = db.execute(
+        'SELECT * FROM episode_characters WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ? LIMIT 1',
+        (show_id, season_number, episode_number, actor_id)
+    ).fetchone()
+    character = dict(char_row) if char_row else None
+    # If not found, try Plex IDs from most recent plex_activity_log for this episode
+    if not character:
+        # --- WORKAROUND: Try Plex TMDB/TVDB IDs if Sonarr ID fails ---
+        # TODO: In the future, implement a more robust cross-service ID mapping system
+        season_episode_str = f"S{str(season_number).zfill(2)}E{str(episode_number).zfill(2)}"
+        plex_row = db.execute(
+            'SELECT raw_payload FROM plex_activity_log WHERE season_episode = ? ORDER BY event_timestamp DESC LIMIT 1',
+            (season_episode_str,)
+        ).fetchone()
+        plex_tmdb_id = None
+        plex_tvdb_id = None
+        if plex_row:
+            import json
+            try:
+                payload = json.loads(plex_row['raw_payload'])
+                guids = payload.get('Metadata', {}).get('Guid', [])
+                for guid_item in guids:
+                    guid_str = guid_item.get('id', '')
+                    if guid_str.startswith('tmdb://'):
+                        try:
+                            plex_tmdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            plex_tmdb_id = None
+                    if guid_str.startswith('tvdb://'):
+                        try:
+                            plex_tvdb_id = int(guid_str.split('//')[1])
+                        except Exception:
+                            plex_tvdb_id = None
+            except Exception:
+                pass
+        # Try Plex TMDB ID
+        if plex_tmdb_id and not character:
+            char_row = db.execute(
+                'SELECT * FROM episode_characters WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ? LIMIT 1',
+                (plex_tmdb_id, season_number, episode_number, actor_id)
+            ).fetchone()
+            character = dict(char_row) if char_row else None
+        # Try Plex TVDB ID
+        if plex_tvdb_id and not character:
+            char_row = db.execute(
+                'SELECT * FROM episode_characters WHERE show_tvdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ? LIMIT 1',
+                (plex_tvdb_id, season_number, episode_number, actor_id)
+            ).fetchone()
+            character = dict(char_row) if char_row else None
+    return render_template('character_detail.html',
+                           show_id=show_id,
+                           season_number=season_number,
+                           episode_number=episode_number,
+                           actor_id=actor_id,
+                           character=character)
