@@ -44,23 +44,58 @@
                         </div>
                         {% if show.imdb_id %}
                         <div>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">IMDb:</span>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">IMDb ID:</span>
                             <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
-                                View on IMDb
+                                {{ show.imdb_id }}
                             </a>
                         </div>
                         {% endif %}
                         {% if show.tvdb_id %}
                         <div>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">TVDB ID:</span> {{ show.tvdb_id }}
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">TVDB ID:</span>
+                             <a href="https://thetvdb.com/?tab=series&id={{ show.tvdb_id }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                                {{ show.tvdb_id }}
+                            </a>
                         </div>
                         {% endif %}
                         {% if show.tmdb_id %}
                         <div>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">TMDB ID:</span> {{ show.tmdb_id }}
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">TMDB ID:</span>
+                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                                {{ show.tmdb_id }}
+                            </a>
                         </div>
                         {% endif %}
                     </div>
+
+                    <!-- Ratings Section -->
+                    <div class="mt-6 pt-4 border-t border-gray-300 dark:border-gray-600">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Ratings</h3>
+                        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                            {% if show.ratings_tmdb_value and show.tmdb_id %}
+                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/tmdb_logo_square.svg') }}" alt="TMDB Logo" class="h-6 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ show.ratings_tmdb_votes | default(0) }} votes">{{ show.ratings_tmdb_value | round(1) }}/10</span>
+                            </a>
+                            {% endif %}
+                            {% if show.ratings_imdb_value and show.imdb_id %}
+                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/imdb_logo.svg') }}" alt="IMDb Logo" class="h-5 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ show.ratings_imdb_votes | default(0) }} votes">{{ show.ratings_imdb_value | round(1) }}/10</span>
+                            </a>
+                            {% endif %}
+                            {% if show.ratings_metacritic_value %}
+                            <a href="https://www.metacritic.com/tv/{{ show.metacritic_id if show.metacritic_id else (show.title | urlencode) }}/" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/metacritic_logo_placeholder.svg') }}" alt="Metacritic Logo" class="h-6 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300">{{ show.ratings_metacritic_value }}</span>
+                            </a>
+                            {% endif %}
+                            {% if not show.ratings_tmdb_value and not show.ratings_imdb_value and not show.ratings_metacritic_value %}
+                            <span class="text-gray-500 dark:text-gray-400">No ratings available for this show yet.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
