@@ -1,5 +1,10 @@
 import sqlite3
 import os
+import importlib
+import glob
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/..'))
 
 DB_PATH = os.environ.get('SHOWNOTES_DB', 'instance/shownotes.sqlite3')
 
@@ -106,11 +111,21 @@ CREATE TABLE IF NOT EXISTS image_cache_queue (
 );
 '''
 
+def run_all_migrations(conn):
+    migration_files = sorted(glob.glob('app/migrations/[0-9][0-9][0-9]_*.py'))
+    for path in migration_files:
+        modname = 'app.migrations.' + os.path.basename(path)[:-3]
+        mod = importlib.import_module(modname)
+        if hasattr(mod, 'upgrade'):
+            print(f'Running migration: {modname}')
+            mod.upgrade(conn)
+
 def upgrade():
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.executescript(SCHEMA)
-        print('Database schema upgraded successfully (plex_activity_log, sonarr_shows, sonarr_seasons, sonarr_episodes, radarr_movies, image_cache_queue tables checked/created).')
+        run_all_migrations(conn)
+        print('All migrations applied.')
     finally:
         conn.close()
 

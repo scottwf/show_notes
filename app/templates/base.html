@@ -11,30 +11,81 @@
   {% block head %}{% endblock %}
 </head>
 <body>
-    <div class="container mx-auto px-4">
-
-        {# Add this section to display flashed messages #}
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="flashes my-4">
-            {% for category, message in messages %}
-              <div class="p-4 mb-4 text-sm rounded-lg 
-                          {% if category == 'success' %} bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100 {% endif %}
-                          {% if category == 'error' %} bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 {% endif %}
-                          {% if category == 'info' %} bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 {% endif %}
-                          {% if category == 'warning' %} bg-yellow-100 text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100 {% endif %}
-                          {% if category == 'message' or category is none %} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100 {% endif %}"
-                   role="alert">
-                {{ message }}
-              </div>
-            {% endfor %}
-            </div>
-          {% endif %}
-        {% endwith %}
-        {# End of flashed messages section #}
-
-        {% block content %}{% endblock %}
+<header class="bg-gray-800 text-white dark:bg-gray-900 dark:text-gray-100 p-4 sticky top-0 z-50 shadow-md">
+  <div class="container mx-auto flex items-center justify-start space-x-4">
+    <!-- Logo/Brand -->
+    <div class="flex-shrink-0">
+      <a href="{{ url_for('main.home') }}" class="text-xl sm:text-2xl font-bold hover:text-sky-400 transition-colors">ShowNotes</a>
     </div>
-    {% block scripts %}{% endblock %}
+
+    <!-- Search Bar -->
+    <div class="flex-grow w-full md:max-w-xl">
+      <form id="search-form" class="relative">
+        <input id="search-input" type="text" placeholder="Search shows and movies..." class="w-full px-4 py-2 text-sm rounded-lg text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 focus:ring-2 focus:ring-sky-500 focus:outline-none" autocomplete="off">
+        <div id="search-results" class="absolute left-0 right-0 mt-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-lg z-50 hidden overflow-y-auto max-h-72"></div>
+      </form>
+    </div>
+
+    <!-- Right-side Icons: Dark Mode Toggle and User Menu -->
+    <div class="flex items-center space-x-3">
+      <button id="darkmode-toggle" title="Toggle light/dark mode" class="focus:outline-none p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+        <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+        <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+      </button>
+
+      {% if session.user_id %}
+      <div x-data="{ open: false }" class="relative">
+        <button @click="open = !open" @click.away="open = false" class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white transition-colors" id="user-menu-button" aria-expanded="false" aria-haspopup="true">
+          <span class="sr-only">Open user menu</span>
+          <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+          </svg>
+        </button>
+        <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="transform opacity-100 scale-100" x-transition:leave-end="transform opacity-0 scale-95" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none py-1" role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
+          <div class="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700">
+            Logged in as <span class="font-medium">{{ session.username }}</span>
+          </div>
+          <a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-0">Your Profile <span class="text-xs text-gray-400">(soon)</span></a>
+          {% if session.is_admin %}
+          <a href="{{ url_for('admin.dashboard') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-1">Admin Dashboard</a>
+          {% endif %}
+          <a href="{{ url_for('main.logout') }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-2">Sign out</a>
+        </div>
+      </div>
+      {% else %}
+      <a href="{{ url_for('main.login') }}" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg shadow-sm hover:shadow-md transition-all duration-150 ease-in-out text-sm">Sign In</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+    {# Add this section to display flashed messages #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes my-4 container mx-auto px-4">
+        {% for category, message in messages %}
+          <div class="p-4 mb-4 text-sm rounded-lg 
+                      {% if category == 'success' %} bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100 {% endif %}
+                      {% if category == 'error' %} bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 {% endif %}
+                      {% if category == 'info' %} bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 {% endif %}
+                      {% if category == 'warning' %} bg-yellow-100 text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100 {% endif %}
+                      {% if category == 'message' or category is none %} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100 {% endif %}"
+               role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {# End of flashed messages section #}
+
+    {% block content %}{% endblock %}
+
+<footer class="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-center p-4 mt-auto">
+    <div class="container mx-auto">
+        <span class="text-sm">&copy; 2024 ShowNotes</span>
+    </div>
+</footer>
+{% block scripts %}{% endblock %}
 </body>
 </html>

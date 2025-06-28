@@ -21,39 +21,17 @@ CREATE TABLE IF NOT EXISTS image_cache_queue (
 );
 '''
 
-def upgrade():
-    print(f"Attempting to connect to database at: {DB_PATH}")
-    if not os.path.exists(INSTANCE_FOLDER_PATH):
-        print(f"Error: Instance folder {INSTANCE_FOLDER_PATH} does not exist. Migration cannot proceed.")
-        return
-    if not os.path.exists(os.path.dirname(DB_PATH)):
-        print(f"Error: Directory for DB_PATH {os.path.dirname(DB_PATH)} does not exist. Migration cannot proceed.")
-        return
-
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        print("Successfully connected to the database.")
-
-        # Check if the table already exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='image_cache_queue';")
-        if cursor.fetchone():
-            print("'image_cache_queue' table already exists.")
-        else:
-            print("Creating 'image_cache_queue' table...")
-            cursor.executescript(TABLE_SCHEMA) # Use executescript for CREATE TABLE IF NOT EXISTS
-            conn.commit()
-            print("'image_cache_queue' table created successfully.")
-            
-    except sqlite3.Error as e:
-        print(f"SQLite error during migration: {e}")
-        if conn:
-            conn.rollback()
-    finally:
-        if conn:
-            conn.close()
-            print("Database connection closed.")
+def upgrade(conn):
+    cursor = conn.cursor()
+    # Check if the table already exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='image_cache_queue';")
+    if cursor.fetchone():
+        print("'image_cache_queue' table already exists.")
+    else:
+        print("Creating 'image_cache_queue' table...")
+        cursor.executescript(TABLE_SCHEMA) # Use executescript for CREATE TABLE IF NOT EXISTS
+        conn.commit()
+        print("'image_cache_queue' table created successfully.")
 
 if __name__ == '__main__':
     if not os.path.exists(INSTANCE_FOLDER_PATH):
@@ -63,5 +41,8 @@ if __name__ == '__main__':
         except OSError as e:
             print(f"Error creating instance folder {INSTANCE_FOLDER_PATH}: {e}")
             exit(1)
-            
-    upgrade()
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        upgrade(conn)
+    finally:
+        conn.close()

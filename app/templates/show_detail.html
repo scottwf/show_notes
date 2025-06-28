@@ -6,13 +6,13 @@
 <div class="relative min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
 
     <!-- Hero Section with Background Image -->
-    <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-no-repeat bg-cover bg-center"
-         style="background-image: url('{{ show.cached_fanart_url if show.cached_fanart_url else url_for('static', filename='logos/placeholder_background.png') }}'); {% if not show.cached_fanart_url %}background-color: #1a202c;{% endif %}">
+    <div class="absolute inset-0 h-[30vh] md:h-[40vh] bg-no-repeat bg-cover bg-center"
+         style="background-image: url('{{ show.cached_fanart_url or url_for('static', filename='logos/placeholder_background.png') }}'); {{ 'background-color: #1a202c;' if not show.cached_fanart_url }}">
     </div>
-    <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
+    <div class="absolute inset-0 h-[30vh] md:h-[40vh] bg-black/50 backdrop-blur-sm"></div> {# Overlay for readability #}
 
     <!-- Content Area -->
-    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[25vh] md:pt-[30vh]">
+    <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[15vh] md:pt-[20vh]">
 
         <div class="md:flex md:items-start md:space-x-8 lg:space-x-12 mb-8">
             <!-- Poster -->
@@ -24,72 +24,87 @@
             </div>
 
             <!-- Details: Title, Year, Overview, Metadata -->
-            <div class="text-center md:text-left flex-grow">
-                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
-                {% if show.year %}
-                <p class="text-xl sm:text-2xl text-gray-300 mb-4 font-light drop-shadow-sm">({{ show.year }})</p>
-                {% endif %}
+            <div class="flex-grow bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm rounded-lg p-6 shadow-xl">
+                <div class="text-center md:text-left">
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
+                    {% if show.year %}
+                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light drop-shadow-sm">({{ show.year }})</p>
+                    {% endif %}
 
-                <p class="text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6">
-                    {{ show.overview | default('No overview available.') }}
-                </p>
+                    <p class="text-gray-700 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6">
+                        {{ show.overview | default('No overview available.') }}
+                    </p>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-gray-300 mb-6">
-                    <div>
-                        <span class="font-semibold text-gray-100">First Air Date:</span> {{ show.year }} {# More specific date could be added if available #}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-gray-700 dark:text-gray-300 mb-6">
+                        <div>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">First Air Date:</span> {{ show.year }} {# More specific date could be added if available #}
+                        </div>
+                        <div>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">Status:</span> {{ show.status | title | default('N/A') }}
+                        </div>
+                        {% if show.imdb_id %}
+                        <div>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">IMDb:</span>
+                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                                View on IMDb
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if show.tvdb_id %}
+                        <div>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">TVDB ID:</span> {{ show.tvdb_id }}
+                        </div>
+                        {% endif %}
+                        {% if show.tmdb_id %}
+                        <div>
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">TMDB ID:</span> {{ show.tmdb_id }}
+                        </div>
+                        {% endif %}
                     </div>
-                    <div>
-                        <span class="font-semibold text-gray-100">Status:</span> {{ show.status | title | default('N/A') }}
-                    </div>
-                    {% if show.imdb_id %}
-                    <div>
-                        <span class="font-semibold text-gray-100">IMDb:</span>
-                        <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:text-sky-300 hover:underline">
-                            View on IMDb
-                        </a>
-                    </div>
-                    {% endif %}
-                     {% if show.tvdb_id %}
-                    <div>
-                        <span class="font-semibold text-gray-100">TVDB ID:</span> {{ show.tvdb_id }}
-                    </div>
-                    {% endif %}
-                    {% if show.tmdb_id %}
-                    <div>
-                        <span class="font-semibold text-gray-100">TMDB ID:</span> {{ show.tmdb_id }}
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <!-- Featured Episode Card & Next Aired -->
+        <!-- Next Up Card & Next Aired -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {% if featured_episode %}
+            {% if next_up_episode %}
             <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
               <h3 class="text-lg font-semibold text-sky-400 mb-2">
-                {% if featured_episode.is_currently_watching %}Currently Watching{% else %}Recently Watched{% endif %}
+                {% if next_up_episode.is_currently_watching %}
+                    Continue Watching
+                {% elif next_up_episode.is_next_unwatched %}
+                    Next Up
+                {% else %}
+                    Recently Watched
+                {% endif %}
               </h3>
               <div class="flex items-start space-x-4">
                 <div class="flex-shrink-0">
-                  <img src="{{ featured_episode.poster_url if featured_episode.poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
-                       alt="Show Poster"
-                       class="w-20 sm:w-24 aspect-[2/3] object-cover rounded-md shadow"
-                       onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                  <a href="{{ next_up_episode.episode_detail_url }}">
+                    <img src="{{ next_up_episode.poster_url if next_up_episode.poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                         alt="Show Poster"
+                         class="w-20 sm:w-24 aspect-[2/3] object-cover rounded-md shadow-md hover:ring-2 hover:ring-sky-400 transition-all duration-150"
+                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                  </a>
                 </div>
                 <div class="flex-grow min-w-0">
-                  <h4 class="font-bold text-gray-100 truncate" title="{{ featured_episode.title }}">{{ featured_episode.title }}</h4>
-                  <p class="text-sm text-gray-300">{{ featured_episode.season_episode_str }}</p>
+                  <h4 class="font-bold text-gray-100 truncate" title="{{ next_up_episode.title }}">
+                    <a href="{{ next_up_episode.episode_detail_url }}" class="hover:underline">{{ next_up_episode.title }}</a>
+                  </h4>
+                  <p class="text-sm text-gray-300">{{ next_up_episode.season_episode_str }}</p>
                   <p class="text-xs text-gray-400 mt-1">
-                    Last activity: {{ featured_episode.formatted_timestamp if featured_episode.formatted_timestamp else (featured_episode.event_timestamp | format_datetime('%b %d, %Y %I:%M %p')) }}
+                    {% if next_up_episode.is_currently_watching or not next_up_episode.is_next_unwatched %}
+                        Last activity: {{ next_up_episode.formatted_timestamp }}
+                    {% else %}
+                        Watched on: {{ next_up_episode.formatted_timestamp }}
+                    {% endif %}
                   </p>
-                  {% if featured_episode.progress_percent %}
-                  <div class="w-full bg-gray-600 rounded-full h-2 mt-2">
-                    <div class="bg-sky-500 h-2 rounded-full" style="width: {{ featured_episode.progress_percent }}%"></div>
+                  {% if next_up_episode.progress_percent %}
+                  <div class="w-full bg-gray-600 rounded-full h-2 mt-2" title="{{ next_up_episode.progress_percent }}% watched">
+                    <div class="bg-sky-500 h-2 rounded-full" style="width: {{ next_up_episode.progress_percent }}%"></div>
                   </div>
-                  <p class="text-xs text-gray-400 text-right">{{ featured_episode.progress_percent }}%</p>
                   {% endif %}
-                  <a href="{{ featured_episode.episode_detail_url }}" class="text-sky-400 hover:text-sky-300 text-sm mt-2 inline-block hover:underline">
+                  <a href="{{ next_up_episode.episode_detail_url }}" class="text-sky-400 hover:text-sky-300 text-sm mt-2 inline-block hover:underline">
                     Go to Episode &rarr;
                   </a>
                 </div>
@@ -110,8 +125,8 @@
             {% endif %}
         </div>
 
-        {% if not featured_episode and not next_aired_episode_info %}
-        <!-- This div is to ensure consistent spacing if neither featured nor next_aired is present, remove if not desired -->
+        {% if not next_up_episode and not next_aired_episode_info %}
+        <!-- This div is to ensure consistent spacing if neither card is present -->
         <div class="mb-8"></div>
         {% endif %}
 
@@ -124,7 +139,7 @@
                     {% if season.season_number == 0 and not season.episodes %} {# Skip empty specials season #}
                         
                     {% endif %}
-                    <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if season.season_number == 1 %}open{% endif %}>
+                    <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if loop.first %}open{% endif %}>
                         <summary class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
                             Season {{ season.season_number }}
                             <span class="text-sm font-normal text-gray-600 dark:text-gray-400">

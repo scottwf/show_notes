@@ -6,3 +6,4 @@ requests
 thefuzz[speedup]
 openai
 ollama
+markdown

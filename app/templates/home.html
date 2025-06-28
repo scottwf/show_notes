@@ -54,7 +54,7 @@
               </p>
             {% endif %}
 
-            {% if current_plex_event.view_offset_ms is defined and current_plex_event.duration_ms is defined and current_plex_event.duration_ms > 0 %}
+            {% if current_plex_event.view_offset_ms is defined and current_plex_event.duration_ms is defined and current_plex_event.view_offset_ms is not none and current_plex_event.duration_ms is not none and current_plex_event.duration_ms > 0 %}
               {% set progress_percent = (current_plex_event.view_offset_ms / current_plex_event.duration_ms * 100) | round %}
               <div class="mt-2 sm:mt-3">
                 <div class="w-full bg-gray-300 dark:bg-gray-600 rounded-full h-2 sm:h-2.5">

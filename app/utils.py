@@ -62,45 +62,32 @@ def cache_image(image_url, image_type_folder, cache_key_prefix, source_service):
 
     Returns:
         str or None: A string containing the relative URL for the `main.image_proxy` endpoint
-                     (e.g., "/image_proxy?url=..."). Returns None if the input `image_url` is empty.
+                     (e.g., "/image_proxy/poster/123"). Returns None if the input `image_url` is empty.
     """
     if not image_url:
         return None
 
-    # Ensure current_app context for database.get_setting
-    with current_app.app_context():
-        api_key = None
-        base_url = None
+    # This function's role is now simplified. The image_proxy route handles all logic.
+    # We just need to give it the right 'type' and 'id' (tmdb_id).
+    # The cache_key_prefix is expected to contain the necessary info.
+    # Example prefix: "show_poster_12345" or "movie_background_67890"
 
-        if source_service == 'sonarr':
-            api_key = database.get_setting('sonarr_api_key')
-            base_url = database.get_setting('sonarr_url')
-        elif source_service == 'radarr':
-            api_key = database.get_setting('radarr_api_key')
-            base_url = database.get_setting('radarr_url')
-        
-        final_image_url = image_url
+    try:
+        parts = cache_key_prefix.split('_')
+        media_type_indicator = parts[0] # 'show' or 'movie'
+        image_type = parts[1] # 'poster' or 'background'
+        tmdb_id = int(parts[2])
 
-        # If URL is relative, prepend the service's base URL
-        if base_url and final_image_url.startswith('/'):
-            final_image_url = f"{base_url.rstrip('/')}{final_image_url}"
+        if image_type not in ['poster', 'background']:
+            current_app.logger.warning(f"Invalid image type '{image_type}' in cache_key_prefix '{cache_key_prefix}'.")
+            return None
         
-        # Add API key if it's a URL from the service that requires it (typically not for direct image URLs from TMDb etc.)
-        # This logic assumes that if an API key is present, it should be added.
-        # Sonarr/Radarr often serve images through their API that might not need an API key in the URL itself,
-        # but if they are proxied through an endpoint that does, this might be relevant.
-        # For direct image URLs (e.g. from TMDB via Sonarr/Radarr's 'remoteUrl'), API key is not needed.
-        # However, the image_proxy itself will handle fetching with API key if the original URL is to the *arr service.
-        # The main purpose here is to ensure the URL passed to image_proxy is complete.
-        
-        # The image_proxy route is responsible for the actual fetching and API key usage if needed.
-        # This function just ensures the URL passed to image_proxy is the correct one to fetch.
-        # If image_url is already absolute (e.g. from tmdb), it will be used as is.
-        # If it's relative (e.g. /api/... from sonarr/radarr), it's made absolute here.
+        # Return the URL that points to our new image_proxy endpoint
+        return url_for('main.image_proxy', type=image_type, id=tmdb_id, _external=False)
 
-    # Return the URL that points to our image_proxy endpoint
-    # The image_proxy will then fetch this 'final_image_url'
-    return url_for('main.image_proxy', url=final_image_url, _external=False)
+    except (IndexError, ValueError) as e:
+        current_app.logger.error(f"Could not parse cache_key_prefix '{cache_key_prefix}' to generate image_proxy URL. Error: {e}")
+        return None
 
 def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
     """
@@ -126,14 +113,15 @@ def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
         # might be called from a background thread or script without one.
         with current_app.app_context():
             client = current_app.test_client()
-            # proxy_image_url is expected to be a relative path like '/image_proxy?url=...'
+            # proxy_image_url is expected to be a relative path like '/image_proxy/poster/123'
             response = client.get(proxy_image_url)
             if response.status_code == 200:
-                current_app.logger.info(f"Successfully triggered image_proxy for '{item_title_for_logging}': {proxy_image_url}")
+                # The image_proxy now handles logging on successful cache, so this log can be simplified.
+                current_app.logger.info(f"Successfully triggered image cache for '{item_title_for_logging}'.")
             else:
-                current_app.logger.warning(f"Failed to trigger image_proxy for '{item_title_for_logging}' via {proxy_image_url}. Status: {response.status_code}")
+                current_app.logger.warning(f"Failed to trigger image cache for '{item_title_for_logging}' via {proxy_image_url}. Status: {response.status_code}")
     except Exception as e:
-        current_app.logger.error(f"Error triggering image_proxy for '{item_title_for_logging}' ({proxy_image_url}): {e}")
+        current_app.logger.error(f"Error triggering image cache for '{item_title_for_logging}' ({proxy_image_url}): {e}")
 
 def _clean_title(title):
     """
@@ -760,9 +748,12 @@ def sync_sonarr_library():
 
                 current_app.logger.info(f"Syncing show: {show_data.get('title', 'N/A')} (Sonarr ID: {current_sonarr_id})")
 
-                # Prepare show data
-                raw_poster_url = next((img.get('url') for img in show_data.get('images', []) if img.get('coverType') == 'poster'), None)
-                raw_fanart_url = next((img.get('url') for img in show_data.get('images', []) if img.get('coverType') == 'fanart'), None)
+                # Prepare show data, preferring 'remoteUrl' over 'url'
+                poster_img_info = next((img for img in show_data.get('images', []) if img.get('coverType') == 'poster'), None)
+                fanart_img_info = next((img for img in show_data.get('images', []) if img.get('coverType') == 'fanart'), None)
+
+                raw_poster_url = poster_img_info.get('remoteUrl') or poster_img_info.get('url') if poster_img_info else None
+                raw_fanart_url = fanart_img_info.get('remoteUrl') or fanart_img_info.get('url') if fanart_img_info else None
 
                 final_poster_url = raw_poster_url # Default to original
                 if sonarr_base_url and raw_poster_url and raw_poster_url.startswith('/'):
@@ -818,36 +809,17 @@ def sync_sonarr_library():
                     db.rollback() # Rollback this show's transaction
                     continue # Skip to next show
 
-                # Add to image_cache_queue
-                show_tmdb_id_for_filename = show_data.get("tmdbId")
-
-                if final_poster_url:
-                    if show_tmdb_id_for_filename:
-                        poster_target_filename = f"{show_tmdb_id_for_filename}.jpg"
-                        try:
-                            db.execute(
-                                "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                                ('show', show_db_id, final_poster_url, 'poster', poster_target_filename)
-                            )
-                            current_app.logger.info(f"Queued poster for show ID {show_db_id} (TMDB ID {show_tmdb_id_for_filename}): {final_poster_url}")
-                        except sqlite3.Error as e:
-                            current_app.logger.error(f"Failed to queue poster for show ID {show_db_id}: {e}")
-                    else:
-                        current_app.logger.warning(f"Skipping poster queue for show ID {show_db_id} (Title: {show_data.get('title', 'N/A')}) due to missing TMDB ID.")
-
-                if final_fanart_url:
-                    if show_tmdb_id_for_filename:
-                        fanart_target_filename = f"{show_tmdb_id_for_filename}.jpg"
-                        try:
-                            db.execute(
-                                "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                                ('show', show_db_id, final_fanart_url, 'background', fanart_target_filename)
-                            )
-                            current_app.logger.info(f"Queued fanart for show ID {show_db_id} (TMDB ID {show_tmdb_id_for_filename}): {final_fanart_url}")
-                        except sqlite3.Error as e:
-                            current_app.logger.error(f"Failed to queue fanart for show ID {show_db_id}: {e}")
-                    else:
-                        current_app.logger.warning(f"Skipping fanart queue for show ID {show_db_id} (Title: {show_data.get('title', 'N/A')}) due to missing TMDB ID.")
+                # Trigger image caching directly
+                show_tmdb_id = show_data.get("tmdbId")
+                if show_tmdb_id:
+                    if final_poster_url:
+                        proxy_poster_url = url_for('main.image_proxy', type='poster', id=show_tmdb_id)
+                        _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {show_data.get('title')}")
+                    if final_fanart_url:
+                        proxy_fanart_url = url_for('main.image_proxy', type='background', id=show_tmdb_id)
+                        _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {show_data.get('title')}")
+                else:
+                    current_app.logger.warning(f"Skipping image trigger for show '{show_data.get('title')}' due to missing TMDB ID.")
 
                 # Sync Seasons and Episodes for this show
                 # Sonarr's /api/v3/series endpoint includes season details
@@ -1204,35 +1176,17 @@ def sync_radarr_library():
             
             movies_synced_count += 1
 
-            # Add to image_cache_queue
-            movie_tmdb_id_for_filename = movie_to_insert.get('tmdb_id') # This is movie_data.get('tmdbId')
-
-            if movie_db_id and movie_tmdb_id_for_filename:
+            # Trigger image caching directly
+            movie_tmdb_id = movie_to_insert.get('tmdb_id')
+            if movie_db_id and movie_tmdb_id:
                 if poster_url:
-                    poster_target_filename = f"{movie_tmdb_id_for_filename}.jpg"
-                    try:
-                        # Use conn.execute directly as we are already in a transaction managed by conn
-                        conn.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('movie', movie_db_id, poster_url, 'poster', poster_target_filename)
-                        )
-                        current_app.logger.info(f"Queued poster for movie ID {movie_db_id} (TMDB ID {movie_tmdb_id_for_filename}): {poster_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue poster for movie ID {movie_db_id}: {e}")
-
+                    proxy_poster_url = url_for('main.image_proxy', type='poster', id=movie_tmdb_id)
+                    _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {movie_to_insert.get('title')}")
                 if fanart_url:
-                    fanart_target_filename = f"{movie_tmdb_id_for_filename}.jpg"
-                    try:
-                        conn.execute(
-                            "INSERT INTO image_cache_queue (item_type, item_db_id, image_url, image_kind, target_filename) VALUES (?, ?, ?, ?, ?)",
-                            ('movie', movie_db_id, fanart_url, 'background', fanart_target_filename)
-                        )
-                        current_app.logger.info(f"Queued background (fanart) for movie ID {movie_db_id} (TMDB ID {movie_tmdb_id_for_filename}): {fanart_url}")
-                    except sqlite3.Error as e:
-                        current_app.logger.error(f"Failed to queue background (fanart) for movie ID {movie_db_id}: {e}")
-            elif not movie_tmdb_id_for_filename:
-                 current_app.logger.warning(f"Skipping image queue for movie ID {movie_db_id} (Title: {movie_to_insert.get('title', 'N/A')}) due to missing TMDB ID.")
-            # movie_db_id should always be set if we didn't 'continue'
+                    proxy_fanart_url = url_for('main.image_proxy', type='background', id=movie_tmdb_id)
+                    _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {movie_to_insert.get('title')}")
+            elif not movie_tmdb_id:
+                 current_app.logger.warning(f"Skipping image trigger for movie '{movie_to_insert.get('title')}' due to missing TMDB ID.")
 
         conn.commit()
         database.update_sync_status(conn, 'radarr', 'success')
@@ -1433,3 +1387,76 @@ def test_tautulli_connection_with_params(url, api_key):
         api_key,
         endpoint='/api/v2?cmd=get_history&length=1'
     )
+
+def parse_llm_markdown_sections(md):
+    """
+    Parse markdown output from LLM into a dict of sections.
+    Each '## Section Name' becomes a key, and its content is the value.
+    """
+    import re
+    sections = {}
+    current = None
+    for line in md.splitlines():
+        header_match = re.match(r"^##\s+(.+)", line)
+        if header_match:
+            current = header_match.group(1).strip()
+            sections[current] = ''
+        elif current is not None:
+            sections[current] += line + '\n'
+    # Strip trailing newlines
+    for k in sections:
+        sections[k] = sections[k].strip()
+    return sections
+
+def parse_relationships_section(md):
+    # Expects lines like: relationship_1: name: "X" role: "Y" description: "Z"
+    import re
+    relationships = []
+    pattern = re.compile(r'relationship_\d+: name: "([^"]*)" role: "([^"]*)" description: "([^"]*)"')
+    for match in pattern.finditer(md):
+        relationships.append({
+            'name': match.group(1),
+            'role': match.group(2),
+            'description': match.group(3)
+        })
+    return relationships
+
+def parse_traits_section(md):
+    # Expects lines like: traits: - "Trait1" - "Trait2"
+    import re
+    traits = []
+    lines = md.splitlines()
+    for line in lines:
+        if line.strip().startswith('- '):
+            trait = line.strip()[2:].strip('"')
+            traits.append(trait)
+    return traits
+
+def parse_events_section(md):
+    # Expects lines like: events: - "Event1" - "Event2"
+    import re
+    events = []
+    lines = md.splitlines()
+    for line in lines:
+        if line.strip().startswith('- '):
+            event = line.strip()[2:].strip('"')
+            events.append(event)
+    return events
+
+def parse_quote_section(md):
+    # Expects: quote: "..."
+    import re
+    match = re.search(r'quote: "([^"]+)"', md)
+    return match.group(1) if match else md.strip()
+
+def parse_motivations_section(md):
+    # Expects: description: ...
+    import re
+    match = re.search(r'description: (.+)', md)
+    return match.group(1).strip() if match else md.strip()
+
+def parse_importance_section(md):
+    # Expects: description: ...
+    import re
+    match = re.search(r'description: (.+)', md)
+    return match.group(1).strip() if match else md.strip()

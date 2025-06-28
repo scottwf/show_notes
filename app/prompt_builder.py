@@ -52,6 +52,9 @@ def build_character_prompt(character, show, season=None, episode=None, options=N
     else:
         base += "\n\nWrite in the voice of an expert TV analyst. Use markdown with `##` headers."
 
+    # Add forceful instruction to return only markdown
+    base += "\n\nReturn only the markdown structure below. Do not include any explanations, preamble, or commentary."
+
     extras = []
 
     if options.get("include_relationships"):

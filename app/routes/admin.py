@@ -1047,3 +1047,24 @@ def parse_all_subtitles_route():
         current_app.logger.error(f"Error during subtitle parsing: {e}", exc_info=True)
         flash(f"Error during subtitle parsing: {str(e)}", "danger")
     return redirect(url_for('admin.tasks'))
+
+@admin_bp.route('/plex_webhook_payloads', methods=['GET'])
+@login_required
+@admin_required
+def plex_webhook_payloads():
+    db = get_db()
+    rows = db.execute('SELECT id, event_type, event_timestamp, raw_payload FROM plex_activity_log ORDER BY event_timestamp DESC LIMIT 20').fetchall()
+    payloads = []
+    import json
+    for row in rows:
+        try:
+            payload = json.loads(row['raw_payload']) if row['raw_payload'] else {}
+        except Exception:
+            payload = row['raw_payload']
+        payloads.append({
+            'id': row['id'],
+            'event_type': row['event_type'],
+            'event_timestamp': row['event_timestamp'],
+            'payload': payload
+        })
+    return render_template('admin_plex_webhook_payloads.html', payloads=payloads)

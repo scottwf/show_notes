@@ -46,46 +46,32 @@ This document outlines the planned features and development stages for the ShowN
     - [x] Added admin pages to view and test LLM prompt templates.
     - [x] Implemented API usage logging with a dedicated page to view provider, token counts, cost, and processing time.
     - [x] Enhanced the settings page to allow selection between LLM providers (e.g., Ollama, OpenAI) and configure model names.
-
+- [x] **Core LLM Features:**
+    - [x] Spoiler-aware character summaries (Ollama/OpenAI integration).
+    - [x] Relationship mapping and actor overlap via LLM generation.
+    - [x] "Currently Watching" tracking via Plex webhook integration.
+- [x] **Subtitle Integration (Bazarr):** Foundational support for parsing subtitles via an admin task.
 
 ## Next Steps
-- [ ] Improve robustness of Plex user detection at login (handle edge cases, more reliable username/id capture)
-- [ ] Consider showing a more detailed history/list of recent events per user on a dedicated page.
-- [ ] Add more metadata from Sonarr/Radarr to homepage cards if needed (current display is quite rich).
-- [ ] UX: Add loading/error states for poster fetches, especially on slower connections or if images are missing from cache.
-- [ ] Document setup and troubleshooting for multi-user environments.
 
-## Phase 2: Core Functionality
-- [ ] Spoiler-aware character summaries (Ollama integration)
-- [ ] Relationship mapping and actor overlap
-- [ ] "Currently Watching" tracking (Plex webhook integration)
+- [ ] **Enhance Character Detail Page UI:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).
+- [ ] **Refine "Next Up" Feature:** Improve the logic for determining the next unwatched episode and display it more prominently on the show detail page and homepage.
+- [ ] **Improve Plex User Detection:** Increase the robustness of Plex user detection at login to handle edge cases and ensure more reliable username/ID capture.
+- [ ] **Improve UI/UX Feedback:** Add loading indicators for image fetches and error states for missing images to provide better feedback on slower connections.
 
+## Future Enhancements
 
-## Admin Panel Development (Phase 2)
-- [ ] **Dashboard Enhancements:**
+- [ ] **Advanced Admin Dashboard:**
     - [ ] Display real-time usage statistics (e.g., active users, Plex events processed).
-    - [ ] Show recent user logins.
+    - [ ] Show recent user logins and a more detailed history of events per user.
     - [ ] Implement a notification system for important alerts or errors.
-- [ ] **Services Page Enhancements:**
-    - [ ] Allow full configuration of service URLs, ports, and API keys directly from this page (expanding current capabilities).
-- [ ] **Database Management Page:**
-    - [ ] Provide UI controls for manual library synchronization (Sonarr, Radarr, potentially others like Bazarr later).
-    - [ ] Display statistics from the local database (e.g., number of shows, movies, episodes, users).
-- [ ] **User Management Page:**
-    - [ ] Display a list of registered users and their details.
-    - [ ] (Future) Add ability to manage user roles or permissions.
-- [ ] **Help & Documentation Page:**
-    - [ ] Provide in-app documentation for administrators and users.
-    - [ ] Include troubleshooting tips and guides.
-
-## Phase 3: Advanced Features & UI Polish
-- [ ] Interactive character chat (Ollama)
-- [ ] Advanced search and filtering
-- [ ] Subtitle integration (Bazarr)
-- [ ] Mobile-first UI refinement
-- [ ] Comprehensive testing
-
-## Future Ideas
-- [ ] User-specific watch history and recommendations
-- [ ] Customizable dashboards
-- [ ] Notification system (Pushover integration for file issues)
+- [ ] **Advanced Search & Filtering:** Implement more powerful search capabilities with filters for genre, year, actors, etc.
+- [ ] **Interactive Character Chat:** Develop the LLM-powered summary feature into a fully interactive, in-character chat experience.
+- [ ] **User-Specific Features:**
+    - [ ] Create dedicated user watch history and recommendations pages.
+    - [ ] Allow for customizable user dashboards.
+- [ ] **Documentation:**
+    - [ ] Create in-app help and documentation for administrators and users.
+    - [ ] Document the setup and troubleshooting process for multi-user environments.
+- [ ] **Testing:** Implement a comprehensive suite of unit and integration tests to ensure application stability.
+- [ ] **Notifications:** Fully integrate Pushover for notifications about file issues or other system events.

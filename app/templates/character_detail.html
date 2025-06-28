@@ -23,15 +23,113 @@
                 <span class="inline-block bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded px-3 py-1 text-xs font-medium mr-2">Season {{ season_number }}</span>
                 <span class="inline-block bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded px-3 py-1 text-xs font-medium">Episode {{ episode_number }}</span>
             </div>
-            <hr class="my-4">
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Character Summary</h2>
-            <div class="text-gray-700 dark:text-gray-300 mb-4">
-                <em>LLM summary and relationships will appear here.</em>
-            </div>
+            <hr class="my-4 border-slate-200 dark:border-slate-700">
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Character Summary</h2>
+            {% if llm_error %}
+                <div class="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded-md" role="alert">
+                    <strong class="font-bold">Error:</strong>
+                    <span class="block sm:inline">{{ llm_error }}</span>
+                </div>
+            {% elif not llm_cards %}
+                <div class="bg-blue-100 dark:bg-blue-900 border border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-200 px-4 py-3 rounded-md" role="alert">
+                    No summary information is available for this character at this point in the story.
+                </div>
+            {% else %}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {# Column 1 #}
+                    <div class="flex flex-col gap-6">
+                        {% if llm_cards.traits %}
+                        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Personality & Traits</h3>
+                            </div>
+                            <div class="p-4">
+                                <div class="flex flex-wrap gap-2">
+                                    {% for trait in llm_cards.traits %}
+                                    <span class="inline-block bg-sky-100 dark:bg-sky-900/50 text-sky-800 dark:text-sky-200 rounded-full px-3 py-1 text-sm font-medium">{{ trait | striptags }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+
+                        {% if llm_cards.motivations %}
+                        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Motivations & Conflicts</h3>
+                            </div>
+                            <div class="p-4 prose prose-slate dark:prose-invert max-w-none">
+                                {{ llm_cards.motivations | safe }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {# Column 2 #}
+                    <div class="flex flex-col gap-6">
+                        {% if llm_cards.relationships %}
+                        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Significant Relationships</h3>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                {% for rel in llm_cards.relationships %}
+                                <div class="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-md border border-slate-200 dark:border-slate-700">
+                                    <div class="font-bold text-sky-700 dark:text-sky-400">{{ rel.name }}</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{ rel.role }}</div>
+                                    <p class="text-sm text-slate-700 dark:text-slate-300">{{ rel.description }}</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if llm_cards.events %}
+                        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                            <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Key Events</h3>
+                            </div>
+                            <div class="p-4 prose prose-slate dark:prose-invert max-w-none">
+                                <ul class="space-y-2">
+                                    {% for event in llm_cards.events %}
+                                    <li>{{ event }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Render any remaining sections that weren't parsed into cards #}
+                {% set rendered_cards = llm_cards.keys() | list %}
+                {% for section_title, section_html in llm_sections_html.items() %}
+                    {% set card_key = section_title.lower().replace(' & ', '_').replace(' ', '_') %}
+                    {% if card_key not in rendered_cards and section_title.lower() != 'notable quote' and section_title.lower() != 'personality & traits' and section_title.lower() != 'significant relationships' and section_title.lower() != 'key events' and section_title.lower() != 'primary motivations & inner conflicts' %}
+                    <div class="mt-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ section_title }}</h3>
+                        </div>
+                        <div class="p-4 prose prose-slate dark:prose-invert max-w-none">
+                            {{ section_html | safe }}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+
+                {% if llm_last_updated or llm_source %}
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 text-center">
+                    <span>Summary generated on {{ llm_last_updated if llm_last_updated else 'Unknown' }}</span>
+                    <span class="mx-2">|</span>
+                    <span>Source: {{ llm_source if llm_source else 'Unknown' }}</span>
+                </div>
+                {% endif %}
+            {% endif %}
             <div class="mt-6">
                 <a href="{{ url_for('main.episode_detail', tmdb_id=show_id, season_number=season_number, episode_number=episode_number) }}" class="text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 text-sm">&larr; Back to Episode</a>
             </div>
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

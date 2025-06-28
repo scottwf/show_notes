@@ -28,6 +28,7 @@ import datetime # Added
 from datetime import timezone # Added
 import urllib.parse
 import logging
+import markdown as md
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for, session, jsonify,
@@ -38,6 +39,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
 from ..utils import get_sonarr_poster, get_radarr_poster
+from ..prompt_builder import build_character_prompt
+from ..llm_services import get_llm_response
+from ..utils import parse_llm_markdown_sections, parse_relationships_section, parse_traits_section, parse_events_section, parse_quote_section, parse_motivations_section, parse_importance_section
 
 main_bp = Blueprint('main', __name__)
 
@@ -674,7 +678,7 @@ def show_detail(tmdb_id):
     show_db_id = show_dict['id']
 
     seasons_rows = db.execute(
-        'SELECT * FROM sonarr_seasons WHERE show_id = ? ORDER BY season_number', (show_db_id,)
+        'SELECT * FROM sonarr_seasons WHERE show_id = ? ORDER BY season_number DESC', (show_db_id,)
     ).fetchall()
 
     seasons_with_episodes = []
@@ -688,7 +692,7 @@ def show_detail(tmdb_id):
         season_db_id = season_dict['id']
 
         episodes_rows = db.execute(
-            'SELECT * FROM sonarr_episodes WHERE season_id = ? ORDER BY episode_number', (season_db_id,)
+            'SELECT * FROM sonarr_episodes WHERE season_id = ? ORDER BY episode_number DESC', (season_db_id,)
         ).fetchall()
 
         current_season_episodes = [dict(ep_row) for ep_row in episodes_rows]
@@ -782,93 +786,143 @@ def show_detail(tmdb_id):
             if last_row:
                 last_watched_episode_info = dict(last_row)
 
+    next_up_episode = get_next_up_episode(
+        currently_watched_episode_info,
+        last_watched_episode_info,
+        show_dict,
+        seasons_with_episodes
+    )
+
     return render_template('show_detail.html',
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
-                           # currently_watched_episode_info=currently_watched_episode_info, # Replaced by featured_episode
-                           # last_watched_episode_info=last_watched_episode_info, # Replaced by featured_episode
-                           featured_episode=prepare_featured_episode(currently_watched_episode_info, last_watched_episode_info, show_dict)
+                           next_up_episode=next_up_episode
                            )
 
-def prepare_featured_episode(currently_watched, last_watched, show_info):
+def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes):
     """
-    Determines the "featured" episode for a show's detail page.
+    Determines the "Next Up" episode for a show's detail page.
 
-    This helper function contains the logic to decide which episode should be
-    highlighted to the user. The priority is as follows:
+    This function implements the logic to decide which episode should be
+    highlighted to the user as the next one to watch. The priority is:
     1.  The episode the user is **currently watching** (i.e., paused mid-way).
-    2.  The **next unwatched episode** after the one they last finished.
-    3.  The **last episode they watched** if there are no subsequent unwatched ones.
-
-    It fetches the necessary episode details from the database to create a data
-    structure that can be rendered as a "featured episode" card.
+    2.  The **next available, unwatched episode** after the one they last finished.
+    3.  The **last episode they watched** if there are no subsequent available episodes.
 
     Args:
         currently_watched (dict): Data about the currently playing/paused episode.
         last_watched (dict): Data about the last fully watched episode.
         show_info (dict): Metadata about the parent show.
+        seasons_with_episodes (list): A list of seasons, each containing a list of its episodes.
 
     Returns:
-        dict or None: A dictionary containing the details of the featured episode,
+        dict or None: A dictionary containing the details of the "Next Up" episode,
                       or None if no suitable episode can be determined.
     """
     db = database.get_db()
-    featured_episode = None
     source_info = None
     is_currently_watching = False
+    is_next_unwatched = False
 
     if currently_watched:
         source_info = currently_watched
         is_currently_watching = True
     elif last_watched:
-        source_info = last_watched
-
-    if source_info:
-        season_episode_str = source_info.get('season_episode')
-        season_number = None
-        episode_number = None
-        match = re.match(r'S(\d+)E(\d+)', season_episode_str) if season_episode_str else None
+        # This is the last *finished* episode. We need to find the *next* one.
+        last_season_episode_str = last_watched.get('season_episode')
+        match = re.match(r'S(\d+)E(\d+)', last_season_episode_str) if last_season_episode_str else None
         if match:
-            season_number = int(match.group(1))
-            episode_number = int(match.group(2))
+            last_season_num = int(match.group(1))
+            last_episode_num = int(match.group(2))
+            
+            # Flatten all episodes into a single list, sorted by season and episode number
+            all_episodes = []
+            for season in seasons_with_episodes:
+                for episode in season['episodes']:
+                    all_episodes.append({
+                        'season_number': season['season_number'],
+                        'episode_number': episode['episode_number'],
+                        'has_file': episode.get('has_file', False),
+                        **episode # Add all other episode details
+                    })
+            
+            # Find the index of the last watched episode
+            last_watched_index = -1
+            for i, ep in enumerate(all_episodes):
+                if ep['season_number'] == last_season_num and ep['episode_number'] == last_episode_num:
+                    last_watched_index = i
+                    break
+            
+            # Search for the next *available* episode
+            if last_watched_index != -1:
+                for i in range(last_watched_index + 1, len(all_episodes)):
+                    next_ep = all_episodes[i]
+                    if next_ep['has_file']:
+                        # Found the next available episode
+                        source_info = {
+                            'title': next_ep['title'],
+                            'season_episode': f"S{str(next_ep['season_number']).zfill(2)}E{str(next_ep['episode_number']).zfill(2)}",
+                            'event_timestamp': last_watched.get('event_timestamp') # For context, show when the *previous* one was watched
+                        }
+                        is_next_unwatched = True
+                        break # Stop after finding the first available one
+        
+        # If no next unwatched episode is found, fall back to showing the last watched one
+        if not source_info:
+            source_info = last_watched
 
-        if season_number is not None and episode_number is not None:
-            episode_detail_url = url_for('main.episode_detail',
-                                         tmdb_id=show_info['tmdb_id'],
-                                         season_number=season_number,
-                                         episode_number=episode_number)
+    if not source_info:
+        return None
 
-            # Format timestamp
-            raw_timestamp = source_info.get('event_timestamp')
-            formatted_timestamp = "Unknown"
-            if raw_timestamp:
-                try:
-                    if isinstance(raw_timestamp, str):
-                        # Attempt to parse from ISO format, common from DB
-                        dt_obj = datetime.datetime.fromisoformat(raw_timestamp.replace('Z', '+00:00'))
-                    elif isinstance(raw_timestamp, (int, float)): # Handle Unix timestamps
-                        dt_obj = datetime.datetime.fromtimestamp(raw_timestamp, tz=timezone.utc)
-                    else: # Assuming it's already a datetime object
-                        dt_obj = raw_timestamp
-                    formatted_timestamp = dt_obj.strftime("%b %d, %Y %I:%M %p")
-                except (ValueError, TypeError) as e:
-                    current_app.logger.warning(f"Could not parse timestamp '{raw_timestamp}': {e}")
-                    formatted_timestamp = str(raw_timestamp) # Fallback
+    # --- Prepare the final episode dictionary ---
+    season_episode_str = source_info.get('season_episode')
+    season_number = None
+    episode_number = None
+    match = re.match(r'S(\d+)E(\d+)', season_episode_str) if season_episode_str else None
+    if match:
+        season_number = int(match.group(1))
+        episode_number = int(match.group(2))
 
-            featured_episode = {
-                'title': source_info.get('title'),
-                'season_episode_str': season_episode_str,
-                'season_number': season_number,
-                'episode_number': episode_number,
-                'poster_url': show_info.get('cached_poster_url'), # Use show's poster
-                'event_timestamp': raw_timestamp,
-                'formatted_timestamp': formatted_timestamp,
-                'progress_percent': source_info.get('progress_percent') if is_currently_watching else None,
-                'episode_detail_url': episode_detail_url,
-                'is_currently_watching': is_currently_watching
-            }
-    return featured_episode
+    if season_number is None or episode_number is None:
+        return None
+
+    episode_detail_url = url_for('main.episode_detail',
+                                    tmdb_id=show_info['tmdb_id'],
+                                    season_number=season_number,
+                                    episode_number=episode_number)
+
+    # Format timestamp
+    raw_timestamp = source_info.get('event_timestamp')
+    formatted_timestamp = "Unknown"
+    if raw_timestamp:
+        try:
+            # Handle different timestamp formats
+            if isinstance(raw_timestamp, str):
+                dt_obj = datetime.datetime.fromisoformat(raw_timestamp.replace('Z', '+00:00'))
+            elif isinstance(raw_timestamp, (int, float)):
+                dt_obj = datetime.datetime.fromtimestamp(raw_timestamp, tz=timezone.utc)
+            else:
+                dt_obj = raw_timestamp
+            formatted_timestamp = dt_obj.strftime("%b %d, %Y at %I:%M %p")
+        except (ValueError, TypeError) as e:
+            current_app.logger.warning(f"Could not parse timestamp '{raw_timestamp}': {e}")
+            formatted_timestamp = str(raw_timestamp)
+
+    next_up_episode = {
+        'title': source_info.get('title'),
+        'season_episode_str': season_episode_str,
+        'season_number': season_number,
+        'episode_number': episode_number,
+        'poster_url': show_info.get('cached_poster_url'),
+        'event_timestamp': raw_timestamp,
+        'formatted_timestamp': formatted_timestamp,
+        'progress_percent': source_info.get('progress_percent') if is_currently_watching else None,
+        'episode_detail_url': episode_detail_url,
+        'is_currently_watching': is_currently_watching,
+        'is_next_unwatched': is_next_unwatched
+    }
+    return next_up_episode
 
 @main_bp.route('/show/<int:tmdb_id>/season/<int:season_number>/episode/<int:episode_number>')
 @login_required
@@ -1120,10 +1174,15 @@ def character_detail(show_id, season_number, episode_number, actor_id):
         (show_id, season_number, episode_number, actor_id)
     ).fetchone()
     character = dict(char_row) if char_row else None
-    # If not found, try Plex IDs from most recent plex_activity_log for this episode
+    # If not found, try Sonarr TVDB ID
     if not character:
-        # --- WORKAROUND: Try Plex TMDB/TVDB IDs if Sonarr ID fails ---
-        # TODO: In the future, implement a more robust cross-service ID mapping system
+        char_row = db.execute(
+            'SELECT * FROM episode_characters WHERE show_tvdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ? LIMIT 1',
+            (show_id, season_number, episode_number, actor_id)
+        ).fetchone()
+        character = dict(char_row) if char_row else None
+    # If still not found, try Plex IDs from most recent plex_activity_log for this episode
+    if not character:
         season_episode_str = f"S{str(season_number).zfill(2)}E{str(episode_number).zfill(2)}"
         plex_row = db.execute(
             'SELECT raw_payload FROM plex_activity_log WHERE season_episode = ? ORDER BY event_timestamp DESC LIMIT 1',
@@ -1164,9 +1223,134 @@ def character_detail(show_id, season_number, episode_number, actor_id):
                 (plex_tvdb_id, season_number, episode_number, actor_id)
             ).fetchone()
             character = dict(char_row) if char_row else None
+
+    # Look up show title for the prompt
+    show_title = None
+    show_row = db.execute('SELECT title FROM sonarr_shows WHERE tmdb_id = ?', (show_id,)).fetchone()
+    if show_row:
+        show_title = show_row['title']
+    else:
+        show_row = db.execute('SELECT title FROM sonarr_shows WHERE tvdb_id = ?', (show_id,)).fetchone()
+        if show_row:
+            show_title = show_row['title']
+    if not show_title:
+        show_title = 'Unknown Show'
+
+    character_name = character['character_name'] if character and 'character_name' in character else 'Unknown Character'
+
+    # Check for cached LLM data
+    llm_fields = [
+        'llm_relationships', 'llm_motivations', 'llm_quote', 'llm_traits', 'llm_events', 'llm_importance',
+        'llm_raw_response', 'llm_last_updated', 'llm_source'
+    ]
+    has_llm_data = character and any(character.get(f) for f in llm_fields)
+    llm_sections = {}
+    llm_last_updated = None
+    llm_source = None
+    llm_error = None
+
+    if has_llm_data:
+        # Use cached data
+        llm_sections = {
+            'Significant Relationships': character.get('llm_relationships'),
+            'Primary Motivations & Inner Conflicts': character.get('llm_motivations'),
+            'Notable Quote': character.get('llm_quote'),
+            'Personality & Traits': character.get('llm_traits'),
+            'Key Events': character.get('llm_events'),
+            'Importance to the Story': character.get('llm_importance'),
+        }
+        llm_last_updated = character.get('llm_last_updated')
+        llm_source = character.get('llm_source')
+    else:
+        # Call LLM and cache results
+        prompt_options = {
+            'include_relationships': True,
+            'include_motivations': True,
+            'include_quote': True,
+            'tone': 'tv_expert'
+        }
+        generated_prompt = build_character_prompt(
+            character=character_name,
+            show=show_title,
+            season=season_number,
+            episode=episode_number,
+            options=prompt_options
+        )
+        llm_summary, llm_error = get_llm_response(generated_prompt)
+        llm_sections = {}
+        if llm_summary:
+            # Parse markdown into sections
+            match = re.search(r"(## .*)", llm_summary, re.DOTALL)
+            if match:
+                llm_summary = match.group(1)
+            llm_sections = parse_llm_markdown_sections(llm_summary)
+            # Store in DB
+            now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            model_source = 'Unknown'
+            from ..database import get_setting
+            provider = get_setting('preferred_llm_provider')
+            model = get_setting('ollama_model_name') if provider == 'ollama' else get_setting('openai_model_name')
+            if provider and model:
+                model_source = f"{provider.capitalize()} {model}"
+            db.execute(
+                '''UPDATE episode_characters SET
+                    llm_relationships = ?,
+                    llm_motivations = ?,
+                    llm_quote = ?,
+                    llm_traits = ?,
+                    llm_events = ?,
+                    llm_importance = ?,
+                    llm_raw_response = ?,
+                    llm_last_updated = ?,
+                    llm_source = ?
+                  WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ?''',
+                (
+                    llm_sections.get('Significant Relationships'),
+                    llm_sections.get('Primary Motivations & Inner Conflicts'),
+                    llm_sections.get('Notable Quote'),
+                    llm_sections.get('Personality & Traits'),
+                    llm_sections.get('Key Events'),
+                    llm_sections.get('Importance to the Story'),
+                    llm_summary,
+                    now,
+                    model_source,
+                    show_id, season_number, episode_number, actor_id
+                )
+            )
+            db.commit()
+            llm_last_updated = now
+            llm_source = model_source
+
+    # Convert markdown to HTML for each section
+    for k, v in llm_sections.items():
+        if v:
+            llm_sections[k] = md.markdown(v)
+
+    # After llm_sections is populated ...
+    llm_cards = {}
+    if llm_sections.get('Significant Relationships'):
+        llm_cards['relationships'] = parse_relationships_section(llm_sections['Significant Relationships'])
+    if llm_sections.get('Personality & Traits'):
+        llm_cards['traits'] = parse_traits_section(llm_sections['Personality & Traits'])
+    if llm_sections.get('Key Events'):
+        llm_cards['events'] = parse_events_section(llm_sections['Key Events'])
+    if llm_sections.get('Notable Quote'):
+        llm_cards['quote'] = parse_quote_section(llm_sections['Notable Quote'])
+    if llm_sections.get('Primary Motivations & Inner Conflicts'):
+        llm_cards['motivations'] = parse_motivations_section(llm_sections['Primary Motivations & Inner Conflicts'])
+    if llm_sections.get('Importance to the Story'):
+        llm_cards['importance'] = parse_importance_section(llm_sections['Importance to the Story'])
+    # Fallback: also pass llm_sections_html for any section not parsed
+    llm_sections_html = {k: md.markdown(v) for k, v in llm_sections.items() if v}
+
     return render_template('character_detail.html',
                            show_id=show_id,
                            season_number=season_number,
                            episode_number=episode_number,
                            actor_id=actor_id,
-                           character=character)
+                           character=character,
+                           llm_cards=llm_cards,
+                           llm_sections_html=llm_sections_html,
+                           llm_last_updated=llm_last_updated,
+                           llm_source=llm_source,
+                           llm_error=llm_error)
