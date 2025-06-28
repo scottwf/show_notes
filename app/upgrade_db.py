@@ -42,7 +42,13 @@ CREATE TABLE IF NOT EXISTS sonarr_shows (
     poster_url TEXT,
     fanart_url TEXT,
     path_on_disk TEXT,
-    last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ratings_imdb_value REAL,
+    ratings_imdb_votes INTEGER,
+    ratings_tmdb_value REAL,
+    ratings_tmdb_votes INTEGER,
+    ratings_metacritic_value REAL,
+    metacritic_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sonarr_seasons (
@@ -68,6 +74,11 @@ CREATE TABLE IF NOT EXISTS sonarr_episodes (
     air_date_utc TEXT,
     has_file BOOLEAN,
     monitored BOOLEAN,
+    ratings_imdb_value REAL,
+    ratings_imdb_votes INTEGER,
+    ratings_tmdb_value REAL,
+    ratings_tmdb_votes INTEGER,
+    imdb_id TEXT,
     FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id)
 );
 

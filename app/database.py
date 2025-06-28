@@ -103,11 +103,34 @@ def init_db():
                 poster_url TEXT,
                 fanart_url TEXT,
                 path_on_disk TEXT,
-                last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                ratings_imdb_value REAL,
+                ratings_imdb_votes INTEGER,
+                ratings_tmdb_value REAL,
+                ratings_tmdb_votes INTEGER,
+                ratings_metacritic_value REAL,
+                metacritic_id TEXT
             );
 
             CREATE TABLE sonarr_seasons ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, sonarr_season_id INTEGER, season_number INTEGER NOT NULL, episode_count INTEGER, episode_file_count INTEGER, statistics TEXT, FOREIGN KEY (show_id) REFERENCES sonarr_shows (id), UNIQUE (show_id, season_number) );
-            CREATE TABLE sonarr_episodes ( id INTEGER PRIMARY KEY AUTOINCREMENT, season_id INTEGER NOT NULL, sonarr_show_id INTEGER NOT NULL, sonarr_episode_id INTEGER UNIQUE NOT NULL, episode_number INTEGER NOT NULL, title TEXT, overview TEXT, air_date_utc TEXT, has_file BOOLEAN, monitored BOOLEAN, FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id) );
+            CREATE TABLE sonarr_episodes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                season_id INTEGER NOT NULL,
+                sonarr_show_id INTEGER NOT NULL,
+                sonarr_episode_id INTEGER UNIQUE NOT NULL,
+                episode_number INTEGER NOT NULL,
+                title TEXT,
+                overview TEXT,
+                air_date_utc TEXT,
+                has_file BOOLEAN,
+                monitored BOOLEAN,
+                ratings_imdb_value REAL,
+                ratings_imdb_votes INTEGER,
+                ratings_tmdb_value REAL,
+                ratings_tmdb_votes INTEGER,
+                imdb_id TEXT,
+                FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id)
+            );
             
             CREATE TABLE radarr_movies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

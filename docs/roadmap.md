@@ -51,6 +51,16 @@ This document outlines the planned features and development stages for the ShowN
     - [x] Relationship mapping and actor overlap via LLM generation.
     - [x] "Currently Watching" tracking via Plex webhook integration.
 - [x] **Subtitle Integration (Bazarr):** Foundational support for parsing subtitles via an admin task.
+- [x] **Movie Detail Page Enhancements:**
+    - [x] Fixed broken rating logos (IMDb, TMDB, Rotten Tomatoes) by using local SVGs.
+    - [x] Added links from ratings to respective external sites.
+    - [x] Removed "Popularity Score" from details.
+    - [x] Formatted "Release Date" to show only the date.
+    - [x] Changed "Status" label from "Released" to "Available".
+- [x] **Show & Episode Detail Page Ratings:**
+    - [x] Added IMDb, TMDB, and Metacritic (shows only) ratings and links to show detail pages.
+    - [x] Added IMDb and TMDB ratings and links to episode detail pages.
+    - [x] Updated database schema and migration scripts to support new rating fields.
 
 ## Next Steps
 
