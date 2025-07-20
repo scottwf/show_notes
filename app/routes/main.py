@@ -400,6 +400,23 @@ def sonarr_webhook():
         
         event_type = payload.get('eventType')
         
+        # Record webhook activity in database
+        try:
+            db = database.get_db()
+            payload_summary = f"Event: {event_type}"
+            if event_type == 'Download' and payload.get('series'):
+                payload_summary += f" - {payload['series'].get('title', 'Unknown')}"
+            elif event_type == 'Series' and payload.get('series'):
+                payload_summary += f" - {payload['series'].get('title', 'Unknown')}"
+            
+            db.execute(
+                'INSERT INTO webhook_activity (service_name, event_type, payload_summary) VALUES (?, ?, ?)',
+                ('sonarr', event_type, payload_summary)
+            )
+            db.commit()
+        except Exception as e:
+            current_app.logger.error(f"Failed to record Sonarr webhook activity: {e}")
+        
         # Events that should trigger a library sync
         sync_events = [
             'Download',           # Episode downloaded
@@ -474,6 +491,23 @@ def radarr_webhook():
         current_app.logger.info(f"Radarr webhook received: {json.dumps(payload, indent=2)}")
         
         event_type = payload.get('eventType')
+        
+        # Record webhook activity in database
+        try:
+            db = database.get_db()
+            payload_summary = f"Event: {event_type}"
+            if event_type == 'Download' and payload.get('movie'):
+                payload_summary += f" - {payload['movie'].get('title', 'Unknown')}"
+            elif event_type == 'Movie' and payload.get('movie'):
+                payload_summary += f" - {payload['movie'].get('title', 'Unknown')}"
+            
+            db.execute(
+                'INSERT INTO webhook_activity (service_name, event_type, payload_summary) VALUES (?, ?, ?)',
+                ('radarr', event_type, payload_summary)
+            )
+            db.commit()
+        except Exception as e:
+            current_app.logger.error(f"Failed to record Radarr webhook activity: {e}")
         
         # Events that should trigger a library sync
         sync_events = [

@@ -266,6 +266,19 @@ def dashboard():
     )
     
     # ============================================================================
+    # WEBHOOK ACTIVITY METRICS
+    # ============================================================================
+    
+    # Get last webhook activity timestamps
+    sonarr_last_webhook = db.execute(
+        "SELECT received_at, event_type, payload_summary FROM webhook_activity WHERE service_name = 'sonarr' ORDER BY received_at DESC LIMIT 1"
+    ).fetchone()
+    
+    radarr_last_webhook = db.execute(
+        "SELECT received_at, event_type, payload_summary FROM webhook_activity WHERE service_name = 'radarr' ORDER BY received_at DESC LIMIT 1"
+    ).fetchone()
+    
+    # ============================================================================
     # API USAGE METRICS
     # ============================================================================
     
@@ -324,6 +337,10 @@ def dashboard():
         openai_call_count_week=openai_call_count_week,
         ollama_avg_ms=ollama_avg_ms,
         ollama_call_count_week=ollama_call_count_week,
+        
+        # Webhook Activity metrics
+        sonarr_last_webhook=sonarr_last_webhook,
+        radarr_last_webhook=radarr_last_webhook,
     )
 
 # ============================================================================
