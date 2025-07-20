@@ -113,3 +113,18 @@ description: Explain in 1 paragraph how this character impacts the show's plot o
 """)
 
     return base + "\n\n" + "\n\n".join(extras)
+
+def build_character_chat_prompt(character, show, season, episode, chat_history):
+    """
+    Builds a prompt for a chatbot conversation about a character.
+    """
+    system_prompt = f"You are a helpful assistant who knows everything about the TV show {show}. You are talking to a user who is asking questions about the character {character}. The user has only seen up to season {season}, episode {episode}, so do not reveal any spoilers beyond this point. Answer the user's questions concisely and accurately, based on the information available up to the specified episode."
+
+    conversation = ""
+    for message in chat_history:
+        if message['role'] == 'user':
+            conversation += f"User: {message['content']}\n"
+        else:
+            conversation += f"Assistant: {message['content']}\n"
+
+    return f"{system_prompt}\n\n{conversation}Assistant:"

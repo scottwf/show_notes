@@ -8,6 +8,26 @@
 <div class="space-y-6">
     <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
         <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            Editable Prompts from Database
+        </h2>
+        {% if prompts_from_db %}
+            {% for prompt in prompts_from_db %}
+            <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-700/30 rounded border border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-semibold text-blue-600 dark:text-blue-500 mb-1">{{ prompt.name }}</h3>
+                <form method="POST" action="{{ url_for('admin.view_prompts') }}">
+                    <input type="hidden" name="prompt_id" value="{{ prompt.id }}">
+                    <textarea name="prompt_text" class="w-full h-40 p-2 border rounded bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300">{{ prompt.prompt }}</textarea>
+                    <button type="submit" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+                </form>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-slate-500 dark:text-slate-400">No prompts found in the database.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
             Prompts from <code class="text-sm bg-slate-100 dark:bg-slate-700 p-1 rounded">prompt_builder.py</code>
         </h2>
         {% if builder_prompts %}
@@ -15,20 +35,7 @@
             <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-700/30 rounded border border-slate-200 dark:border-slate-700">
                 <h3 class="text-lg font-semibold text-sky-600 dark:text-sky-500 mb-1">{{ prompt.name }}</h3>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Source: {{ prompt.source }}</p>
-                {% if prompt.error %}
-                <div class="my-2 p-2 bg-red-100 dark:bg-red-800/30 border border-red-300 dark:border-red-600 rounded text-red-700 dark:text-red-300 text-xs">
-                    <p><strong>Error generating example:</strong> {{ prompt.error }}</p>
-                    {% if prompt.docstring %}
-                    <p class="mt-1"><strong>Docstring:</strong></p>
-                    <pre class="text-xs whitespace-pre-wrap p-1 bg-red-50 dark:bg-red-700/20 rounded max-h-40 overflow-y-auto">{{ prompt.docstring }}</pre>
-                    {% endif %}
-                </div>
-                {% elif prompt.docstring and 'Could not generate example' in prompt.text %}
-                 <p class="text-xs text-slate-600 dark:text-slate-400 mb-1 italic">Example generation not available for this function directly. Showing docstring:</p>
-                 <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-60 overflow-y-auto">{{ prompt.docstring }}</pre>
-                {% else %}
                 <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-60 overflow-y-auto">{{ prompt.text }}</pre>
-                {% endif %}
             </div>
             {% endfor %}
         {% else %}

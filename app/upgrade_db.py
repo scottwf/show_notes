@@ -122,6 +122,8 @@ CREATE TABLE IF NOT EXISTS image_cache_queue (
 );
 '''
 
+import inspect
+
 def run_all_migrations(conn):
     migration_files = sorted(glob.glob('app/migrations/[0-9][0-9][0-9]_*.py'))
     for path in migration_files:
@@ -129,7 +131,12 @@ def run_all_migrations(conn):
         mod = importlib.import_module(modname)
         if hasattr(mod, 'upgrade'):
             print(f'Running migration: {modname}')
-            mod.upgrade(conn)
+            # Inspect the upgrade function to see if it accepts a connection argument
+            sig = inspect.signature(mod.upgrade)
+            if 'conn' in sig.parameters or 'db_conn' in sig.parameters:
+                mod.upgrade(conn)
+            else:
+                mod.upgrade()
 
 def upgrade():
     conn = sqlite3.connect(DB_PATH)

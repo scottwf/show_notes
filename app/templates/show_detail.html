@@ -101,70 +101,31 @@
         </div>
 
         <!-- Next Up Card & Next Aired -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {% if next_up_episode %}
-            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
-              <h3 class="text-lg font-semibold text-sky-400 mb-2">
-                {% if next_up_episode.is_currently_watching %}
-                    Continue Watching
-                {% elif next_up_episode.is_next_unwatched %}
-                    Next Up
-                {% else %}
-                    Recently Watched
-                {% endif %}
-              </h3>
-              <div class="flex items-start space-x-4">
-                <div class="flex-shrink-0">
-                  <a href="{{ next_up_episode.episode_detail_url }}">
-                    <img src="{{ next_up_episode.poster_url if next_up_episode.poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
-                         alt="Show Poster"
-                         class="w-20 sm:w-24 aspect-[2/3] object-cover rounded-md shadow-md hover:ring-2 hover:ring-sky-400 transition-all duration-150"
-                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
-                  </a>
-                </div>
-                <div class="flex-grow min-w-0">
-                  <h4 class="font-bold text-gray-100 truncate" title="{{ next_up_episode.title }}">
-                    <a href="{{ next_up_episode.episode_detail_url }}" class="hover:underline">{{ next_up_episode.title }}</a>
-                  </h4>
-                  <p class="text-sm text-gray-300">{{ next_up_episode.season_episode_str }}</p>
-                  <p class="text-xs text-gray-400 mt-1">
-                    {% if next_up_episode.is_currently_watching or not next_up_episode.is_next_unwatched %}
-                        Last activity: {{ next_up_episode.formatted_timestamp }}
+        {% if next_up_episode %}
+        <div class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Next Up</h2>
+            <div class="flex flex-col md:flex-row gap-6">
+                <a href="{{ next_up_episode.episode_detail_url }}" class="flex-shrink-0">
+                    <img src="{{ next_up_episode.poster_url }}" alt="Show Poster" class="w-32 h-48 object-cover rounded-lg shadow-md">
+                </a>
+                <div class="flex-grow">
+                    <h3 class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ next_up_episode.title }}</h3>
+                    <p class="text-slate-600 dark:text-slate-400 mb-2">{{ next_up_episode.season_episode_str }}</p>
+                    {% if next_up_episode.is_currently_watching and next_up_episode.progress_percent is not none %}
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-2">
+                            <div class="bg-sky-600 h-2.5 rounded-full" style="width: {{ next_up_episode.progress_percent }}%"></div>
+                        </div>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{ next_up_episode.formatted_timestamp }}</p>
+                    {% elif next_up_episode.is_next_unwatched %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Next unwatched episode.</p>
                     {% else %}
-                        Watched on: {{ next_up_episode.formatted_timestamp }}
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{ next_up_episode.formatted_timestamp }}</p>
                     {% endif %}
-                  </p>
-                  {% if next_up_episode.progress_percent %}
-                  <div class="w-full bg-gray-600 rounded-full h-2 mt-2" title="{{ next_up_episode.progress_percent }}% watched">
-                    <div class="bg-sky-500 h-2 rounded-full" style="width: {{ next_up_episode.progress_percent }}%"></div>
-                  </div>
-                  {% endif %}
-                  <a href="{{ next_up_episode.episode_detail_url }}" class="text-sky-400 hover:text-sky-300 text-sm mt-2 inline-block hover:underline">
-                    Go to Episode &rarr;
-                  </a>
+                    <p class="mt-4 text-slate-700 dark:text-slate-300">{{ next_up_episode.overview | truncate(200) }}</p>
                 </div>
-              </div>
             </div>
-            {% endif %}
-
-            {% if next_aired_episode_info %}
-            <div class="bg-slate-800/70 backdrop-blur-md p-4 rounded-lg shadow-lg">
-                <h3 class="text-lg font-semibold text-sky-400 mb-2">Next Episode Airing</h3>
-                <p class="text-gray-200">
-                    {{ next_aired_episode_info.season_episode_str }}: {{ next_aired_episode_info.title }}
-                </p>
-                <p class="text-sm text-gray-400">
-                    Airs on: {{ next_aired_episode_info.air_date_utc | format_datetime }}
-                </p>
-            </div>
-            {% endif %}
         </div>
-
-        {% if not next_up_episode and not next_aired_episode_info %}
-        <!-- This div is to ensure consistent spacing if neither card is present -->
-        <div class="mb-8"></div>
         {% endif %}
-
 
         <!-- Seasons and Episodes Section -->
         <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6">
