@@ -61,6 +61,13 @@ This document outlines the planned features and development stages for the ShowN
     - [x] Added IMDb, TMDB, and Metacritic (shows only) ratings and links to show detail pages.
     - [x] Added IMDb and TMDB ratings and links to episode detail pages.
     - [x] Updated database schema and migration scripts to support new rating fields.
+- [x] **Webhook Activity Tracking & Dashboard Monitoring:**
+    - [x] Added `webhook_activity` table to track Radarr and Sonarr webhook events with timestamps.
+    - [x] Enhanced webhook endpoints to record activity with event types and payload summaries.
+    - [x] Updated admin dashboard to display "Last Updated" timestamps for each service.
+    - [x] Added visual indicators (green for recent activity, amber for no activity) on service cards.
+    - [x] Implemented automatic library syncing triggered by webhook events (Download, Series, Movie).
+    - [x] Created comprehensive webhook setup guide with troubleshooting instructions.
 
 ## Next Steps
 
@@ -68,6 +75,8 @@ This document outlines the planned features and development stages for the ShowN
 - [ ] **Refine "Next Up" Feature:** Improve the logic for determining the next unwatched episode and display it more prominently on the show detail page and homepage.
 - [ ] **Improve Plex User Detection:** Increase the robustness of Plex user detection at login to handle edge cases and ensure more reliable username/ID capture.
 - [ ] **Improve UI/UX Feedback:** Add loading indicators for image fetches and error states for missing images to provide better feedback on slower connections.
+- [ ] **Webhook Activity Analytics:** Expand webhook tracking to include more detailed analytics (frequency, event patterns, sync success rates).
+- [ ] **Real-time Dashboard Updates:** Implement live updates for webhook activity timestamps without page refresh.
 
 ## Future Enhancements
 
