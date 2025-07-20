@@ -662,6 +662,8 @@ def settings():
             merged_settings[k] = v
     site_url = request.url_root.rstrip('/')
     plex_webhook_url = url_for('main.plex_webhook', _external=True)
+    sonarr_webhook_url = url_for('main.sonarr_webhook', _external=True)
+    radarr_webhook_url = url_for('main.radarr_webhook', _external=True)
 
     sonarr_status = test_sonarr_connection()
     radarr_status = test_radarr_connection()
@@ -699,6 +701,8 @@ def settings():
         settings=merged_settings,
         site_url=site_url,
         plex_webhook_url=plex_webhook_url,
+        sonarr_webhook_url=sonarr_webhook_url,
+        radarr_webhook_url=radarr_webhook_url,
         sonarr_status=sonarr_status,
         radarr_status=radarr_status,
         bazarr_status=bazarr_status,

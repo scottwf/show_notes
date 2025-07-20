@@ -254,6 +254,10 @@ def home():
                            username=s_username,
                            is_admin=session.get('is_admin', False))
 
+# ============================================================================
+# WEBHOOK ENDPOINTS
+# ============================================================================
+
 @main_bp.route('/plex/webhook', methods=['POST'])
 def plex_webhook():
     """
@@ -366,6 +370,155 @@ def plex_webhook():
     except Exception as e:
         current_app.logger.error(f"Error processing Plex webhook: {e}", exc_info=True)
         return 'error', 400
+
+
+@main_bp.route('/sonarr/webhook', methods=['POST'])
+def sonarr_webhook():
+    """
+    Handles incoming webhook events from Sonarr.
+
+    This endpoint receives webhook notifications from Sonarr when shows, seasons,
+    or episodes are added, updated, or removed. It automatically triggers a
+    library sync to keep the ShowNotes database up to date.
+
+    Supported events:
+    - Download: When episodes are downloaded
+    - Series: When series are added/updated
+    - Episode: When episodes are added/updated
+    - Rename: When files are renamed
+
+    Returns:
+        A JSON response indicating success or an error.
+    """
+    try:
+        if request.is_json:
+            payload = request.get_json()
+        else:
+            payload = json.loads(request.form.get('payload', '{}'))
+        
+        current_app.logger.info(f"Sonarr webhook received: {json.dumps(payload, indent=2)}")
+        
+        event_type = payload.get('eventType')
+        
+        # Events that should trigger a library sync
+        sync_events = [
+            'Download',           # Episode downloaded
+            'Series',             # Series added/updated
+            'Episode',            # Episode added/updated
+            'Rename',             # Files renamed
+            'Delete',             # Files deleted
+            'Health',             # Health check (good for periodic syncs)
+            'Test'                # Test event
+        ]
+        
+        if event_type in sync_events:
+            current_app.logger.info(f"Sonarr webhook event '{event_type}' detected, triggering library sync")
+            
+            # Import here to avoid circular imports
+            from ..utils import sync_sonarr_library
+            
+            try:
+                # Trigger the sync in a background thread to avoid blocking the webhook response
+                import threading
+                def sync_in_background():
+                    try:
+                        with current_app.app_context():
+                            count = sync_sonarr_library()
+                            current_app.logger.info(f"Sonarr webhook-triggered sync completed: {count} shows processed")
+                    except Exception as e:
+                        current_app.logger.error(f"Error in background Sonarr sync: {e}", exc_info=True)
+                
+                # Start background sync
+                sync_thread = threading.Thread(target=sync_in_background)
+                sync_thread.daemon = True
+                sync_thread.start()
+                
+                current_app.logger.info("Sonarr library sync initiated in background")
+                
+            except Exception as e:
+                current_app.logger.error(f"Failed to trigger Sonarr sync from webhook: {e}", exc_info=True)
+        else:
+            current_app.logger.debug(f"Sonarr webhook event '{event_type}' received but no sync needed")
+        
+        return jsonify({'status': 'success', 'message': f'Processed {event_type} event'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error processing Sonarr webhook: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@main_bp.route('/radarr/webhook', methods=['POST'])
+def radarr_webhook():
+    """
+    Handles incoming webhook events from Radarr.
+
+    This endpoint receives webhook notifications from Radarr when movies are
+    added, updated, or removed. It automatically triggers a library sync to
+    keep the ShowNotes database up to date.
+
+    Supported events:
+    - Download: When movies are downloaded
+    - Movie: When movies are added/updated
+    - Rename: When files are renamed
+    - Delete: When files are deleted
+
+    Returns:
+        A JSON response indicating success or an error.
+    """
+    try:
+        if request.is_json:
+            payload = request.get_json()
+        else:
+            payload = json.loads(request.form.get('payload', '{}'))
+        
+        current_app.logger.info(f"Radarr webhook received: {json.dumps(payload, indent=2)}")
+        
+        event_type = payload.get('eventType')
+        
+        # Events that should trigger a library sync
+        sync_events = [
+            'Download',           # Movie downloaded
+            'Movie',              # Movie added/updated
+            'Rename',             # Files renamed
+            'Delete',             # Files deleted
+            'Health',             # Health check (good for periodic syncs)
+            'Test'                # Test event
+        ]
+        
+        if event_type in sync_events:
+            current_app.logger.info(f"Radarr webhook event '{event_type}' detected, triggering library sync")
+            
+            # Import here to avoid circular imports
+            from ..utils import sync_radarr_library
+            
+            try:
+                # Trigger the sync in a background thread to avoid blocking the webhook response
+                import threading
+                def sync_in_background():
+                    try:
+                        with current_app.app_context():
+                            result = sync_radarr_library()
+                            current_app.logger.info(f"Radarr webhook-triggered sync completed: {result}")
+                    except Exception as e:
+                        current_app.logger.error(f"Error in background Radarr sync: {e}", exc_info=True)
+                
+                # Start background sync
+                sync_thread = threading.Thread(target=sync_in_background)
+                sync_thread.daemon = True
+                sync_thread.start()
+                
+                current_app.logger.info("Radarr library sync initiated in background")
+                
+            except Exception as e:
+                current_app.logger.error(f"Failed to trigger Radarr sync from webhook: {e}", exc_info=True)
+        else:
+            current_app.logger.debug(f"Radarr webhook event '{event_type}' received but no sync needed")
+        
+        return jsonify({'status': 'success', 'message': f'Processed {event_type} event'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error processing Radarr webhook: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @main_bp.route('/login', methods=['GET', 'POST'])
 def login():
