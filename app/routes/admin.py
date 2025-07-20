@@ -9,6 +9,16 @@ All routes in this blueprint are prefixed with `/admin` and require the user to 
 logged in and have administrative privileges, enforced by the `@admin_required`
 decorator.
 
+ORGANIZATION:
+This file is organized into logical sections for better maintainability:
+- DECORATORS & UTILITIES: Shared decorators and constants
+- DASHBOARD & SEARCH: Main dashboard and search functionality  
+- SETTINGS MANAGEMENT: Service configuration and connection testing
+- TASK EXECUTION: Background task triggers (sync, parsing, etc.)
+- LOG MANAGEMENT: Log viewing, streaming, and logbook functionality
+- LLM TOOLS: LLM testing and prompt management
+- API USAGE: API usage tracking and monitoring
+
 Key Features:
 - **Dashboard:** A summary page with key statistics about the application's data.
 - **Settings:** A page for configuring connections to external services like
@@ -51,6 +61,10 @@ from ..llm_services import get_llm_response
 
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# ============================================================================
+# DECORATORS & UTILITIES
+# ============================================================================
 
 def admin_required(f):
     """
@@ -145,21 +159,28 @@ def admin_search():
 
     return jsonify(results)
 
+# ============================================================================
+# DASHBOARD & SEARCH
+# ============================================================================
+
 @admin_bp.route('/dashboard', methods=['GET'])
 @login_required
 @admin_required
 def dashboard():
     """
-    Renders the admin dashboard page.
+    Renders the admin dashboard page with comprehensive application statistics.
 
     This page provides a high-level overview of the application's state by
-    displaying key statistics, such as the number of movies, shows, users,
-    and Plex events currently in the database.
+    displaying key statistics organized into three main sections:
+    - Plex Activity: Content consumption and user engagement metrics
+    - Media Library: Sonarr/Radarr library statistics and sync status
+    - API Usage: LLM service usage and cost tracking
 
     Returns:
-        A rendered HTML template for the admin dashboard.
+        A rendered HTML template for the admin dashboard with all metrics.
     """
     db = database.get_db()
+    
     def safe_value(query):
         """Execute a scalar SQL query and return a numeric result or 0."""
         try:
@@ -168,11 +189,20 @@ def dashboard():
         except Exception:
             return 0
 
+    # ============================================================================
+    # MEDIA LIBRARY STATISTICS
+    # ============================================================================
+    
+    # Basic library counts
     movie_count = safe_value('SELECT COUNT(*) FROM radarr_movies')
     show_count = safe_value('SELECT COUNT(*) FROM sonarr_shows')
     user_count = safe_value('SELECT COUNT(*) FROM users')
-    plex_event_count = safe_value('SELECT COUNT(*) FROM plex_events')
-
+    
+    # File availability metrics
+    episodes_with_files = safe_value('SELECT COUNT(*) FROM sonarr_episodes WHERE has_file = 1')
+    movies_with_files = safe_value('SELECT COUNT(*) FROM radarr_movies WHERE has_file = 1')
+    
+    # Recent sync activity (last 7 days)
     radarr_week_count = safe_value(
         "SELECT COUNT(*) FROM radarr_movies WHERE last_synced_at >= DATETIME('now', '-7 days')"
     )
@@ -180,12 +210,78 @@ def dashboard():
         "SELECT COUNT(*) FROM sonarr_shows WHERE last_synced_at >= DATETIME('now', '-7 days')"
     )
 
+    # ============================================================================
+    # PLEX ACTIVITY METRICS
+    # ============================================================================
+    
+    # Content consumption (unique items played)
+    unique_movies_played = safe_value(
+        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'movie' AND event_type IN ('media.play', 'media.scrobble')"
+    )
+    unique_episodes_played = safe_value(
+        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'episode' AND event_type IN ('media.play', 'media.scrobble')"
+    )
+    unique_shows_watched = safe_value(
+        "SELECT COUNT(DISTINCT show_title) FROM plex_activity_log WHERE show_title IS NOT NULL"
+    )
+    
+    # Recent activity volume (last 7 days)
+    plex_events_week = safe_value(
+        "SELECT COUNT(*) FROM plex_activity_log WHERE event_timestamp >= DATETIME('now', '-7 days')"
+    )
+    recent_plays = safe_value(
+        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.play' AND event_timestamp >= DATETIME('now', '-7 days')"
+    )
+    recent_scrobbles = safe_value(
+        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.scrobble' AND event_timestamp >= DATETIME('now', '-7 days')"
+    )
+    
+    # ============================================================================
+    # USER ACTIVITY METRICS
+    # ============================================================================
+    
+    # Plex user activity (based on media consumption)
+    unique_plex_users = safe_value(
+        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL"
+    )
+    plex_users_today = safe_value(
+        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-1 day')"
+    )
+    plex_users_week = safe_value(
+        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-7 days')"
+    )
+    plex_users_month = safe_value(
+        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-30 days')"
+    )
+    
+    # ShowNotes user activity (based on login activity)
+    shownotes_users_today = safe_value(
+        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-1 day')"
+    )
+    shownotes_users_week = safe_value(
+        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-7 days')"
+    )
+    shownotes_users_month = safe_value(
+        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-30 days')"
+    )
+    
+    # ============================================================================
+    # API USAGE METRICS
+    # ============================================================================
+    
+    # Total API usage
+    total_api_calls = safe_value('SELECT COUNT(*) FROM api_usage')
+    total_api_cost = safe_value('SELECT SUM(cost_usd) FROM api_usage')
+    
+    # OpenAI usage (last 7 days)
     openai_cost_week = safe_value(
         "SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
     )
     openai_call_count_week = safe_value(
         "SELECT COUNT(*) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
     )
+    
+    # Ollama usage (last 7 days)
     ollama_avg_ms = safe_value(
         "SELECT AVG(processing_time_ms) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
     )
@@ -195,18 +291,44 @@ def dashboard():
 
     return render_template(
         'admin_dashboard.html',
+        # Media Library metrics
         movie_count=movie_count,
         show_count=show_count,
         user_count=user_count,
-        plex_event_count=plex_event_count,
+        episodes_with_files=episodes_with_files,
+        movies_with_files=movies_with_files,
         radarr_week_count=radarr_week_count,
         sonarr_week_count=sonarr_week_count,
+        
+        # Plex Activity metrics
+        unique_movies_played=unique_movies_played,
+        unique_episodes_played=unique_episodes_played,
+        unique_shows_watched=unique_shows_watched,
+        plex_events_week=plex_events_week,
+        recent_plays=recent_plays,
+        recent_scrobbles=recent_scrobbles,
+        
+        # User Activity metrics
+        unique_plex_users=unique_plex_users,
+        plex_users_today=plex_users_today,
+        plex_users_week=plex_users_week,
+        plex_users_month=plex_users_month,
+        shownotes_users_today=shownotes_users_today,
+        shownotes_users_week=shownotes_users_week,
+        shownotes_users_month=shownotes_users_month,
+        
+        # API Usage metrics
+        total_api_calls=total_api_calls,
+        total_api_cost=total_api_cost,
         openai_cost_week=openai_cost_week,
         openai_call_count_week=openai_call_count_week,
         ollama_avg_ms=ollama_avg_ms,
         ollama_call_count_week=ollama_call_count_week,
     )
 
+# ============================================================================
+# TASK EXECUTION
+# ============================================================================
 
 @admin_bp.route('/tasks')
 @login_required
@@ -223,6 +345,10 @@ def tasks():
         A rendered HTML template for the admin tasks page.
     """
     return render_template('admin_tasks.html', title='Admin Tasks')
+
+# ============================================================================
+# LOG MANAGEMENT
+# ============================================================================
 
 @admin_bp.route('/logs', methods=['GET'])
 @login_required
@@ -446,6 +572,10 @@ def stream_log_content(filename):
 
     return Response(stream_with_context(generate_log_updates(file_path)), mimetype='text/event-stream')
 
+# ============================================================================
+# SETTINGS MANAGEMENT
+# ============================================================================
+
 @admin_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -600,6 +730,10 @@ def sync_sonarr():
         flash(f"Error during Sonarr sync: {str(e)}", "danger") # Changed to danger for errors
         current_app.logger.error(f"Sonarr sync error: {e}", exc_info=True)
     return redirect(url_for('admin.tasks'))
+
+# ============================================================================
+# LLM TOOLS
+# ============================================================================
 
 @admin_bp.route('/test-llm-summary', methods=['GET', 'POST'])
 @login_required
@@ -816,6 +950,10 @@ def view_prompts():
                            builder_prompts=builder_prompts,
                            static_prompts=static_prompts,
                            title="View Prompts")
+
+# ============================================================================
+# API USAGE
+# ============================================================================
 
 @admin_bp.route('/api-usage-logs')
 @login_required

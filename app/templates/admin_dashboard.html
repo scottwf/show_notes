@@ -1,67 +1,283 @@
 {% extends "admin_layout.html" %}
 
 {% block admin_page_title %}Dashboard{% endblock %}
-
 {% block admin_page_header %}Admin Dashboard{% endblock %}
 
 {% block admin_page_content %}
+<!-- Main Dashboard Container -->
 <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-6">
-    <h2 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Welcome to the Admin Dashboard!</h2>
-    <p class="text-slate-600 dark:text-slate-300">
-        This is the central hub for managing your ShowNotes application. 
-        Use the sidebar to navigate to different administrative sections.
-    </p>
-    <div class="my-6 flex flex-col sm:flex-row items-center gap-4">
-        <button id="admin-link-plex" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base flex items-center justify-center space-x-2">
-            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10zm-1.5-6.056V8.056h3v7.906l3.536-3.535.707.707L12 18.414l-5.743-5.743.707-.707L10.5 15.944z"/></svg>
-            <span>Link Plex Account</span>
-        </button>
-        <span id="plex-link-status" class="text-sm text-slate-600 dark:text-slate-300"></span>
+    
+    <!-- ============================================================================
+         DASHBOARD HEADER & WELCOME SECTION
+         ============================================================================ -->
+    <div class="mb-8">
+        <h2 class="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            Welcome to the Admin Dashboard!
+        </h2>
+        <p class="text-slate-600 dark:text-slate-300 mb-6">
+            This is the central hub for managing your ShowNotes application. 
+            Use the sidebar to navigate to different administrative sections.
+        </p>
+        
+        <!-- Plex Account Link Button -->
+        <div class="flex flex-col sm:flex-row items-center gap-4">
+            <button id="admin-link-plex" 
+                    class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-yellow-900 font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base flex items-center justify-center space-x-2">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10zm-1.5-6.056V8.056h3v7.906l3.536-3.535.707.707L12 18.414l-5.743-5.743.707-.707L10.5 15.944z"/>
+                </svg>
+                <span>Link Plex Account</span>
+            </button>
+            <span id="plex-link-status" class="text-sm text-slate-600 dark:text-slate-300"></span>
+        </div>
     </div>
-    <script>
-    document.getElementById('admin-link-plex').addEventListener('click', async function() {
-        document.getElementById('plex-link-status').textContent = 'Connecting to Plex...';
-        const resp = await fetch('/admin/link-plex/start');
-        const data = await resp.json();
-        const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
-        // Optionally poll for completion, or let backend handle callback
-        document.getElementById('plex-link-status').textContent = 'Complete the Plex login in the popup.';
-    });
-    </script>
-    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- Placeholder for stats cards -->
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Total Users</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ user_count if user_count is not none else '--' }}</p>
+
+    <!-- ============================================================================
+         PLEX ACTIVITY SECTION
+         Shows content consumption and user engagement metrics
+         ============================================================================ -->
+    <div class="mb-8">
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Plex Activity</h3>
+        
+        <!-- Main Activity Metrics Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Movies Played -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Movies Played</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ unique_movies_played|default('--', true) }}
+                </p>
+            </div>
+            
+            <!-- Episodes Played -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Episodes Played</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ unique_episodes_played|default('--', true) }}
+                </p>
+            </div>
+            
+            <!-- Recent Events -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Events (7d)</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ plex_events_week|default('--', true) }}
+                </p>
+            </div>
+            
+            <!-- Shows Watched -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Shows Watched</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ unique_shows_watched|default('--', true) }}
+                </p>
+            </div>
         </div>
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Plex Events Logged</h3>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400">{{ plex_event_count if plex_event_count is not none else '--' }}</p>
+        
+        <!-- User Activity Card -->
+        <div class="mt-4">
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">User Activity</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Plex Users Section -->
+                    <div>
+                        <h5 class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Plex Users</h5>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Today:</span>
+                                <span class="font-semibold text-sky-600 dark:text-sky-400">
+                                    {{ plex_users_today|default('--', true) }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Week:</span>
+                                <span class="font-semibold text-sky-600 dark:text-sky-400">
+                                    {{ plex_users_week|default('--', true) }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Month:</span>
+                                <span class="font-semibold text-sky-600 dark:text-sky-400">
+                                    {{ plex_users_month|default('--', true) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ShowNotes Users Section -->
+                    <div>
+                        <h5 class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">ShowNotes Users</h5>
+                        <div class="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Today:</span>
+                                <span class="font-semibold text-green-600 dark:text-green-400">
+                                    {{ shownotes_users_today|default('--', true) }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Week:</span>
+                                <span class="font-semibold text-green-600 dark:text-green-400">
+                                    {{ shownotes_users_week|default('--', true) }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 dark:text-slate-400">Month:</span>
+                                <span class="font-semibold text-green-600 dark:text-green-400">
+                                    {{ shownotes_users_month|default('--', true) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Movies in Radarr</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-300">Total:</p>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400 mb-2">{{ movie_count if movie_count is not none else '--' }}</p>
-            <p class="text-sm text-slate-600 dark:text-slate-300">This week:</p>
-            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">{{ radarr_week_count if radarr_week_count is not none else '--' }}</p>
+        
+        <!-- Recent Activity Breakdown -->
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Recent Plays (7d)</h4>
+                <p class="text-xl font-bold text-green-600 dark:text-green-400">
+                    {{ recent_plays|default('--', true) }}
+                </p>
+            </div>
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Recent Completions (7d)</h4>
+                <p class="text-xl font-bold text-green-600 dark:text-green-400">
+                    {{ recent_scrobbles|default('--', true) }}
+                </p>
+            </div>
         </div>
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Shows in Sonarr</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-300">Total:</p>
-            <p class="text-3xl font-bold text-sky-600 dark:text-sky-400 mb-2">{{ show_count if show_count is not none else '--' }}</p>
-            <p class="text-sm text-slate-600 dark:text-slate-300">This week:</p>
-            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">{{ sonarr_week_count if sonarr_week_count is not none else '--' }}</p>
+    </div>
+
+    <!-- ============================================================================
+         MEDIA LIBRARY SECTION
+         Shows Sonarr/Radarr library statistics and sync status
+         ============================================================================ -->
+    <div class="mb-8">
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Media Library</h3>
+        
+        <!-- Library Cards with Service Logos -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- Radarr Movies Card -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <div class="flex items-center mb-3">
+                    <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" 
+                         alt="Radarr Logo" 
+                         class="block dark:hidden h-6 w-auto mr-2">
+                    <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" 
+                         alt="Radarr Logo" 
+                         class="hidden dark:block h-6 w-auto mr-2">
+                    <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Movies (Radarr)</h4>
+                </div>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ movie_count|default('--', true) }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Available: {{ movies_with_files|default('--', true) }}
+                </p>
+            </div>
+            
+            <!-- Sonarr Shows Card -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <div class="flex items-center mb-3">
+                    <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" 
+                         alt="Sonarr Logo" 
+                         class="block dark:hidden h-6 w-auto mr-2">
+                    <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" 
+                         alt="Sonarr Logo" 
+                         class="hidden dark:block h-6 w-auto mr-2">
+                    <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Shows (Sonarr)</h4>
+                </div>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ show_count|default('--', true) }}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Episodes Available: {{ episodes_with_files|default('--', true) }}
+                </p>
+            </div>
         </div>
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">OpenAI Usage (7d)</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-300">Calls: {{ openai_call_count_week }}</p>
-            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">${{ '%.5f'|format(openai_cost_week|float) if openai_cost_week is not none else '--' }}</p>
+        
+        <!-- Sync Activity -->
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Radarr Sync (7d)</h4>
+                <p class="text-xl font-bold text-blue-600 dark:text-blue-400">
+                    {{ radarr_week_count|default('--', true) }}
+                </p>
+            </div>
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Sonarr Sync (7d)</h4>
+                <p class="text-xl font-bold text-blue-600 dark:text-blue-400">
+                    {{ sonarr_week_count|default('--', true) }}
+                </p>
+            </div>
         </div>
-        <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
-            <h3 class="text-lg font-medium text-slate-700 dark:text-slate-200">Ollama Avg Time (7d)</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-300">Calls: {{ ollama_call_count_week }}</p>
-            <p class="text-2xl font-semibold text-sky-600 dark:text-sky-400">{{ ollama_avg_ms|format_ms if ollama_avg_ms is not none else '--' }}</p>
+    </div>
+
+    <!-- ============================================================================
+         API USAGE SECTION
+         Shows LLM service usage and cost tracking
+         ============================================================================ -->
+    <div class="mb-8">
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">API Usage</h3>
+        
+        <!-- API Usage Metrics Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Total API Calls -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Total API Calls</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ total_api_calls|default('--', true) }}
+                </p>
+            </div>
+            
+            <!-- Total Cost -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Total Cost</h4>
+                <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">
+                    ${{ '%.2f'|format(total_api_cost|float) if total_api_cost is not none else '--' }}
+                </p>
+            </div>
+            
+            <!-- OpenAI Usage -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">OpenAI (7d)</h4>
+                <p class="text-sm text-slate-600 dark:text-slate-300">
+                    Calls: {{ openai_call_count_week|default('--', true) }}
+                </p>
+                <p class="text-xl font-bold text-sky-600 dark:text-sky-400">
+                    ${{ '%.5f'|format(openai_cost_week|float) if openai_cost_week is not none else '--' }}
+                </p>
+            </div>
+            
+            <!-- Ollama Usage -->
+            <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg shadow">
+                <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300">Ollama (7d)</h4>
+                <p class="text-sm text-slate-600 dark:text-slate-300">
+                    Calls: {{ ollama_call_count_week|default('--', true) }}
+                </p>
+                <p class="text-xl font-bold text-sky-600 dark:text-sky-400">
+                    {{ ollama_avg_ms|format_ms if ollama_avg_ms is not none else '--' }}
+                </p>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- ============================================================================
+     JAVASCRIPT FUNCTIONALITY
+     ============================================================================ -->
+<script>
+document.getElementById('admin-link-plex').addEventListener('click', async function() {
+    document.getElementById('plex-link-status').textContent = 'Connecting to Plex...';
+    const resp = await fetch('/admin/link-plex/start');
+    const data = await resp.json();
+    const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
+    // Optionally poll for completion, or let backend handle callback
+    document.getElementById('plex-link-status').textContent = 'Complete the Plex login in the popup.';
+});
+</script>
 {% endblock %}
