@@ -278,6 +278,26 @@ def dashboard():
         "SELECT received_at, event_type, payload_summary FROM webhook_activity WHERE service_name = 'radarr' ORDER BY received_at DESC LIMIT 1"
     ).fetchone()
     
+    # Convert string timestamps to datetime objects for template formatting
+    import datetime
+    if sonarr_last_webhook and sonarr_last_webhook['received_at']:
+        try:
+            sonarr_last_webhook = dict(sonarr_last_webhook)
+            sonarr_last_webhook['received_at'] = datetime.datetime.strptime(
+                sonarr_last_webhook['received_at'], '%Y-%m-%d %H:%M:%S'
+            )
+        except (ValueError, TypeError):
+            sonarr_last_webhook['received_at'] = None
+    
+    if radarr_last_webhook and radarr_last_webhook['received_at']:
+        try:
+            radarr_last_webhook = dict(radarr_last_webhook)
+            radarr_last_webhook['received_at'] = datetime.datetime.strptime(
+                radarr_last_webhook['received_at'], '%Y-%m-%d %H:%M:%S'
+            )
+        except (ValueError, TypeError):
+            radarr_last_webhook['received_at'] = None
+    
     # ============================================================================
     # API USAGE METRICS
     # ============================================================================
