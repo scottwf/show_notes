@@ -258,7 +258,8 @@
     <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
       <summary class="flex items-center gap-x-3 cursor-pointer">
         <span class="inline-block w-10 h-10 sm:w-12 sm:h-12">
-          <img src="https://thetvdb.com/images/logo-thetvdb.svg" alt="TheTVDB logo" class="w-full h-full object-contain">
+          <img src="{{ url_for('static', filename='logos/tvdb-light.png') }}" alt="TheTVDB logo" class="w-full h-full object-contain dark:hidden">
+          <img src="{{ url_for('static', filename='logos/tvdb-dark.png') }}" alt="TheTVDB logo dark" class="w-full h-full object-contain hidden dark:inline">
         </span>
         <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">TheTVDB</span>
       </summary>
@@ -268,8 +269,8 @@
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="thetvdb_api_key">API Key</label>
             <div class="relative flex items-center">
-              <input type="password" id="thetvdb_api_key" name="thetvdb_api_key" value="{{ settings.thetvdb_api_key or '' }}" autocomplete="off" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-10">
-              <button type="button" onclick="const inp = document.getElementById('thetvdb_api_key'); inp.type = inp.type === 'password' ? 'text' : 'password'; this.innerText = inp.type === 'password' ? 'Show' : 'Hide';" class="absolute right-2 text-xs text-sky-600 dark:text-sky-400 focus:outline-none">Show</button>
+              <input type="password" id="thetvdb_api_key" name="thetvdb_api_key" value="{{ settings.thetvdb_api_key or '' }}" autocomplete="off" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-16">
+              <button type="button" onclick="const inp = document.getElementById('thetvdb_api_key'); inp.type = inp.type === 'password' ? 'text' : 'password'; this.innerText = inp.type === 'password' ? 'Show' : 'Hide';" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-sky-600 dark:text-sky-400 focus:outline-none">Show</button>
             </div>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your API key for TheTVDB v4 API. <a href='https://thetvdb.com/api-information' target='_blank' class='text-sky-500 dark:text-sky-400 underline'>Get your key</a>.</p>
           </div>
