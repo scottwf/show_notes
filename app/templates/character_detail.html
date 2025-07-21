@@ -131,5 +131,52 @@
             </div>
         </div>
     </div>
+    <div class="mt-8">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">Ask a question about {{ character.character_name if character else character_name }}</h2>
+        <div id="chat-container" class="bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6">
+            <div id="chat-history" class="mb-4 h-64 overflow-y-auto">
+                {% for message in session.get('chat_history', []) %}
+                    <div class="mb-2">
+                        <span class="font-bold">{{ message.role }}:</span> {{ message.content }}
+                    </div>
+                {% endfor %}
+            </div>
+            <form id="chat-form">
+                <div class="flex">
+                    <input type="text" id="chat-input" class="w-full p-2 border rounded-l-md" placeholder="Type your question here...">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700">Send</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
+<script>
+    document.getElementById('chat-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const message = input.value;
+        input.value = '';
+
+        const chatHistory = document.getElementById('chat-history');
+        const userMessage = document.createElement('div');
+        userMessage.classList.add('mb-2');
+        userMessage.innerHTML = `<span class="font-bold">You:</span> ${message}`;
+        chatHistory.appendChild(userMessage);
+
+        const response = await fetch("{{ url_for('main.character_chat', show_id=show_id, season_number=season_number, episode_number=episode_number, actor_id=actor_id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ message: message })
+        });
+
+        const data = await response.json();
+        const botMessage = document.createElement('div');
+        botMessage.classList.add('mb-2');
+        botMessage.innerHTML = `<span class="font-bold">Bot:</span> ${data.reply}`;
+        chatHistory.appendChild(botMessage);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    });
+</script>
 {% endblock %}

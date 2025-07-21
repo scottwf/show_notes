@@ -71,7 +71,9 @@ This document outlines the planned features and development stages for the ShowN
 
 ## Next Steps
 
+- [ ] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with version history.
 - [ ] **Enhance Character Detail Page UI:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).
+- [ ] **Interactive Character Chat:** Develop the LLM-powered summary feature into a fully interactive, in-character chat experience.
 - [ ] **Refine "Next Up" Feature:** Improve the logic for determining the next unwatched episode and display it more prominently on the show detail page and homepage.
 - [ ] **Improve Plex User Detection:** Increase the robustness of Plex user detection at login to handle edge cases and ensure more reliable username/ID capture.
 - [ ] **Improve UI/UX Feedback:** Add loading indicators for image fetches and error states for missing images to provide better feedback on slower connections.

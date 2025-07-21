@@ -930,64 +930,62 @@ def api_test_llm_summary():
         response_data['error_message'] = 'No response received from LLM. This may mean the provider is not configured, returned an empty response, or the model is missing.'
     return jsonify(response_data)
 
-@admin_bp.route('/view-prompts')
+@admin_bp.route('/view-prompts', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def view_prompts():
     """
-    Displays all available LLM prompt templates.
-
-    This page introspects the `prompt_builder.py` and `prompts.py` modules to
-    find and display the structure and example output of all defined prompts.
-    It helps administrators understand and verify the prompts being sent to the
-    LLM services.
-
-    Returns:
-        A rendered HTML template showing lists of static and builder prompts.
+    Displays all available LLM prompt templates from the database.
     """
-    current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed View Prompts page.")
+    db = get_db()
+    if request.method == 'POST':
+        prompt_id = request.form.get('prompt_id')
+        prompt_text = request.form.get('prompt_text')
 
+        if prompt_id and prompt_text:
+            # First, get the current prompt to store in history
+            current_prompt = db.execute('SELECT prompt FROM prompts WHERE id = ?', (prompt_id,)).fetchone()
+            if current_prompt:
+                # Add current version to history
+                db.execute('INSERT INTO prompt_history (prompt_id, prompt) VALUES (?, ?)',
+                           (prompt_id, current_prompt['prompt']))
+
+                # Update the prompt
+                db.execute('UPDATE prompts SET prompt = ? WHERE id = ?', (prompt_text, prompt_id))
+                db.commit()
+                flash('Prompt updated successfully.', 'success')
+            else:
+                flash('Prompt not found.', 'danger')
+        else:
+            flash('Invalid request.', 'danger')
+        return redirect(url_for('admin.view_prompts'))
+
+    prompts_from_db = db.execute('SELECT * FROM prompts ORDER BY name').fetchall()
+
+    # For now, we will also keep the old way of loading prompts from files
+    # to avoid breaking anything. We will phase this out later.
     builder_prompts = []
     try:
         builder_functions = inspect.getmembers(prompt_builder, inspect.isfunction)
         for name, func in builder_functions:
             if name.startswith('build_'):
-                prompt_text = f"Could not generate example for {name}. Review function signature and test manually."
-                source_info = f'prompt_builder.py - {name}()'
+                # Here you can decide if you want to show example output
+                # For simplicity, we'll just show the name and docstring
                 docstring = inspect.getdoc(func)
-                if docstring:
-                    prompt_text = f"Docstring:\n{docstring}\n\n{prompt_text}"
-
-                try:
-                    if name == 'build_quote_prompt':
-                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow')
-                    elif name == 'build_relationships_prompt':
-                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow')
-                    elif name == 'build_character_prompt':
-                        prompt_text = func(character='PlaceholderCharacter', show='PlaceholderShow',
-                                           options={'include_quote': True, 'include_relationships': True, 'include_motivations': True})
-                    # Add more specific handlers if other build_ functions have simple, common call patterns
-
-                    builder_prompts.append({'name': name, 'text': prompt_text, 'source': source_info, 'docstring': docstring})
-                except Exception as e:
-                    current_app.logger.warning(f"Could not generate example for prompt function {name}: {e}")
-                    # Keep the docstring and error message if example generation failed
-                    builder_prompts.append({'name': name, 'text': prompt_text, 'source': source_info, 'docstring': docstring, 'error': str(e)})
-
+                builder_prompts.append({'name': name, 'text': docstring, 'source': 'prompt_builder.py'})
     except Exception as e:
         current_app.logger.error(f"Error inspecting prompt_builder.py: {e}", exc_info=True)
-        flash("Error loading prompts from prompt_builder.py.", "danger")
 
     static_prompts = []
     try:
         for var_name, var_value in inspect.getmembers(prompts):
-            if isinstance(var_value, str) and "PROMPT" in var_name.upper(): # Convention
+            if isinstance(var_value, str) and "PROMPT" in var_name.upper():
                 static_prompts.append({'name': var_name, 'text': var_value, 'source': 'prompts.py'})
     except Exception as e:
         current_app.logger.error(f"Error inspecting prompts.py: {e}", exc_info=True)
-        flash("Error loading prompts from prompts.py.", "danger")
 
     return render_template('admin_view_prompts.html',
+                           prompts_from_db=prompts_from_db,
                            builder_prompts=builder_prompts,
                            static_prompts=static_prompts,
                            title="View Prompts")
