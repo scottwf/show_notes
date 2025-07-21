@@ -7,7 +7,7 @@ import logging
 DATABASE = 'data/shownotes.db' # This will be updated by app.config['DATABASE']
 
 # Define the current schema version. Increment this when you make schema changes.
-CURRENT_SCHEMA_VERSION = 2 # Started at 1, incremented to 2 for plex_events.client_ip
+CURRENT_SCHEMA_VERSION = 3 # Started at 1, incremented to 3 for notifications and reports
 
 def get_db_connection():
     db_path = current_app.config['DATABASE']
@@ -69,6 +69,9 @@ def init_db():
             DROP TABLE IF EXISTS plex_activity_log;
             DROP TABLE IF EXISTS image_cache_queue;
             DROP TABLE IF EXISTS service_sync_status;
+            DROP TABLE IF EXISTS user_show_preferences;
+            DROP TABLE IF EXISTS notifications;
+            DROP TABLE IF EXISTS issue_reports;
             DROP TABLE IF EXISTS schema_version;
             DROP TABLE IF EXISTS subtitles;
 
@@ -200,6 +203,43 @@ def init_db():
             CREATE INDEX idx_subtitles_show_tmdb_id ON subtitles (show_tmdb_id);
             CREATE INDEX idx_subtitles_season_episode ON subtitles (show_tmdb_id, season_number, episode_number);
             CREATE INDEX idx_subtitles_line_search ON subtitles (search_blob);
+
+            CREATE TABLE user_show_preferences (
+                user_id INTEGER,
+                show_id INTEGER,
+                notify_new_episode INTEGER DEFAULT 1,
+                notify_season_finale INTEGER DEFAULT 1,
+                notify_series_finale INTEGER DEFAULT 1,
+                notify_time TEXT DEFAULT 'immediate',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, show_id)
+            );
+
+            CREATE TABLE notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                show_id INTEGER,
+                type TEXT,
+                message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                seen INTEGER DEFAULT 0
+            );
+
+            CREATE TABLE issue_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                media_type TEXT,
+                media_id INTEGER,
+                show_id INTEGER,
+                title TEXT,
+                issue_type TEXT,
+                comment TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'open',
+                resolved_by_admin_id INTEGER,
+                resolved_at DATETIME,
+                resolution_notes TEXT
+            );
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))

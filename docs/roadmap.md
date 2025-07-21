@@ -68,6 +68,7 @@ This document outlines the planned features and development stages for the ShowN
     - [x] Added visual indicators (green for recent activity, amber for no activity) on service cards.
     - [x] Implemented automatic library syncing triggered by webhook events (Download, Series, Movie).
     - [x] Created comprehensive webhook setup guide with troubleshooting instructions.
+- [x] **Notification & Issue Reporting Foundation:** Added tables for user preferences, notifications, and issue reports with an admin review UI.
 
 ## Next Steps
 

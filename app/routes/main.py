@@ -1489,3 +1489,29 @@ def character_detail(show_id, season_number, episode_number, actor_id):
                            llm_last_updated=llm_last_updated,
                            llm_source=llm_source,
                            llm_error=llm_error)
+
+
+@main_bp.route('/report_issue/<string:media_type>/<int:media_id>', methods=['GET', 'POST'])
+@login_required
+def report_issue(media_type, media_id):
+    db = database.get_db()
+    if request.method == 'POST':
+        issue_types = request.form.getlist('issue_type')
+        comment = request.form.get('comment', '')
+        show_id = request.form.get('show_id')
+        title = request.form.get('title', '')
+        db.execute(
+            'INSERT INTO issue_reports (user_id, media_type, media_id, show_id, title, issue_type, comment) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (session.get('user_id'), media_type, media_id, show_id, title, ','.join(issue_types), comment)
+        )
+        db.commit()
+        flash('Issue reported. Thank you!', 'success')
+        return redirect(url_for('main.home'))
+
+    issues = [
+        'Wrong language', 'No audio', 'Audio out of sync', 'Bad video quality',
+        'Wrong episode playing', 'Missing subtitles', 'Other'
+    ]
+    show_id = request.args.get('show_id', '')
+    title = request.args.get('title', '')
+    return render_template('report_issue.html', media_type=media_type, media_id=media_id, show_id=show_id, title=title, issues=issues)

@@ -1,0 +1,34 @@
+{% extends "admin_layout.html" %}
+{% block admin_page_title %}Issue Reports{% endblock %}
+{% block admin_page_header %}Issue Reports{% endblock %}
+{% block admin_page_content %}
+<table class="min-w-full text-sm">
+  <tr class="font-bold text-left">
+    <th class="pr-4">ID</th>
+    <th class="pr-4">Title</th>
+    <th class="pr-4">Type</th>
+    <th class="pr-4">Status</th>
+    <th class="pr-4">Comment</th>
+    <th class="pr-4">Created</th>
+    <th>Action</th>
+  </tr>
+  {% for r in reports %}
+  <tr class="border-t">
+    <td>{{ r.id }}</td>
+    <td>{{ r.title }}</td>
+    <td>{{ r.issue_type }}</td>
+    <td>{{ r.status }}</td>
+    <td>{{ r.comment }}</td>
+    <td>{{ r.created_at }}</td>
+    <td>
+      {% if r.status != 'resolved' %}
+      <form method="post" action="{{ url_for('admin.resolve_issue_report', report_id=r.id) }}" class="flex space-x-1">
+        <input type="text" name="resolution_notes" placeholder="notes" class="border px-1 py-0.5 text-xs">
+        <button type="submit" class="px-2 py-1 bg-green-600 text-white text-xs rounded">Resolve</button>
+      </form>
+      {% else %}Resolved{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
