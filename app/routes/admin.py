@@ -94,6 +94,7 @@ ADMIN_SEARCHABLE_ROUTES = [
     {'title': 'API Usage Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.api_usage_logs')},
     {'title': 'View Prompts', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.view_prompts')},
     {'title': 'Test LLM Summary', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.test_llm_summary')},
+    {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -1248,3 +1249,27 @@ def plex_webhook_payloads():
             'payload': payload
         })
     return render_template('admin_plex_webhook_payloads.html', payloads=payloads)
+
+
+@admin_bp.route('/issue-reports')
+@login_required
+@admin_required
+def issue_reports():
+    db = get_db()
+    rows = db.execute('SELECT * FROM issue_reports ORDER BY created_at DESC').fetchall()
+    return render_template('admin_issue_reports.html', reports=[dict(r) for r in rows])
+
+
+@admin_bp.route('/issue-reports/<int:report_id>/resolve', methods=['POST'])
+@login_required
+@admin_required
+def resolve_issue_report(report_id):
+    db = get_db()
+    notes = request.form.get('resolution_notes', '')
+    db.execute(
+        "UPDATE issue_reports SET status='resolved', resolved_by_admin_id=?, resolved_at=CURRENT_TIMESTAMP, resolution_notes=? WHERE id=?",
+        (current_user.id, notes, report_id)
+    )
+    db.commit()
+    flash('Report resolved.', 'success')
+    return redirect(url_for('admin.issue_reports'))

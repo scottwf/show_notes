@@ -1,0 +1,23 @@
+{% extends 'layout.html' %}
+{% block page_title %}Report Issue{% endblock %}
+{% block page_content %}
+<form method="post" class="space-y-4 max-w-md">
+  <input type="hidden" name="show_id" value="{{ show_id }}">
+  <input type="hidden" name="title" value="{{ title }}">
+  <div>
+    <p class="font-semibold">Select issue(s) for {{ title }}</p>
+    <div class="mt-2 space-y-1">
+      {% for issue in issues %}
+      <label class="block">
+        <input type="checkbox" name="issue_type" value="{{ issue }}" class="mr-1">{{ issue }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <div>
+    <label class="block font-semibold" for="comment">Comment</label>
+    <textarea id="comment" name="comment" class="w-full border rounded p-1" rows="3"></textarea>
+  </div>
+  <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Submit</button>
+</form>
+{% endblock %}

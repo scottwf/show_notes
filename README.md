@@ -21,6 +21,7 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - **User List:** Admins can view Plex users, last login times, and latest watched items.
 - **Episode Detail Pages:** Individual episode pages now show air date and an "Available" label when the file exists.
 - **Episode Lists:** Season 0 is hidden from show pages and episodes indicate availability instead of download status.
+- **Notification & Reporting System:** Added database tables for user show preferences, notifications, and issue reports with a simple admin review page.
 
 ---
 ### 🚀 Latest Enhancements
