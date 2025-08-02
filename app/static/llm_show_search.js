@@ -77,7 +77,7 @@
                         </div>
                     `;
                     const innerFlexContainer = `<div class="flex items-center p-2 cursor-pointer">${imageHtml}${textHtml}</div>`;
-                    html += `<div class="search-result-item" data-title="${item.title.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">${innerFlexContainer}</div>`;
+                    html += `<div class="search-result-item" data-title="${item.title.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" data-tmdb-id="${item.tmdb_id}">${innerFlexContainer}</div>`;
                 });
                 searchResultsDiv.innerHTML = html;
                 if (window.innerWidth < mobileBreakpoint) {
@@ -138,8 +138,10 @@
         if (currentHighlightIndex >= 0 && currentHighlightIndex < items.length) {
           const selectedItem = items[currentHighlightIndex];
           const showTitle = selectedItem.getAttribute('data-title');
+          const tmdbId = selectedItem.getAttribute('data-tmdb-id');
           if (showTitle) searchInput.value = showTitle;
           hideResults();
+          fetchCharactersForShow(tmdbId);
           return;
         }
       } else if (event.key === 'Escape') {
@@ -155,11 +157,53 @@
         }
         if (targetElement && targetElement.classList.contains('search-result-item')) {
             const showTitle = targetElement.getAttribute('data-title');
+            const tmdbId = targetElement.getAttribute('data-tmdb-id');
             if (showTitle) searchInput.value = showTitle;
             hideResults();
+            fetchCharactersForShow(tmdbId);
             return;
         }
     });
+
+    const characterSelect = document.getElementById('test_character');
+
+    async function fetchCharactersForShow(tmdbId) {
+        if (!tmdbId) {
+            characterSelect.innerHTML = '<option value="">-- Select a show first --</option>';
+            characterSelect.disabled = true;
+            return;
+        }
+
+        characterSelect.innerHTML = '<option value="">Loading characters...</option>';
+        characterSelect.disabled = true;
+
+        try {
+            const response = await fetch(`/admin/api/characters-for-show?tmdb_id=${tmdbId}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch characters');
+            }
+            const characters = await response.json();
+
+            characterSelect.innerHTML = ''; // Clear existing options
+            if (characters.length > 0) {
+                characterSelect.disabled = false;
+                characters.sort().forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    characterSelect.appendChild(option);
+                });
+            } else {
+                characterSelect.innerHTML = '<option value="">-- No characters found --</option>';
+                characterSelect.disabled = true;
+            }
+        } catch (error) {
+            console.error('Error fetching characters:', error);
+            characterSelect.innerHTML = '<option value="">-- Error loading characters --</option>';
+            characterSelect.disabled = true;
+        }
+    }
+
     document.addEventListener('click', function(event) {
         if (!searchForm.contains(event.target)) {
             hideResults();

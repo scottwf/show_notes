@@ -1012,6 +1012,56 @@ def view_prompts():
                            static_prompts=static_prompts,
                            title="View Prompts")
 
+@admin_bp.route('/api/prompt-history/<int:prompt_id>')
+@login_required
+@admin_required
+def get_prompt_history(prompt_id):
+    """
+    API endpoint to retrieve the version history for a specific prompt.
+    """
+    db = get_db()
+    try:
+        history_rows = db.execute(
+            'SELECT * FROM prompt_history WHERE prompt_id = ? ORDER BY timestamp DESC',
+            (prompt_id,)
+        ).fetchall()
+
+        history = [dict(row) for row in history_rows]
+
+        return jsonify(history)
+    except Exception as e:
+        current_app.logger.error(f"Error fetching history for prompt_id {prompt_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Database query failed'}), 500
+
+@admin_bp.route('/api/characters-for-show')
+@login_required
+@admin_required
+def api_characters_for_show():
+    """
+    API endpoint to get all unique character names for a given show.
+    Accepts a 'tmdb_id' query parameter.
+    """
+    show_tmdb_id = request.args.get('tmdb_id')
+    if not show_tmdb_id:
+        return jsonify({'error': 'tmdb_id parameter is required'}), 400
+
+    db = get_db()
+    try:
+        # Query for distinct character names for the given show
+        characters = db.execute(
+            "SELECT DISTINCT character_name FROM episode_characters WHERE show_tmdb_id = ?",
+            (show_tmdb_id,)
+        ).fetchall()
+
+        # Extract just the names into a list
+        character_names = [row['character_name'] for row in characters]
+
+        return jsonify(character_names)
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching characters for show {show_tmdb_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Database query failed'}), 500
+
 # ============================================================================
 # API USAGE
 # ============================================================================

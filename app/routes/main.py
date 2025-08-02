@@ -345,6 +345,28 @@ def plex_webhook():
             # --- Store episode character data if available ---
             if metadata.get('type') == 'episode' and 'Role' in metadata:
                 episode_rating_key = metadata.get('ratingKey')
+
+                # --- Correctly identify the show's TMDB ID ---
+                show_tvdb_id_from_plex = None
+                try:
+                    show_tvdb_id_from_plex = int(metadata.get('grandparentRatingKey'))
+                except (ValueError, TypeError):
+                    current_app.logger.warning(f"Could not parse grandparentRatingKey: {metadata.get('grandparentRatingKey')}")
+
+                correct_show_tmdb_id = None
+                if show_tvdb_id_from_plex:
+                    show_record = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?', (show_tvdb_id_from_plex,)).fetchone()
+                    if show_record:
+                        correct_show_tmdb_id = show_record['tmdb_id']
+                    else:
+                        current_app.logger.warning(f"Could not find show in DB with TVDB ID: {show_tvdb_id_from_plex}")
+
+                if not correct_show_tmdb_id:
+                    # Fallback to the tmdb_id from the episode's own GUID if show lookup fails
+                    correct_show_tmdb_id = tmdb_id
+                    current_app.logger.warning(f"Falling back to using episode's TMDB ID ({tmdb_id}) for show, as show lookup failed.")
+
+
                 # Remove old character rows for this episode
                 db.execute('DELETE FROM episode_characters WHERE episode_rating_key = ?', (episode_rating_key,))
                 roles = metadata['Role']
@@ -352,8 +374,8 @@ def plex_webhook():
                     db.execute(
                         'INSERT INTO episode_characters (show_tmdb_id, show_tvdb_id, season_number, episode_number, episode_rating_key, character_name, actor_name, actor_id, actor_thumb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
                         (
-                            tmdb_id,
-                            tvdb_id,
+                            correct_show_tmdb_id, # Use the corrected show TMDB ID
+                            show_tvdb_id_from_plex, # Use the show's TVDB ID
                             season_num,
                             episode_num,
                             episode_rating_key,
@@ -364,7 +386,7 @@ def plex_webhook():
                         )
                     )
                 db.commit()
-                current_app.logger.info(f"Stored {len(roles)} episode characters for episode {episode_rating_key} (S{season_num}E{episode_num})")
+                current_app.logger.info(f"Stored {len(roles)} episode characters for episode {episode_rating_key} (S{season_num}E{episode_num}) with correct show TMDB ID {correct_show_tmdb_id}")
         
         return '', 200
     except Exception as e:
