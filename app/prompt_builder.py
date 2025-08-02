@@ -27,7 +27,7 @@ relationship_2:
   description: "1–2 sentence description"
 """
 
-def build_character_prompt(character, show, season=None, episode=None, options=None):
+def build_character_prompt(character, show, season=None, episode=None, options=None, show_context=None, episode_context=None, character_context=None):
     """
     options: {
         'include_relationships': True,
@@ -36,13 +36,47 @@ def build_character_prompt(character, show, season=None, episode=None, options=N
         'include_quote': True,
         'tone': 'tv_expert' or 'in_character'
     }
+    show_context: {
+        'overview': 'Show description',
+        'year': 2023,
+        'genre': 'Drama'
+    }
+    episode_context: {
+        'title': 'Episode Title',
+        'overview': 'Episode description'
+    }
+    character_context: {
+        'actor_name': 'Actor Name',
+        'other_characters': ['Char1', 'Char2']
+    }
     """
     if options is None:
         options = {}
 
     limit_text = f" Limit the analysis to events up to Season {season}, Episode {episode}." if season and episode else ""
 
-    base = f"Provide a structured markdown character summary for the character {character} from the show {show}.{limit_text}"
+    # Build context information
+    context_parts = []
+    if show_context and show_context.get('overview'):
+        context_parts.append(f"Show context: {show_context['overview']}")
+    if character_context and character_context.get('actor_name'):
+        context_parts.append(f"Character: {character} is played by {character_context['actor_name']}")
+    if character_context and character_context.get('other_characters'):
+        other_chars = ', '.join(character_context['other_characters'][:5])  # Limit to 5 to avoid long prompts
+        context_parts.append(f"Other characters in this episode: {other_chars}")
+    if episode_context and episode_context.get('title'):
+        context_parts.append(f"Episode {episode}: '{episode_context['title']}'")
+    if episode_context and episode_context.get('overview'):
+        context_parts.append(f"Episode context: {episode_context['overview']}")
+    
+    context_text = ""
+    if context_parts:
+        context_text = f"\n\nContext for accuracy:\n" + "\n".join(f"- {part}" for part in context_parts)
+
+    # Add warning about accuracy
+    accuracy_warning = f"\n\nIMPORTANT: Only describe what is definitively known about {character} specifically. Do not assume relationships or plot details from the general show description. If uncertain about {character}'s specific role or relationships, write 'Not available' rather than guessing."
+
+    base = f"Provide a structured markdown character summary for the character {character} from the show {show}.{limit_text}{context_text}{accuracy_warning}"
 
     if options.get("tone") == "in_character":
         base = (
@@ -114,11 +148,28 @@ description: Explain in 1 paragraph how this character impacts the show's plot o
 
     return base + "\n\n" + "\n\n".join(extras)
 
-def build_character_chat_prompt(character, show, season, episode, chat_history):
+def build_character_chat_prompt(character, show, season, episode, chat_history, show_context=None, episode_context=None, character_context=None):
     """
     Builds a prompt for a chatbot conversation about a character.
     """
-    system_prompt = f"You are a helpful assistant who knows everything about the TV show {show}. You are talking to a user who is asking questions about the character {character}. The user has only seen up to season {season}, episode {episode}, so do not reveal any spoilers beyond this point. Answer the user's questions concisely and accurately, based on the information available up to the specified episode."
+    # Build context information
+    context_parts = []
+    if show_context and show_context.get('overview'):
+        context_parts.append(f"Show context: {show_context['overview']}")
+    if character_context and character_context.get('actor_name'):
+        context_parts.append(f"Character: {character} is played by {character_context['actor_name']}")
+    if episode_context and episode_context.get('title'):
+        context_parts.append(f"Episode {episode}: '{episode_context['title']}'")
+    if episode_context and episode_context.get('overview'):
+        context_parts.append(f"Episode context: {episode_context['overview']}")
+    
+    context_text = ""
+    if context_parts:
+        context_text = f" Context for accuracy: " + " ".join(context_parts)
+
+    accuracy_note = f" IMPORTANT: Only discuss what is definitively known about {character} specifically. Do not assume relationships or plot details from the general show description."
+
+    system_prompt = f"You are a helpful assistant who knows everything about the TV show {show}. You are talking to a user who is asking questions about the character {character}. The user has only seen up to season {season}, episode {episode}, so do not reveal any spoilers beyond this point. Answer the user's questions concisely and accurately, based on the information available up to the specified episode.{context_text}{accuracy_note}"
 
     conversation = ""
     for message in chat_history:

@@ -10,6 +10,15 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 
 ## 🆕 Recent Improvements
 
+### **December 2025 - UI/UX & Character System Enhancements**
+- **Next Episode Display:** Restored the "Next Episode" functionality on show detail pages, displaying upcoming episodes with air dates for actively airing shows with clean, readable styling in both light and dark modes.
+- **Character Detail System:** Fixed character page routing and database queries, transitioning from `actor_id` to `character_id` (primary key) for accurate character identification and resolved "Character not found" errors.
+- **LLM Character Summaries:** Enhanced character summary accuracy by adding comprehensive context (show overview, episode details, actor names, other characters) to LLM prompts, reducing hallucinations and improving character-specific responses.
+- **LLM Testing Tools:** Added cache clearing functionality and refresh buttons for character pages to facilitate prompt testing and iteration without database interference.
+- **Show Detail Page Readability:** Fixed transparency issues in both light and dark modes, ensuring all text is clearly readable against background images with optimized opacity levels (98% for light mode, 95% for dark mode).
+- **Sonarr Metadata Sync:** Implemented targeted episode updates via Sonarr webhooks for improved metadata freshness without full library syncs.
+
+### **Previous Improvements**
 - **Search Highlighting:** Implemented keyboard navigation highlighting for search results, matching the mouse hover style.
 - **Image Loading:** Updated image loading strategy to use locally cached images (posters and backgrounds) served from `/static/poster/` and `/static/background/` respectively, with filenames based on TMDB IDs. Image queuing for Sonarr and Radarr syncs now prepares files for this local cache.
 - **Show Detail Page:** Significantly enhanced the Show Detail page with a new Sonarr-like layout including a background image, detailed metadata (first air date, status, next episode, IMDb link), collapsible season/episode lists, and display of the 'currently watched' episode based on Plex activity.

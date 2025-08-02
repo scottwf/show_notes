@@ -72,7 +72,7 @@
             {% if episode_characters %}
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {% for char in episode_characters %}
-                <a href="{{ url_for('main.character_detail', show_id=show.tmdb_id, season_number=season_number, episode_number=episode.episode_number, actor_id=char.actor_id) }}"
+                <a href="{{ url_for('main.character_detail', show_id=show.tmdb_id, season_number=season_number, episode_number=episode.episode_number, character_id=char.id) }}"
                    class="block text-center group">
                     <div class="relative">
                         <img src="{{ char.actor_thumb if char.actor_thumb else url_for('static', filename='logos/placeholder_poster.png') }}"

@@ -853,6 +853,27 @@ def test_llm_summary():
                            card_data=card_data,
                            title="Test LLM Summary Generation")
 
+@admin_bp.route('/clear-character-cache', methods=['POST'])
+@login_required
+@admin_required
+def clear_character_cache():
+    """Clear all cached LLM data for characters to force regeneration."""
+    try:
+        db = database.get_db()
+        result = db.execute('''
+            UPDATE episode_characters 
+            SET llm_relationships=NULL, llm_motivations=NULL, llm_quote=NULL, 
+                llm_traits=NULL, llm_events=NULL, llm_importance=NULL, 
+                llm_raw_response=NULL, llm_last_updated=NULL, llm_source=NULL
+        ''')
+        db.commit()
+        
+        rows_affected = result.rowcount
+        return jsonify({'success': True, 'message': f'Cleared LLM cache for {rows_affected} characters'})
+    except Exception as e:
+        current_app.logger.error(f"Error clearing character cache: {e}")
+        return jsonify({'error': 'Failed to clear cache'}), 500
+
 @admin_bp.route('/api/test-llm-summary', methods=['POST'])
 @login_required
 @admin_required

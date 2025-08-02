@@ -123,6 +123,12 @@
                     <span>Summary generated on {{ llm_last_updated if llm_last_updated else 'Unknown' }}</span>
                     <span class="mx-2">|</span>
                     <span>Source: {{ llm_source if llm_source else 'Unknown' }}</span>
+                    <span class="mx-2">|</span>
+                    <a href="{{ url_for('main.character_detail', show_id=show_id, season_number=season_number, episode_number=episode_number, character_id=character_id) }}?refresh=true" 
+                       class="text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 text-xs underline"
+                       title="Regenerate character summary with current prompts">
+                       🔄 Refresh Summary
+                    </a>
                 </div>
                 {% endif %}
             {% endif %}
@@ -163,7 +169,7 @@
         userMessage.innerHTML = `<span class="font-bold">You:</span> ${message}`;
         chatHistory.appendChild(userMessage);
 
-        const response = await fetch("{{ url_for('main.character_detail', show_id=show_id, season_number=season_number, episode_number=episode_number, actor_id=actor_id) }}", {
+        const response = await fetch("{{ url_for('main.character_detail', show_id=show_id, season_number=season_number, episode_number=episode_number, character_id=character_id) }}", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

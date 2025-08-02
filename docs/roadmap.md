@@ -69,17 +69,34 @@ This document outlines the planned features and development stages for the ShowN
     - [x] Implemented automatic library syncing triggered by webhook events (Download, Series, Movie).
     - [x] Created comprehensive webhook setup guide with troubleshooting instructions.
 - [x] **Notification & Issue Reporting Foundation:** Added tables for user preferences, notifications, and issue reports with an admin review UI.
+- [x] **Next Episode Display Restoration:** Fixed missing "Next Episode" section on show detail pages with proper styling and readability.
+- [x] **Character Detail System Fixes:** Resolved character page routing issues by transitioning from `actor_id` to `character_id` (primary key) for accurate character identification.
+- [x] **LLM Character Summary Enhancements:** Added comprehensive context (show overview, episode details, actor names, other characters) to LLM prompts to reduce hallucinations and improve accuracy.
+- [x] **LLM Testing Tools:** Implemented cache clearing functionality and refresh buttons for character pages to facilitate prompt development and testing.
+- [x] **UI Readability Improvements:** Fixed transparency issues in show detail page cards, ensuring optimal text readability in both light and dark modes.
+- [x] **Targeted Sonarr Sync:** Implemented episode-specific metadata updates via Sonarr webhooks for better data freshness.
 
 ## Next Steps
 
-- [ ] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with version history.
-- [ ] **Enhance Character Detail Page UI:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).
+### **Immediate Priorities**
+- [ ] **LLM Test Page Character Fetching:** Complete the character autocomplete functionality for the LLM test page to dynamically load characters based on selected show.
+- [ ] **Character Data Consistency:** Address TMDB ID mismatches in character data that can cause characters to appear in wrong episodes/shows.
+- [ ] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with version history and testing capabilities.
+
+### **UI/UX Improvements**
+- [ ] **Enhanced Character Detail Page:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).
 - [ ] **Interactive Character Chat:** Develop the LLM-powered summary feature into a fully interactive, in-character chat experience.
+- [ ] **Loading States:** Add loading indicators for LLM requests, image fetches, and other async operations.
+
+### **System Reliability**
 - [ ] **Refine "Next Up" Feature:** Improve the logic for determining the next unwatched episode and display it more prominently on the show detail page and homepage.
 - [ ] **Improve Plex User Detection:** Increase the robustness of Plex user detection at login to handle edge cases and ensure more reliable username/ID capture.
-- [ ] **Improve UI/UX Feedback:** Add loading indicators for image fetches and error states for missing images to provide better feedback on slower connections.
+- [ ] **Data Validation:** Implement better validation for character and episode data to prevent ID mismatches and missing content.
+
+### **Analytics & Monitoring**
 - [ ] **Webhook Activity Analytics:** Expand webhook tracking to include more detailed analytics (frequency, event patterns, sync success rates).
 - [ ] **Real-time Dashboard Updates:** Implement live updates for webhook activity timestamps without page refresh.
+- [ ] **LLM Usage Analytics:** Add detailed tracking of LLM performance, accuracy metrics, and cost optimization.
 
 ## Future Enhancements
 

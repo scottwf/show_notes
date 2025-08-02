@@ -1038,6 +1038,95 @@ def sync_sonarr_library():
         current_app.logger.info(f"Sonarr library sync finished. Synced {shows_synced_count} shows and {episodes_synced_count} episodes.")
         return shows_synced_count
 
+def update_sonarr_episode(series_id, episode_ids):
+    """
+    Updates a specific set of episodes for a given series from Sonarr.
+
+    This function is designed to be called from a webhook, allowing for a much
+    more efficient update than a full library sync.
+
+    Args:
+        series_id (int): The Sonarr `id` of the series to update.
+        episode_ids (list[int]): A list of Sonarr `id`s of the episodes to update.
+    """
+    current_app.logger.info(f"Starting targeted Sonarr update for series ID {series_id} and episode IDs {episode_ids}")
+    
+    with current_app.app_context():
+        db = database.get_db()
+        
+        # Fetch show data first
+        show_data = get_sonarr_show_details(series_id)
+        if not show_data:
+            current_app.logger.error(f"Could not fetch show details for series ID {series_id}. Aborting update.")
+            return
+
+        # Upsert show data to ensure it's up-to-date
+        # (This part is similar to the full sync, but for a single show)
+        # This logic can be refactored into a helper if it becomes repetitive
+        db.execute('''
+            INSERT INTO sonarr_shows (sonarr_id, title, year, status, overview, seasons, tvdb_id, tmdb_id, imdb_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(sonarr_id) DO UPDATE SET
+                title = excluded.title,
+                year = excluded.year,
+                status = excluded.status,
+                overview = excluded.overview,
+                seasons = excluded.seasons,
+                tvdb_id = excluded.tvdb_id,
+                tmdb_id = excluded.tmdb_id,
+                imdb_id = excluded.imdb_id;
+            ''', (
+                show_data.get('id'),
+                show_data.get('title'),
+                show_data.get('year'),
+                show_data.get('status'),
+                show_data.get('overview'),
+                show_data.get('seasonCount'),
+                show_data.get('tvdbId'),
+                show_data.get('tmdbId'),
+                show_data.get('imdbId')
+            )
+        )
+        
+        # Now, fetch and update the specific episodes
+        all_episodes_data = get_episodes_by_series_id(series_id)
+        if not all_episodes_data:
+            current_app.logger.warning(f"No episodes found for series ID {series_id}, but show was updated.")
+            db.commit()
+            return
+            
+        episodes_to_update = [ep for ep in all_episodes_data if ep.get('id') in episode_ids]
+
+        for episode_data in episodes_to_update:
+            is_available = episode_data.get('hasFile', False)
+            db.execute('''
+                INSERT INTO sonarr_episodes (episode_id, sonarr_show_id, title, season_number, episode_number, overview, air_date, is_available)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(episode_id) DO UPDATE SET
+                    sonarr_show_id = excluded.sonarr_show_id,
+                    title = excluded.title,
+                    season_number = excluded.season_number,
+                    episode_number = excluded.episode_number,
+                    overview = excluded.overview,
+                    air_date = excluded.air_date,
+                    is_available = excluded.is_available;
+                ''', (
+                    episode_data.get('id'),
+                    series_id,
+                    episode_data.get('title'),
+                    episode_data.get('seasonNumber'),
+                    episode_data.get('episodeNumber'),
+                    episode_data.get('overview'),
+                    episode_data.get('airDateUtc'),
+                    is_available
+                )
+            )
+            current_app.logger.info(f"Updated episode: {show_data.get('title')} S{episode_data.get('seasonNumber')}E{episode_data.get('episodeNumber')} (Available: {is_available})")
+
+        db.commit()
+        current_app.logger.info(f"Finished targeted Sonarr update for series ID {series_id}.")
+
+
 def sync_radarr_library():
     """
     Synchronizes the entire Radarr library with the local database.

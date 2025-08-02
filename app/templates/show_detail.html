@@ -24,7 +24,7 @@
             </div>
 
             <!-- Details: Title, Year, Overview, Metadata -->
-            <div class="flex-grow bg-white/95 dark:bg-slate-800/70 backdrop-blur-md rounded-lg p-6 shadow-xl border border-white/20 dark:border-slate-700/50">
+            <div class="flex-grow bg-white/98 dark:bg-slate-800/95 backdrop-blur-md rounded-lg p-6 shadow-xl border border-slate-200 dark:border-slate-700">
                 <div class="text-center md:text-left">
                     <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
                     {% if show.year %}
@@ -127,8 +127,28 @@
         </div>
         {% endif %}
 
+        <!-- Next Aired Episode -->
+        {% if next_aired_episode_info %}
+        <div class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Next Episode</h2>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-grow">
+                    <h3 class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ next_aired_episode_info.title }}</h3>
+                    <p class="text-slate-600 dark:text-slate-400 mb-2">{{ next_aired_episode_info.season_episode_str }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                        {% if next_aired_episode_info.air_date_utc %}
+                            Airs: {{ next_aired_episode_info.air_date_utc[:10] | replace('-', '/') }}
+                        {% else %}
+                            Air date: TBD
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Seasons and Episodes Section -->
-        <div class="bg-white/95 dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6 border border-white/20 dark:border-slate-700/50">
+        <div class="bg-white/98 dark:bg-slate-800/98 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
             <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Seasons & Episodes</h2>
             {% if seasons_with_episodes %}
                 {% for season in seasons_with_episodes %}

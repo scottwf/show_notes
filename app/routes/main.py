@@ -428,8 +428,37 @@ def sonarr_webhook():
             'Test'                # Test event
         ]
         
-        if event_type in sync_events:
-            current_app.logger.info(f"Sonarr webhook event '{event_type}' detected, triggering library sync")
+        if event_type == 'Download':
+            current_app.logger.info(f"Sonarr webhook event 'Download' detected, triggering targeted episode update.")
+            try:
+                # Extract necessary info from the payload
+                series_id = payload.get('series', {}).get('id')
+                episode_ids = [ep.get('id') for ep in payload.get('episodes', [])]
+
+                if not series_id or not episode_ids:
+                    current_app.logger.error("Webhook 'Download' event missing series_id or episode_ids.")
+                else:
+                    from ..utils import update_sonarr_episode
+                    import threading
+                    
+                    def sync_in_background():
+                        try:
+                            with current_app.app_context():
+                                update_sonarr_episode(series_id, episode_ids)
+                                current_app.logger.info(f"Targeted episode sync for series {series_id} completed.")
+                        except Exception as e:
+                            current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
+                    
+                    sync_thread = threading.Thread(target=sync_in_background)
+                    sync_thread.daemon = True
+                    sync_thread.start()
+                    current_app.logger.info(f"Initiated targeted background sync for series {series_id}, episodes {episode_ids}")
+
+            except Exception as e:
+                current_app.logger.error(f"Failed to trigger targeted Sonarr sync from webhook: {e}", exc_info=True)
+        
+        elif event_type in sync_events:
+            current_app.logger.info(f"Sonarr webhook event '{event_type}' detected, triggering full library sync as a fallback.")
             
             # Import here to avoid circular imports
             from ..utils import sync_sonarr_library
@@ -1220,6 +1249,11 @@ def episode_detail(tmdb_id, season_number, episode_number):
     # Add runtime if available (example field name, adjust if different in your schema)
     # episode_dict['runtime_minutes'] = episode_dict.get('runtime', None)
 
+    # Debug episode_characters before rendering
+    current_app.logger.info(f"[DEBUG] Episode {tmdb_id} S{season_number}E{episode_number} found {len(episode_characters)} characters:")
+    for char in episode_characters:
+        current_app.logger.info(f"[DEBUG] Character: ID={char.get('id')}, Name={char.get('character_name')}, Actor={char.get('actor_name')}")
+    
     return render_template('episode_detail.html',
                            show=show_dict,
                            episode=episode_dict,
@@ -1329,25 +1363,105 @@ def image_proxy(type, id):
         placeholder_path = f'logos/placeholder_{type}.png' if os.path.exists(os.path.join(current_app.static_folder, f'logos/placeholder_{type}.png')) else 'logos/placeholder_poster.png'
         return current_app.send_static_file(placeholder_path)
 
-@main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:actor_id>', methods=['GET', 'POST'])
-def character_detail(show_id, season_number, episode_number, actor_id):
+@main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:character_id>', methods=['GET', 'POST'])
+def character_detail(show_id, season_number, episode_number, character_id):
     db = database.get_db()
-    # ... (existing character and show data fetching logic)
-    char_row = db.execute(
-        'SELECT * FROM episode_characters WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ? LIMIT 1',
-        (show_id, season_number, episode_number, actor_id)
-    ).fetchone()
-    character = dict(char_row) if char_row else None
-    if not character:
-        # ... (fallback logic)
-        pass
 
-    show_title = 'Unknown Show'
-    show_row = db.execute('SELECT title FROM sonarr_shows WHERE tmdb_id = ?', (show_id,)).fetchone()
+    # --- Enhanced Debugging ---
+    current_app.logger.info(f"[DEBUG] Received request for show_id: {show_id}, season: {season_number}, episode: {episode_number}, character_id: {character_id}")
+    
+    # Check if the character exists by ID
+    char_exists = db.execute('SELECT * FROM episode_characters WHERE id = ?', (character_id,)).fetchone()
+    if char_exists:
+        current_app.logger.info(f"[DEBUG] Found character by ID: {dict(char_exists)}")
+    else:
+        current_app.logger.info(f"[DEBUG] No character found with ID: {character_id}")
+    
+    # Check what characters exist for this show/season/episode
+    chars_for_episode = db.execute('''
+        SELECT id, character_name, actor_name, show_tmdb_id, season_number, episode_number 
+        FROM episode_characters 
+        WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
+    ''', (show_id, season_number, episode_number)).fetchall()
+    current_app.logger.info(f"[DEBUG] Characters for this episode: {[dict(row) for row in chars_for_episode]}")
+    
+    # Check all characters for this show
+    chars_for_show = db.execute('''
+        SELECT id, character_name, actor_name, show_tmdb_id, season_number, episode_number 
+        FROM episode_characters 
+        WHERE show_tmdb_id = ?
+    ''', (show_id,)).fetchall()
+    current_app.logger.info(f"[DEBUG] All characters for show {show_id}: {[dict(row) for row in chars_for_show]}")
+    # --- End Enhanced Debugging ---
+
+    # Find the character by their primary key ID from the episode_characters table
+    char_row = db.execute('''
+        SELECT ec.*
+        FROM episode_characters ec
+        WHERE ec.id = ?
+        LIMIT 1
+    ''', (character_id,)).fetchone()
+    
+    if not char_row:
+        flash('Character not found within this show.', 'danger')
+        return redirect(url_for('main.episode_detail', tmdb_id=show_id, season_number=season_number, episode_number=episode_number))
+
+    character = dict(char_row)
+    
+    # Get show details for context
+    show_title = "Unknown Show"
+    show_context = {}
+    episode_context = {}
+    character_context = {}
+    
+    # Get show information
+    show_row = db.execute('SELECT title, overview, year FROM sonarr_shows WHERE tmdb_id = ?', (show_id,)).fetchone()
     if show_row:
         show_title = show_row['title']
+        show_context = {
+            'overview': show_row['overview'],
+            'year': show_row['year']
+        }
+    
+    # Get episode information
+    episode_row = db.execute('''
+        SELECT se.title, se.overview 
+        FROM sonarr_episodes se 
+        JOIN sonarr_shows ss ON se.sonarr_show_id = ss.id 
+        WHERE ss.tmdb_id = ? AND se.episode_number = ?
+        AND EXISTS (
+            SELECT 1 FROM sonarr_seasons seas 
+            WHERE seas.id = se.season_id AND seas.season_number = ?
+        )
+        LIMIT 1
+    ''', (show_id, episode_number, season_number)).fetchone()
+    
+    if episode_row:
+        episode_context = {
+            'title': episode_row['title'],
+            'overview': episode_row['overview']
+        }
+    
+    # Build character context with actor info and other characters from this episode
+    if character.get('actor_name'):
+        character_context['actor_name'] = character['actor_name']
+        
+    # Get other characters from this episode for context
+    other_characters_rows = db.execute('''
+        SELECT character_name 
+        FROM episode_characters 
+        WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? 
+        AND id != ? AND character_name IS NOT NULL
+        LIMIT 10
+    ''', (character['show_tmdb_id'], season_number, episode_number, character_id)).fetchall()
+    
+    if other_characters_rows:
+        character_context['other_characters'] = [row['character_name'] for row in other_characters_rows]
+    character_name = character.get('character_name')
 
-    character_name = character.get('character_name', 'Unknown Character') if character else 'Unknown Character'
+    if not character_name:
+        character_name = "Unknown Character"
+        current_app.logger.warning(f"Character name not found for character_id {character_id} in show {show_title}. Defaulting to 'Unknown Character'.")
 
     if request.method == 'POST':
         data = request.get_json()
@@ -1360,13 +1474,15 @@ def character_detail(show_id, season_number, episode_number, actor_id):
 
         session['chat_history'].append({'role': 'user', 'content': user_message})
 
-        # Generate LLM response
         prompt = build_character_chat_prompt(
             character=character_name,
             show=show_title,
             season=season_number,
             episode=episode_number,
-            chat_history=session['chat_history']
+            chat_history=session['chat_history'],
+            show_context=show_context,
+            episode_context=episode_context,
+            character_context=character_context
         )
         llm_reply, error = get_llm_response(prompt)
 
@@ -1378,15 +1494,17 @@ def character_detail(show_id, season_number, episode_number, actor_id):
 
         return jsonify({'reply': llm_reply})
 
-    # For GET request, clear chat history for a new session
     session.pop('chat_history', None)
-
-    # ... (existing LLM data fetching and processing for cards)
+    
     llm_fields = [
         'llm_relationships', 'llm_motivations', 'llm_quote', 'llm_traits', 'llm_events', 'llm_importance',
         'llm_raw_response', 'llm_last_updated', 'llm_source'
     ]
-    has_llm_data = character and any(character.get(f) for f in llm_fields)
+    
+    # Check for force refresh parameter
+    force_refresh = request.args.get('refresh') == 'true'
+    
+    has_llm_data = any(character.get(f) for f in llm_fields) and not force_refresh
     llm_sections = {}
     llm_last_updated = None
     llm_source = None
@@ -1416,7 +1534,10 @@ def character_detail(show_id, season_number, episode_number, actor_id):
             show=show_title,
             season=season_number,
             episode=episode_number,
-            options=prompt_options
+            options=prompt_options,
+            show_context=show_context,
+            episode_context=episode_context,
+            character_context=character_context
         )
         llm_summary, llm_error = get_llm_response(generated_prompt)
         llm_sections = {}
@@ -1445,7 +1566,7 @@ def character_detail(show_id, season_number, episode_number, actor_id):
                     llm_raw_response = ?,
                     llm_last_updated = ?,
                     llm_source = ?
-                  WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND actor_id = ?''',
+                  WHERE id = ?''',
                 (
                     llm_sections.get('Significant Relationships'),
                     llm_sections.get('Primary Motivations & Inner Conflicts'),
@@ -1456,7 +1577,7 @@ def character_detail(show_id, season_number, episode_number, actor_id):
                     llm_summary,
                     now,
                     model_source,
-                    show_id, season_number, episode_number, actor_id
+                    character_id
                 )
             )
             db.commit()
@@ -1482,7 +1603,7 @@ def character_detail(show_id, season_number, episode_number, actor_id):
                            show_id=show_id,
                            season_number=season_number,
                            episode_number=episode_number,
-                           actor_id=actor_id,
+                           character_id=character_id,
                            character=character,
                            llm_cards=llm_cards,
                            llm_sections_html=llm_sections_html,
