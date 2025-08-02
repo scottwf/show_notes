@@ -21,7 +21,9 @@
             <!-- Character (right) -->
             <div>
                 <label for="test_character" class="block text-sm font-medium">Character</label>
-                <input type="text" id="test_character" name="test_character" value="{{ test_character }}" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700">
+                <select id="test_character" name="test_character" class="mt-1 p-2 w-full rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700" disabled>
+                    <option value="">-- Select a show first --</option>
+                </select>
             </div>
             <div>
                 <label for="test_season" class="block text-sm font-medium">Season</label>
