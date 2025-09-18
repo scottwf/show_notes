@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (savedModel && !savedModelExists) {
                     const option = document.createElement('option');
                     option.value = savedModel;
-                    option.textContent = `${savedModel} (saved, not detected)`;
+                    option.textContent = `${savedModel} (saved, not available)`;
                     option.selected = true;
                     ollamaModelSelect.appendChild(option);
                 }

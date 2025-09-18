@@ -97,12 +97,15 @@
                 logStatus.textContent = `Streaming updates for ${filename}...`;
 
                 currentEventSource.onmessage = function (event) {
-                    displayedLogLines.push(event.data);
-                    // Keep the array from growing indefinitely if performance becomes an issue
-                    // For now, let's assume client-side filtering is on all received lines.
-                    // A more robust solution might involve server-side windowing for very large/fast logs.
-                    filterAndDisplayLogs();
-                    logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Auto-scroll
+                    const line = event.data;
+                    displayedLogLines.push(line);
+                    const searchTerm = logSearchInput.value.toLowerCase();
+                    if (line.toLowerCase().includes(searchTerm)) {
+                        const lineElement = document.createElement('div');
+                        lineElement.textContent = line;
+                        logDisplay.appendChild(lineElement);
+                        logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Auto-scroll
+                    }
                 };
 
                 currentEventSource.onerror = function (error) {
@@ -120,15 +123,15 @@
 
         function filterAndDisplayLogs() {
             const searchTerm = logSearchInput.value.toLowerCase();
-            const filteredLines = displayedLogLines.filter(line => line.toLowerCase().includes(searchTerm));
             logDisplay.innerHTML = ''; // Clear existing lines
 
-            // Create a document fragment to batch DOM appends for performance
             const fragment = document.createDocumentFragment();
-            filteredLines.forEach(line => {
-                const lineElement = document.createElement('div');
-                lineElement.textContent = line;
-                fragment.appendChild(lineElement);
+            displayedLogLines.forEach(line => {
+                if (line.toLowerCase().includes(searchTerm)) {
+                    const lineElement = document.createElement('div');
+                    lineElement.textContent = line;
+                    fragment.appendChild(lineElement);
+                }
             });
             logDisplay.appendChild(fragment);
         }

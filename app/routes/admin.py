@@ -711,21 +711,7 @@ def settings():
 
     # Fetch available Ollama models for dropdown
     ollama_models = []
-    ollama_url = merged_settings.get('ollama_url')
-    if ollama_url:
-        try:
-            import requests
-            resp = requests.get(ollama_url.rstrip('/') + '/api/tags', timeout=5)
-            if resp.ok:
-                data = resp.json()
-                ollama_models = [m['model'] for m in data.get('models', [])]
-        except Exception as e:
-            current_app.logger.warning(f"Could not fetch Ollama models: {e}")
-
-    # Ensure the saved model is always in the list
     saved_model = merged_settings.get('ollama_model_name')
-    if saved_model and saved_model not in ollama_models:
-        ollama_models.insert(0, saved_model)
 
     openai_models = [
         {"name": "gpt-3.5-turbo", "price": "$0.0015 / 1K"},
@@ -747,6 +733,7 @@ def settings():
         ollama_status=ollama_status,
         tautulli_status=tautulli_status, # Added Tautulli status
         ollama_models=ollama_models,
+        saved_ollama_model=saved_model,
         openai_models=openai_models
     )
 
@@ -1228,6 +1215,55 @@ def test_api_connection():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': error_message or 'Connection test failed'}), 400
+
+
+@admin_bp.route('/api/ollama-models', methods=['GET'])
+@login_required
+@admin_required
+def get_ollama_models():
+    """
+    Fetches the available models from an Ollama server.
+
+    Expects a 'url' query parameter with the Ollama server's URL.
+    Returns a JSON list of model names or an error.
+    """
+    ollama_url = request.args.get('url')
+    if not ollama_url:
+        return jsonify({'error': 'Ollama URL parameter is required.'}), 400
+
+    try:
+        import requests
+        # Ensure the URL is well-formed
+        api_url = ollama_url.rstrip('/') + '/api/tags'
+        
+        current_app.logger.info(f"Fetching Ollama models from: {api_url}")
+        
+        resp = requests.get(api_url, timeout=5)
+        resp.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+
+        data = resp.json()
+        
+        # The expected structure is a JSON object with a "models" key,
+        # which is a list of objects, each with a "model" name.
+        # Example: {"models": [{"model": "llama2:latest", ...}, ...]}
+        ollama_models = [m.get('name') for m in data.get('models', []) if m.get('name')]
+        
+        current_app.logger.info(f"Successfully fetched {len(ollama_models)} models from Ollama.")
+        
+        return jsonify({'models': ollama_models})
+
+    except requests.exceptions.Timeout:
+        error_msg = "Connection to Ollama timed out. Ensure the URL is correct and the server is responsive."
+        current_app.logger.error(f"{error_msg} URL: {ollama_url}")
+        return jsonify({'error': error_msg}), 504 # Gateway Timeout
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Could not connect to Ollama. Please check the URL and ensure the service is running. Error: {e}"
+        current_app.logger.error(f"{error_msg} URL: {ollama_url}")
+        return jsonify({'error': error_msg}), 500
+    except Exception as e:
+        error_msg = f"An unexpected error occurred: {e}"
+        current_app.logger.error(f"Failed to fetch Ollama models from {ollama_url}. {error_msg}", exc_info=True)
+        return jsonify({'error': error_msg}), 500
 
 
 @admin_bp.route('/test-pushover', methods=['POST'])

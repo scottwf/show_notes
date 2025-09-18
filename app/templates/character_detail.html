@@ -215,31 +215,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-        e.preventDefault();
-        const input = document.getElementById('chat-input');
-        const message = input.value;
-        input.value = '';
-
-        const chatHistory = document.getElementById('chat-history');
-        const userMessage = document.createElement('div');
-        userMessage.classList.add('mb-2');
-        userMessage.innerHTML = `<span class="font-bold">You:</span> ${message}`;
-        chatHistory.appendChild(userMessage);
-
-        const response = await fetch("{{ url_for('main.character_detail', show_id=show_id, season_number=season_number, episode_number=episode_number, character_id=character_id) }}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: message })
-        });
-
-        const data = await response.json();
-        const botMessage = document.createElement('div');
-        botMessage.classList.add('mb-2');
-        botMessage.innerHTML = `<span class="font-bold">Bot:</span> ${data.reply}`;
-        chatHistory.appendChild(botMessage);
-        chatHistory.scrollTop = chatHistory.scrollHeight;
-    });
-</script>
-{% endblock %}

@@ -691,6 +691,56 @@ def get_radarr_poster(movie_title):
     return None
 
 
+def get_sonarr_show_details(series_id):
+    """
+    Fetches the details for a single show from the Sonarr API.
+    """
+    sonarr_url = None
+    sonarr_api_key = None
+    with current_app.app_context():
+        sonarr_url = database.get_setting('sonarr_url')
+        sonarr_api_key = database.get_setting('sonarr_api_key')
+
+    if not sonarr_url or not sonarr_api_key:
+        current_app.logger.error(f"get_sonarr_show_details: Sonarr URL or API key not configured for series ID {series_id}.")
+        return None
+
+    endpoint = f"{sonarr_url.rstrip('/')}/api/v3/series/{series_id}"
+    headers = {"X-Api-Key": sonarr_api_key}
+
+    try:
+        response = requests.get(endpoint, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Error fetching Sonarr show details for series ID {series_id}: {e}")
+        return None
+
+def get_episodes_by_series_id(series_id):
+    """
+    Fetches all episodes for a given series ID from the Sonarr API.
+    """
+    sonarr_url = None
+    sonarr_api_key = None
+    with current_app.app_context():
+        sonarr_url = database.get_setting('sonarr_url')
+        sonarr_api_key = database.get_setting('sonarr_api_key')
+
+    if not sonarr_url or not sonarr_api_key:
+        current_app.logger.error(f"get_episodes_by_series_id: Sonarr URL or API key not configured for series ID {series_id}.")
+        return None
+
+    endpoint = f"{sonarr_url.rstrip('/')}/api/v3/episode?seriesId={series_id}"
+    headers = {"X-Api-Key": sonarr_api_key}
+
+    try:
+        response = requests.get(endpoint, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Error fetching Sonarr episodes for series ID {series_id}: {e}")
+        return None
+
 def sync_sonarr_library():
     """
     Synchronizes the entire Sonarr library with the local database.

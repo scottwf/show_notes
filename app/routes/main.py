@@ -412,6 +412,7 @@ def sonarr_webhook():
     Returns:
         A JSON response indicating success or an error.
     """
+    current_app.logger.info("Sonarr webhook received.")
     try:
         if request.is_json:
             payload = request.get_json()
@@ -464,6 +465,7 @@ def sonarr_webhook():
                     import threading
                     
                     def sync_in_background():
+                        current_app.logger.info(f"Starting background targeted Sonarr sync for series {series_id}.")
                         try:
                             with current_app.app_context():
                                 update_sonarr_episode(series_id, episode_ids)
@@ -489,6 +491,7 @@ def sonarr_webhook():
                 # Trigger the sync in a background thread to avoid blocking the webhook response
                 import threading
                 def sync_in_background():
+                    current_app.logger.info("Starting background Sonarr library sync.")
                     try:
                         with current_app.app_context():
                             count = sync_sonarr_library()
@@ -533,6 +536,7 @@ def radarr_webhook():
     Returns:
         A JSON response indicating success or an error.
     """
+    current_app.logger.info("Radarr webhook received.")
     try:
         if request.is_json:
             payload = request.get_json()
@@ -580,6 +584,7 @@ def radarr_webhook():
                 # Trigger the sync in a background thread to avoid blocking the webhook response
                 import threading
                 def sync_in_background():
+                    current_app.logger.info("Starting background Radarr library sync.")
                     try:
                         with current_app.app_context():
                             result = sync_radarr_library()
