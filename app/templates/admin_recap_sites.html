@@ -94,7 +94,7 @@
                         <div class="mt-3">
                             <button type="button" id="test-patterns-btn" 
                                     class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
-                                <span id="test-patterns-text">Test Patterns</span>
+                                <span id="test-patterns-text">🧪 Test Patterns</span>
                             </button>
                             <div id="test-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center mt-2">
                                 <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
@@ -109,6 +109,20 @@
                         </div>
                     </div>
 
+                    <!-- Setup Workflow Instructions -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">📋 Setup Workflow:</h4>
+                        <ol class="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
+                            <li><strong>Add sample URLs</strong> - Enter 2-3 episode recap URLs from this site above</li>
+                            <li><strong>Generate Rules</strong> - Click "Generate Rules with LLM" to create scraping patterns</li>
+                            <li><strong>Test Patterns</strong> - Click "Test Patterns" to verify the patterns work correctly</li>
+                            <li><strong>Save Site</strong> - Click "Save Site" to store the configuration</li>
+                        </ol>
+                        <div class="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                            💡 <strong>Tip:</strong> Always test patterns before saving to ensure they work!
+                        </div>
+                    </div>
+
                     <div class="flex justify-end space-x-3 pt-4">
                         <button type="button" id="cancel-btn"
                                 class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-slate-600 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors">
@@ -116,7 +130,7 @@
                         </button>
                         <button type="button" id="generate-rules-btn"
                                 class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
-                            Generate Rules with LLM
+                            🤖 Generate Rules with LLM
                         </button>
                         <button type="submit"
                                 class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
@@ -300,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .finally(() => {
             generateRulesBtn.disabled = false;
-            generateRulesBtn.textContent = 'Generate Rules with LLM';
+            generateRulesBtn.textContent = '🤖 Generate Rules with LLM';
         });
     }
 
@@ -464,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => {
             // Reset button state
             testPatternsBtn.disabled = false;
-            testPatternsBtn.querySelector('#test-patterns-text').textContent = 'Test Patterns';
+            testPatternsBtn.querySelector('#test-patterns-text').textContent = '🧪 Test Patterns';
             testStatus.classList.add('hidden');
         });
     }
