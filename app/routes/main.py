@@ -1284,6 +1284,15 @@ def episode_detail(tmdb_id, season_number, episode_number):
             (show_tmdb_id, season_number, episode_number)
         ).fetchall()
         episode_recaps = [dict(row) for row in episode_recaps]
+        
+        # Convert created_at strings to datetime objects for template rendering
+        for recap in episode_recaps:
+            if recap.get('created_at'):
+                try:
+                    if isinstance(recap['created_at'], str):
+                        recap['created_at'] = datetime.datetime.fromisoformat(recap['created_at'].replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    recap['created_at'] = None
 
     # Debug episode_characters before rendering
     current_app.logger.info(f"[DEBUG] Episode {tmdb_id} S{season_number}E{episode_number} found {len(episode_characters)} characters:")
