@@ -1131,29 +1131,116 @@ def scrape_show_recaps():
         return jsonify({'error': 'TMDB ID and show title are required'}), 400
 
     try:
-        from app.recap_scrapers import recap_scraping_manager
+        # Use the new dynamic scraping system
+        from app.database import get_db_connection
+        import requests
+        import re
+        import json
+        import html as html_module
+        import urllib.parse
+        from datetime import datetime
         
-        # Scrape recaps for the specific show
-        current_app.logger.info(f"Scraping recaps for show: {show_title}")
-        recaps = recap_scraping_manager.scrape_show_recaps(show_title, max_episodes)
+        db = get_db_connection()
         
-        if not recaps:
+        # Get active recap sites from database
+        sites = db.execute("""
+            SELECT site_name, base_url, link_patterns, title_patterns, content_patterns, 
+                   rate_limit_seconds, user_agent, sample_urls
+            FROM recap_sites 
+            WHERE is_active = 1
+        """).fetchall()
+        
+        if not sites:
+            return jsonify({
+                'success': False,
+                'error': 'No active recap sites configured'
+            })
+        
+        # Scrape recaps using dynamic patterns
+        all_recaps = []
+        
+        for site in sites:
+            try:
+                site_name = site['site_name']
+                base_url = site['base_url']
+                link_patterns = json.loads(site['link_patterns'] or '[]')
+                title_patterns = json.loads(site['title_patterns'] or '[]')
+                content_patterns = json.loads(site['content_patterns'] or '[]')
+                rate_limit = site['rate_limit_seconds'] or 30
+                user_agent = site['user_agent'] or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                
+                current_app.logger.info(f"Scraping {site_name} for {show_title}")
+                
+                # Get recent recaps from the site
+                headers = {
+                    'User-Agent': user_agent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                }
+                
+                # Try to find recaps on the site's main page or search
+                search_urls = [
+                    f"{base_url}/",
+                    f"{base_url}/search?q={show_title.replace(' ', '+')}",
+                    f"{base_url}/tv/",
+                    f"{base_url}/recaps/"
+                ]
+                
+                site_recaps = []
+                
+                for search_url in search_urls:
+                    try:
+                        response = requests.get(search_url, headers=headers, timeout=10)
+                        if response.status_code == 200:
+                            html = response.text
+                            
+                            # Look for recap links using patterns
+                            for pattern in link_patterns:
+                                matches = re.findall(pattern, html, re.IGNORECASE)
+                                for match in matches:
+                                    if len(match) >= 2:
+                                        url = match[0] if match[0].startswith('http') else f"{base_url}{match[0]}"
+                                        title = match[1]
+                                        
+                                        # Check if this recap is for our show
+                                        if show_title.lower() in title.lower():
+                                            # Scrape the detailed recap
+                                            detailed_recap = scrape_detailed_recap(
+                                                url, title, site_name, title_patterns, content_patterns, headers
+                                            )
+                                            if detailed_recap:
+                                                detailed_recap['tmdb_id'] = tmdb_id
+                                                detailed_recap['source'] = site_name
+                                                site_recaps.append(detailed_recap)
+                        
+                        # Rate limiting
+                        import time
+                        time.sleep(rate_limit)
+                        
+                    except Exception as e:
+                        current_app.logger.warning(f"Error scraping {search_url}: {e}")
+                        continue
+                
+                all_recaps.extend(site_recaps)
+                current_app.logger.info(f"Found {len(site_recaps)} recaps from {site_name}")
+                
+            except Exception as e:
+                current_app.logger.error(f"Error scraping {site['site_name']}: {e}")
+                continue
+        
+        # Store the scraped recaps
+        if all_recaps:
+            store_dynamic_recaps(all_recaps, db)
+            matched_recaps = all_recaps
+        else:
             return jsonify({
                 'success': False,
                 'error': f'No recaps found for "{show_title}". This may be due to rate limiting from recap sites or the show not having recent recaps available.',
                 'suggestion': 'Try again later or check if the show has recent episodes with recaps on Vulture or Showbiz Junkies.'
             })
-        
-        # Match recaps to the show (should all match since we filtered by show title)
-        matched_recaps = []
-        for recap in recaps:
-            recap['tmdb_id'] = tmdb_id
-            recap['matched_show'] = show_title
-            matched_recaps.append(recap)
-        
-        # Store the recaps
-        if matched_recaps:
-            recap_scraping_manager.store_recap_summaries(matched_recaps)
         
         # Get updated episode count for this show
         db = get_db()
@@ -1562,6 +1649,162 @@ def generate_basic_patterns(site_name, base_url, sample_urls):
     except Exception as e:
         current_app.logger.error(f"Error in basic pattern generation: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+def scrape_detailed_recap(url, title, site_name, title_patterns, content_patterns, headers):
+    """Scrape detailed recap from a specific URL using dynamic patterns"""
+    try:
+        import requests
+        import re
+        import html as html_module
+        import urllib.parse
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+        
+        html = response.text
+        
+        # Extract title - try multiple methods
+        final_title = title
+        
+        # Method 1: Try h1 tags first
+        h1_matches = re.findall(r'<h1[^>]*>([^<]+)</h1>', html, re.IGNORECASE)
+        if h1_matches:
+            # Filter out social media buttons
+            for h1_text in h1_matches:
+                h1_clean = h1_text.strip()
+                if not any(social in h1_clean.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                    final_title = h1_clean
+                    break
+        
+        # Method 2: Try title tag if h1 didn't work
+        if final_title == title:
+            title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+            if title_match:
+                title_text = title_match.group(1).strip()
+                # Filter out social media buttons
+                if not any(social in title_text.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                    final_title = title_text
+        
+        # Method 3: Extract from URL if title tag is overridden
+        if final_title == title or any(social in final_title.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+            parsed_url = urllib.parse.urlparse(url)
+            path_parts = [part for part in parsed_url.path.split('/') if part]
+            if path_parts:
+                url_title = path_parts[-1].replace('-', ' ').title()
+                final_title = url_title
+        
+        # Decode HTML entities
+        final_title = html_module.unescape(final_title)
+        
+        # Extract episode info from title
+        episode_info = None
+        for pattern in title_patterns:
+            match = re.search(pattern, final_title, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 2:
+                    episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                elif len(match.groups()) == 1:
+                    episode_info = {'season': 1, 'episode': int(match.group(1))}
+                break
+        
+        # If no episode info in title, try to extract from URL
+        if not episode_info:
+            parsed_url = urllib.parse.urlparse(url)
+            path_parts = [part for part in parsed_url.path.split('/') if part]
+            
+            # Look for episode patterns in URL path
+            url_patterns = [
+                r'episode-(\d+)',  # episode-3
+                r'episode(\d+)',   # episode3
+                r's(\d+)e(\d+)',   # s1e3
+                r'season-(\d+)-episode-(\d+)',  # season-1-episode-3
+                r'season(\d+)episode(\d+)',     # season1episode3
+            ]
+            
+            for part in path_parts:
+                for pattern in url_patterns:
+                    match = re.search(pattern, part, re.IGNORECASE)
+                    if match:
+                        if len(match.groups()) == 2:
+                            episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                        elif len(match.groups()) == 1:
+                            episode_info = {'season': 1, 'episode': int(match.group(1))}
+                        break
+                if episode_info:
+                    break
+        
+        if not episode_info:
+            return None
+        
+        # Extract content using patterns
+        content = ""
+        for pattern in content_patterns:
+            match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+            if match:
+                content = match.group(1)
+                break
+        
+        if not content:
+            return None
+        
+        # Extract paragraphs from content
+        paragraph_pattern = r'<p[^>]*>(.*?)</p>'
+        paragraphs = re.findall(paragraph_pattern, content, re.DOTALL | re.IGNORECASE)
+        
+        summary_parts = []
+        for p in paragraphs:
+            # Clean HTML tags and get text
+            text = re.sub(r'<[^>]+>', '', p).strip()
+            if text and len(text) > 50:  # Skip very short paragraphs
+                summary_parts.append(text)
+        
+        summary = ' '.join(summary_parts[:5])  # Take first 5 substantial paragraphs
+        
+        if not summary:
+            return None
+        
+        return {
+            'title': final_title,
+            'season': episode_info['season'],
+            'episode': episode_info['episode'],
+            'summary': summary,
+            'url': url,
+            'source_provider': site_name
+        }
+        
+    except Exception as e:
+        current_app.logger.error(f"Error scraping detailed recap from {url}: {e}")
+        return None
+
+def store_dynamic_recaps(recaps, db):
+    """Store dynamically scraped recaps in database"""
+    try:
+        for recap in recaps:
+            if not recap.get('tmdb_id') or not recap.get('season') or not recap.get('episode'):
+                current_app.logger.warning(f"Skipping recap with missing data: {recap}")
+                continue
+            
+            # Store in database
+            db.execute("""
+                INSERT OR REPLACE INTO episode_summaries 
+                (tmdb_id, season_number, episode_number, episode_title, normalized_summary, 
+                 raw_source_data, source_provider, source_url, confidence_score, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                recap['tmdb_id'], recap['season'], recap['episode'], 
+                recap['title'], recap['summary'],
+                json.dumps(recap), recap['source_provider'], recap['url'],
+                0.9,  # High confidence for scraped recaps
+                datetime.now(), datetime.now()
+            ))
+        
+        db.commit()
+        current_app.logger.info(f"Stored {len(recaps)} dynamic recaps in database")
+        
+    except Exception as e:
+        current_app.logger.error(f"Error storing dynamic recaps: {e}")
+        db.rollback()
 
 @admin_bp.route('/api/test-site-scraping/<int:site_id>', methods=['POST'])
 @login_required
