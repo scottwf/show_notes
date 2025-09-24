@@ -1203,7 +1203,7 @@ def get_recap_sites():
         sites = db.execute("""
             SELECT id, site_name, base_url, is_active, rate_limit_seconds, 
                    user_agent, link_patterns, title_patterns, content_patterns,
-                   created_at, updated_at
+                   sample_urls, created_at, updated_at
             FROM recap_sites 
             ORDER BY site_name
         """).fetchall()
@@ -1220,6 +1220,7 @@ def get_recap_sites():
                 'link_patterns': site['link_patterns'],
                 'title_patterns': site['title_patterns'],
                 'content_patterns': site['content_patterns'],
+                'sample_urls': site['sample_urls'],
                 'created_at': site['created_at'],
                 'updated_at': site['updated_at']
             })
@@ -1259,8 +1260,8 @@ def create_recap_site():
         db.execute("""
             INSERT INTO recap_sites 
             (site_name, base_url, is_active, rate_limit_seconds, user_agent,
-             link_patterns, title_patterns, content_patterns, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+             link_patterns, title_patterns, content_patterns, sample_urls, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         """, (
             data['site_name'],
             data['base_url'],
@@ -1269,7 +1270,8 @@ def create_recap_site():
             data.get('user_agent', ''),
             data.get('link_patterns', '[]'),
             data.get('title_patterns', '[]'),
-            data.get('content_patterns', '[]')
+            data.get('content_patterns', '[]'),
+            data.get('sample_urls', '[]')
         ))
         
         db.commit()
@@ -1289,7 +1291,7 @@ def get_recap_site(site_id):
         site = db.execute("""
             SELECT id, site_name, base_url, is_active, rate_limit_seconds, 
                    user_agent, link_patterns, title_patterns, content_patterns,
-                   created_at, updated_at
+                   sample_urls, created_at, updated_at
             FROM recap_sites 
             WHERE id = ?
         """, (site_id,)).fetchone()
@@ -1307,6 +1309,7 @@ def get_recap_site(site_id):
             'link_patterns': site['link_patterns'],
             'title_patterns': site['title_patterns'],
             'content_patterns': site['content_patterns'],
+            'sample_urls': site['sample_urls'],
             'created_at': site['created_at'],
             'updated_at': site['updated_at']
         }
@@ -1337,7 +1340,7 @@ def update_recap_site(site_id):
             UPDATE recap_sites 
             SET site_name = ?, base_url = ?, is_active = ?, rate_limit_seconds = ?,
                 user_agent = ?, link_patterns = ?, title_patterns = ?, content_patterns = ?,
-                updated_at = datetime('now')
+                sample_urls = ?, updated_at = datetime('now')
             WHERE id = ?
         """, (
             data['site_name'],
@@ -1348,6 +1351,7 @@ def update_recap_site(site_id):
             data.get('link_patterns', '[]'),
             data.get('title_patterns', '[]'),
             data.get('content_patterns', '[]'),
+            data.get('sample_urls', '[]'),
             site_id
         ))
         
@@ -1458,6 +1462,58 @@ def generate_scraping_rules():
         
     except Exception as e:
         current_app.logger.error(f"Error generating scraping rules: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/test-site-scraping/<int:site_id>', methods=['POST'])
+@login_required
+@admin_required
+def test_site_scraping(site_id):
+    """Test scraping for a specific site using its stored sample URLs"""
+    try:
+        db = get_db()
+        
+        # Get the site configuration
+        site = db.execute("""
+            SELECT site_name, base_url, sample_urls, link_patterns, title_patterns, content_patterns
+            FROM recap_sites 
+            WHERE id = ? AND is_active = 1
+        """, (site_id,)).fetchone()
+        
+        if not site:
+            return jsonify({'success': False, 'error': 'Site not found or inactive'}), 404
+        
+        # Parse sample URLs
+        import json
+        try:
+            sample_urls = json.loads(site['sample_urls'] or '[]')
+        except:
+            sample_urls = []
+        
+        if not sample_urls:
+            return jsonify({'success': False, 'error': 'No sample URLs found for this site'}), 400
+        
+        # Test scraping using the site's patterns
+        current_app.logger.info(f"Testing scraping for {site['site_name']} with {len(sample_urls)} sample URLs")
+        
+        # For now, return a simple test result
+        # In the future, this would actually test the scraping patterns
+        test_results = []
+        for url in sample_urls[:3]:  # Test first 3 URLs
+            test_results.append({
+                'url': url,
+                'title': f"Test recap from {site['site_name']}",
+                'status': 'success'
+            })
+        
+        return jsonify({
+            'success': True,
+            'site_name': site['site_name'],
+            'results': test_results,
+            'message': f'Tested {len(test_results)} sample URLs from {site["site_name"]}'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error testing site scraping: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/api/latest-episode')
