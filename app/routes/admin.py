@@ -93,7 +93,6 @@ ADMIN_SEARCHABLE_ROUTES = [
     {'title': 'View Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logs_view')},
     {'title': 'API Usage Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.api_usage_logs')},
     {'title': 'View Prompts', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.view_prompts')},
-    {'title': 'Test LLM Summary', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.test_llm_summary')},
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
 ]
 
@@ -198,7 +197,7 @@ def dashboard():
     movie_count = safe_value('SELECT COUNT(*) FROM radarr_movies')
     show_count = safe_value('SELECT COUNT(*) FROM sonarr_shows')
     user_count = safe_value('SELECT COUNT(*) FROM users')
-    
+
     # File availability metrics
     episodes_with_files = safe_value('SELECT COUNT(*) FROM sonarr_episodes WHERE has_file = 1')
     movies_with_files = safe_value('SELECT COUNT(*) FROM radarr_movies WHERE has_file = 1')
@@ -764,81 +763,6 @@ def sync_sonarr():
 # LLM TOOLS
 # ============================================================================
 
-@admin_bp.route('/test-llm-summary', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def test_llm_summary():
-    """
-    Renders a page for testing LLM character summary generation.
-
-    This page provides a form where an administrator can input a character, show,
-    and episode details to manually test the summary generation process.
-
-    On a POST request, it builds a prompt using the form data, calls the
-    configured LLM service, and displays the generated prompt and the LLM's
-    response on the page.
-
-    Returns:
-        A rendered HTML template for the LLM test page, including any
-        generated results from a POST request.
-    """
-    current_app.logger.info(f"Admin user {current_user.username if current_user.is_authenticated else 'Unknown'} accessed Test LLM Summary page.")
-
-    # Initialize variables
-    test_character = ''
-    test_show = ''
-    test_season = 1
-    test_episode = 1
-    preferred_provider = get_setting('preferred_llm_provider') or 'ollama'
-    prompt_options = {
-        'include_relationships': True,
-        'include_motivations': True,
-        'include_quote': True,
-        'tone': 'tv_expert'
-    }
-    generated_prompt = ''
-    llm_response = None
-    error_message = None
-    card_data = None
-
-    if request.method == 'POST':
-        # Get values from the submitted form
-        test_character = request.form.get('test_character', '')
-        test_show = request.form.get('test_show', '')
-        test_season = int(request.form.get('test_season', 1))
-        test_episode = int(request.form.get('test_episode', 1))
-        preferred_provider = request.form.get('preferred_provider', preferred_provider)
-        prompt_options = {
-            'include_relationships': 'include_relationships' in request.form,
-            'include_motivations': 'include_motivations' in request.form,
-            'include_quote': 'include_quote' in request.form,
-            'tone': request.form.get('tone', 'tv_expert')
-        }
-
-        # Build prompt and call LLM
-        generated_prompt = prompt_builder.build_character_prompt(
-            character=test_character,
-            show=test_show,
-            season=test_season,
-            episode=test_episode,
-            options=prompt_options
-        )
-        llm_response, error_message = get_llm_response(generated_prompt, llm_model_name=None, provider=preferred_provider)
-        if llm_response:
-            card_data = llm_response
-
-    return render_template('admin_test_llm_summary.html',
-                           test_character=test_character,
-                           test_show=test_show,
-                           test_season=test_season,
-                           test_episode=test_episode,
-                           prompt_options=prompt_options,
-                           generated_prompt=generated_prompt,
-                           llm_response=llm_response,
-                           error_message=error_message,
-                           preferred_provider=preferred_provider,
-                           card_data=card_data,
-                           title="Test LLM Summary Generation")
 
 @admin_bp.route('/clear-character-cache', methods=['POST'])
 @login_required
@@ -861,83 +785,6 @@ def clear_character_cache():
         current_app.logger.error(f"Error clearing character cache: {e}")
         return jsonify({'error': 'Failed to clear cache'}), 500
 
-@admin_bp.route('/api/test-llm-summary', methods=['POST'])
-@login_required
-@admin_required
-def api_test_llm_summary():
-    """
-    API endpoint to run an LLM summary test and return results as JSON.
-
-    This provides the backend functionality for the LLM test page. It accepts
-    test parameters as a JSON payload, builds the prompt, calls the appropriate
-    LLM service, and returns all the inputs and outputs in a JSON response.
-
-    JSON Payload:
-        - test_character (str)
-        - test_show (str)
-        - test_season (int)
-        - test_episode (int)
-        - preferred_provider (str)
-        - prompt_options (dict)
-
-    Returns:
-        flask.Response: A JSON response containing the test results or an error message.
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON payload'}), 400
-
-    test_character = data.get('test_character', '')
-    test_show = data.get('test_show', '')
-    test_season = int(data.get('test_season', 1))
-    test_episode = int(data.get('test_episode', 1))
-    preferred_provider = data.get('preferred_provider') or get_setting('preferred_llm_provider') or 'ollama'
-    prompt_options = data.get('prompt_options', {
-        'include_relationships': True,
-        'include_motivations': True,
-        'include_quote': True,
-        'tone': 'tv_expert'
-    })
-
-    # Build prompt
-    generated_prompt = prompt_builder.build_character_prompt(
-        character=test_character,
-        show=test_show,
-        season=test_season,
-        episode=test_episode,
-        options=prompt_options
-    )
-
-    # Determine model name if provider is Ollama
-    ollama_model_name = None
-    if preferred_provider == 'ollama':
-        ollama_model_name = get_setting('ollama_model_name')
-        if not ollama_model_name:
-            current_app.logger.error('Ollama is selected, but no Ollama model name is configured in settings.')
-            return jsonify({'error': 'Ollama is selected, but no Ollama model name is configured in settings.'}), 400
-
-    # Call LLM
-    try:
-        llm_response, error_message = get_llm_response(generated_prompt, llm_model_name=ollama_model_name, provider=preferred_provider)
-    except Exception as e:
-        current_app.logger.error(f"Error calling LLM provider {preferred_provider}: {e}", exc_info=True)
-        return jsonify({'error': f'Error calling LLM provider {preferred_provider}: {e}'}), 500
-
-    # Prepare response
-    response_data = {
-        'test_character': test_character,
-        'test_show': test_show,
-        'test_season': test_season,
-        'test_episode': test_episode,
-        'preferred_provider': preferred_provider,
-        'prompt_options': prompt_options,
-        'generated_prompt': generated_prompt,
-        'llm_response': llm_response,
-        'error_message': error_message
-    }
-    if not llm_response and not error_message:
-        response_data['error_message'] = 'No response received from LLM. This may mean the provider is not configured, returned an empty response, or the model is missing.'
-    return jsonify(response_data)
 
 @admin_bp.route('/view-prompts', methods=['GET', 'POST'])
 @login_required
@@ -993,11 +840,531 @@ def view_prompts():
     except Exception as e:
         current_app.logger.error(f"Error inspecting prompts.py: {e}", exc_info=True)
 
-    return render_template('admin_view_prompts.html',
+    return render_template('admin_view_prompts_simple.html',
                            prompts_from_db=prompts_from_db,
                            builder_prompts=builder_prompts,
                            static_prompts=static_prompts,
-                           title="View Prompts")
+                           title="Prompt Management")
+
+@admin_bp.route('/api/test-llm', methods=['POST'])
+@login_required
+@admin_required
+def test_llm():
+    """
+    API endpoint to test LLM prompts with real data.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    prompt = data.get('prompt', '')
+    prompt_type = data.get('prompt_type', 'character')
+    test_data = data.get('test_data', {})
+
+    if not prompt:
+        return jsonify({'error': 'Prompt is required'}), 400
+
+    try:
+        # Import LLM functions
+        from app.llm_services import get_llm_response
+        
+        # Log the test attempt
+        current_app.logger.info(f"LLM test - Type: {prompt_type}, Prompt length: {len(prompt)}")
+        
+        # Get LLM response (returns tuple: response_text, error_message)
+        response_text, error_message = get_llm_response(prompt)
+        
+        if error_message:
+            current_app.logger.error(f"LLM test failed: {error_message}")
+            return jsonify({'error': error_message}), 500
+        
+        if not response_text:
+            current_app.logger.error("LLM test returned empty response")
+            return jsonify({'error': 'LLM returned empty response'}), 500
+        
+        current_app.logger.info(f"LLM test successful - Response length: {len(response_text)}")
+        
+        # Get LLM info from the last API usage log entry
+        db = get_db()
+        llm_info = {}
+        try:
+            last_usage = db.execute(
+                'SELECT provider, endpoint, cost_usd, processing_time_ms FROM api_usage ORDER BY timestamp DESC LIMIT 1'
+            ).fetchone()
+            if last_usage:
+                llm_info = {
+                    'provider': last_usage['provider'],
+                    'model': last_usage['endpoint'],
+                    'cost': f"${last_usage['cost_usd']:.4f}" if last_usage['cost_usd'] else 'N/A',
+                    'time': f"{last_usage['processing_time_ms']}ms" if last_usage['processing_time_ms'] else 'N/A'
+                }
+        except Exception as e:
+            current_app.logger.error(f"Error fetching LLM info: {e}")
+
+        return jsonify({
+            'content': response_text,
+            'prompt_type': prompt_type,
+            'test_data': test_data,
+            'llm_info': llm_info
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"LLM test error: {e}", exc_info=True)
+        return jsonify({'error': f'LLM request failed: {str(e)}'}), 500
+
+@admin_bp.route('/api/save-prompt', methods=['POST'])
+@login_required
+@admin_required
+def save_prompt():
+    """
+    API endpoint to save a prompt template.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    prompt_type = data.get('prompt_type', '')
+    prompt_text = data.get('prompt_text', '')
+
+    if not prompt_type or not prompt_text:
+        return jsonify({'error': 'Prompt type and text are required'}), 400
+
+    try:
+        db = get_db()
+        
+        # Map prompt types to database names
+        prompt_name_map = {
+            'character': 'character_summary',
+            'show': 'show_summary', 
+            'season': 'season_summary',
+            'episode': 'episode_summary'
+        }
+        
+        prompt_name = prompt_name_map.get(prompt_type)
+        if not prompt_name:
+            return jsonify({'error': 'Invalid prompt type'}), 400
+
+        # Check if prompt exists
+        existing = db.execute('SELECT id FROM prompts WHERE name = ?', (prompt_name,)).fetchone()
+        
+        if existing:
+            # Update existing prompt
+            db.execute('UPDATE prompts SET prompt = ? WHERE name = ?', (prompt_text, prompt_name))
+            current_app.logger.info(f"Updated prompt template: {prompt_name}")
+        else:
+            # Insert new prompt
+            db.execute('INSERT INTO prompts (name, prompt) VALUES (?, ?)', (prompt_name, prompt_text))
+            current_app.logger.info(f"Created new prompt template: {prompt_name}")
+        
+        db.commit()
+        return jsonify({'success': True, 'message': 'Prompt template saved successfully'})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error saving prompt: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to save prompt template'}), 500
+
+@admin_bp.route('/api/get-prompt')
+@login_required
+@admin_required
+def get_prompt():
+    """
+    API endpoint to get a saved prompt template.
+    """
+    prompt_type = request.args.get('type', '')
+    
+    if not prompt_type:
+        return jsonify({'error': 'Prompt type is required'}), 400
+
+    try:
+        db = get_db()
+        
+        # Map prompt types to database names
+        prompt_name_map = {
+            'character': 'character_summary',
+            'show': 'show_summary', 
+            'season': 'season_summary',
+            'episode': 'episode_summary'
+        }
+        
+        prompt_name = prompt_name_map.get(prompt_type)
+        if not prompt_name:
+            return jsonify({'error': 'Invalid prompt type'}), 400
+
+        # Get prompt from database
+        prompt_row = db.execute('SELECT prompt FROM prompts WHERE name = ?', (prompt_name,)).fetchone()
+        
+        if prompt_row:
+            return jsonify({'prompt': prompt_row['prompt']})
+        else:
+            return jsonify({'prompt': None})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting prompt: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to get prompt template'}), 500
+
+@admin_bp.route('/api/test-grounded-llm', methods=['POST'])
+@login_required
+@admin_required
+def test_grounded_llm():
+    """
+    API endpoint to test LLM with grounded episode data.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    prompt_type = data.get('prompt_type', '')
+    tmdb_id = data.get('tmdb_id')
+    season = data.get('season')
+    episode = data.get('episode')
+    character_name = data.get('character_name', '')
+    show_title = data.get('show_title', '')
+
+    if not prompt_type or not tmdb_id or not season or not episode:
+        return jsonify({'error': 'Prompt type, TMDB ID, season, and episode are required'}), 400
+
+    try:
+        # Import LLM functions
+        from app.llm_services import get_llm_response
+        from app.prompt_builder import build_grounded_character_prompt, build_grounded_show_prompt
+        
+        # Build grounded prompt based on type
+        if prompt_type == 'character' and character_name:
+            prompt = build_grounded_character_prompt(character_name, show_title, tmdb_id, season, episode)
+        elif prompt_type == 'show':
+            prompt = build_grounded_show_prompt(show_title, tmdb_id, season, episode)
+        else:
+            return jsonify({'error': 'Invalid prompt type or missing character name'}), 400
+        
+        # Log the test attempt
+        current_app.logger.info(f"Grounded LLM test - Type: {prompt_type}, TMDB: {tmdb_id}, S{season}E{episode}")
+        
+        # Get LLM response
+        response_text, error_message = get_llm_response(prompt)
+        
+        if error_message:
+            current_app.logger.error(f"LLM test failed: {error_message}")
+            return jsonify({'error': f'LLM request failed: {error_message}'}), 500
+        
+        if not response_text:
+            current_app.logger.error("LLM returned empty response")
+            return jsonify({'error': 'LLM returned empty response'}), 500
+        
+        # Get LLM info from the most recent API usage record
+        db = get_db()
+        llm_info_row = db.execute("""
+            SELECT provider, model, cost, response_time 
+            FROM api_usage 
+            ORDER BY timestamp DESC 
+            LIMIT 1
+        """).fetchone()
+        
+        llm_info = {
+            'provider': llm_info_row['provider'] if llm_info_row else 'Unknown',
+            'model': llm_info_row['model'] if llm_info_row else 'Unknown',
+            'cost': llm_info_row['cost'] if llm_info_row else 0.0,
+            'time': llm_info_row['response_time'] if llm_info_row else 0
+        }
+        
+        current_app.logger.info(f"Grounded LLM test successful - Provider: {llm_info['provider']}, Model: {llm_info['model']}")
+        
+        return jsonify({
+            'success': True,
+            'response': response_text,
+            'llm_info': llm_info,
+            'prompt_used': prompt[:500] + '...' if len(prompt) > 500 else prompt
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in grounded LLM test: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to run grounded LLM test'}), 500
+
+@admin_bp.route('/api/test-recap-scraping', methods=['POST'])
+@login_required
+@admin_required
+def test_recap_scraping():
+    """
+    API endpoint to test recap scraping functionality.
+    """
+    try:
+        from app.recap_scrapers import recap_scraping_manager
+        
+        # Test scraping recent recaps
+        logger.info("Testing recap scraping...")
+        recaps = recap_scraping_manager.scrape_recent_recaps(days_back=7)
+        
+        # Match recaps to shows in database
+        matched_recaps = recap_scraping_manager.match_recaps_to_shows(recaps)
+        
+        # Store matched recaps
+        if matched_recaps:
+            recap_scraping_manager.store_recap_summaries(matched_recaps)
+        
+        return jsonify({
+            'success': True,
+            'total_recaps_found': len(recaps),
+            'matched_recaps': len(matched_recaps),
+            'recaps': recaps[:10],  # Return first 10 for preview
+            'matched': matched_recaps[:5]  # Return first 5 matched for preview
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in recap scraping test: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to test recap scraping: {str(e)}'}), 500
+
+@admin_bp.route('/api/scrape-show-recaps', methods=['POST'])
+@login_required
+@admin_required
+def scrape_show_recaps():
+    """
+    API endpoint to scrape recaps for a specific show.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    tmdb_id = data.get('tmdb_id')
+    show_title = data.get('show_title')
+    max_episodes = data.get('max_episodes', 20)
+
+    if not tmdb_id or not show_title:
+        return jsonify({'error': 'TMDB ID and show title are required'}), 400
+
+    try:
+        from app.recap_scrapers import recap_scraping_manager
+        
+        # Scrape recaps for the specific show
+        logger.info(f"Scraping recaps for show: {show_title}")
+        recaps = recap_scraping_manager.scrape_show_recaps(show_title, max_episodes)
+        
+        if not recaps:
+            return jsonify({
+                'success': False,
+                'error': f'No recaps found for "{show_title}". This may be due to rate limiting from recap sites or the show not having recent recaps available.',
+                'suggestion': 'Try again later or check if the show has recent episodes with recaps on Vulture or Showbiz Junkies.'
+            })
+        
+        # Match recaps to the show (should all match since we filtered by show title)
+        matched_recaps = []
+        for recap in recaps:
+            recap['tmdb_id'] = tmdb_id
+            recap['matched_show'] = show_title
+            matched_recaps.append(recap)
+        
+        # Store the recaps
+        if matched_recaps:
+            recap_scraping_manager.store_recap_summaries(matched_recaps)
+        
+        # Get updated episode count for this show
+        db = get_db()
+        episode_count = db.execute("""
+            SELECT COUNT(*) as count FROM episode_summaries 
+            WHERE tmdb_id = ? AND source_provider IN ('Vulture', 'Showbiz Junkies')
+        """, (tmdb_id,)).fetchone()['count']
+        
+        return jsonify({
+            'success': True,
+            'show_title': show_title,
+            'recaps_found': len(recaps),
+            'recaps_stored': len(matched_recaps),
+            'total_episode_summaries': episode_count,
+            'recaps': recaps[:10]  # Return first 10 for preview
+        })
+        
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Error scraping recaps for {show_title}: {e}", exc_info=True)
+        
+        # Provide more specific error messages
+        if "pattern" in error_msg.lower() and "match" in error_msg.lower():
+            return jsonify({
+                'success': False,
+                'error': f'Scraping failed for {show_title}. This could be due to site structure changes or unexpected content format.',
+                'suggestion': 'The scraping system has been updated with proper browser headers. If this persists, the site structure may have changed and the scraping rules may need updates.'
+            })
+        else:
+            return jsonify({'error': f'Failed to scrape recaps for {show_title}: {str(e)}'}), 500
+
+@admin_bp.route('/api/latest-episode')
+@login_required
+@admin_required
+def get_latest_episode():
+    """
+    API endpoint to get the latest aired episode for a show.
+    """
+    tmdb_id = request.args.get('tmdb_id')
+    if not tmdb_id:
+        return jsonify({'error': 'TMDB ID is required'}), 400
+
+    try:
+        db = get_db()
+        
+        # Get the latest aired episode for this show (only episodes that have actually aired)
+        # We need to join through the seasons table to get season numbers
+        latest_episode = db.execute('''
+            SELECT s.season_number, e.episode_number, e.air_date_utc
+            FROM sonarr_episodes e
+            JOIN sonarr_seasons s ON e.season_id = s.id
+            JOIN sonarr_shows sh ON s.show_id = sh.id
+            WHERE sh.tmdb_id = ? 
+            AND e.air_date_utc IS NOT NULL 
+            AND e.air_date_utc != ''
+            AND e.air_date_utc <= datetime('now')
+            ORDER BY s.season_number DESC, e.episode_number DESC
+            LIMIT 1
+        ''', (tmdb_id,)).fetchone()
+        
+        if latest_episode:
+            return jsonify({
+                'season': latest_episode['season_number'],
+                'episode': latest_episode['episode_number'],
+                'air_date': latest_episode['air_date_utc']
+            })
+        else:
+            # If no aired episodes found, get the latest episode regardless of air date
+            latest_episode = db.execute('''
+                SELECT s.season_number, e.episode_number
+                FROM sonarr_episodes e
+                JOIN sonarr_seasons s ON e.season_id = s.id
+                JOIN sonarr_shows sh ON s.show_id = sh.id
+                WHERE sh.tmdb_id = ? 
+                ORDER BY s.season_number DESC, e.episode_number DESC
+                LIMIT 1
+            ''', (tmdb_id,)).fetchone()
+            
+            if latest_episode:
+                return jsonify({
+                    'season': latest_episode['season_number'],
+                    'episode': latest_episode['episode_number'],
+                    'air_date': None
+                })
+            else:
+                return jsonify({'error': 'No episodes found for this show'}), 404
+                
+    except Exception as e:
+        current_app.logger.error(f"Error fetching latest episode: {e}", exc_info=True)
+        return jsonify({'error': 'Database error'}), 500
+
+@admin_bp.route('/api/get-character-info', methods=['POST'])
+@login_required
+@admin_required
+def get_character_info():
+    """
+    API endpoint to get character information from the database for testing.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON payload'}), 400
+
+    character_name = data.get('character', '')
+    show_title = data.get('show', '')
+    season = data.get('season', 1)
+    episode = data.get('episode', 1)
+
+    if not character_name or not show_title:
+        return jsonify({'error': 'Character and show are required'}), 400
+
+    db = get_db()
+    
+    try:
+        # First, find the show by title
+        show_row = db.execute('SELECT tmdb_id, title, year, overview FROM sonarr_shows WHERE title LIKE ?', (f'%{show_title}%',)).fetchone()
+        
+        if not show_row:
+            current_app.logger.warning(f"Show not found for title: {show_title}")
+            return jsonify({'error': 'Show not found', 'searched_title': show_title}), 404
+        
+        show_tmdb_id = show_row['tmdb_id']
+        current_app.logger.info(f"Found show: {show_row['title']} (TMDB ID: {show_tmdb_id})")
+        
+        # Find the character by name and show
+        character_row = db.execute('''
+            SELECT ec.actor_name, ec.character_name
+            FROM episode_characters ec
+            WHERE ec.show_tmdb_id = ? 
+            AND ec.season_number = ? 
+            AND ec.episode_number = ?
+            AND ec.character_name LIKE ?
+            LIMIT 1
+        ''', (show_tmdb_id, season, episode, f'%{character_name}%')).fetchone()
+        
+        # Also check what characters exist for this show/episode for debugging
+        all_characters = db.execute('''
+            SELECT ec.character_name, ec.actor_name
+            FROM episode_characters ec
+            WHERE ec.show_tmdb_id = ? 
+            AND ec.season_number = ? 
+            AND ec.episode_number = ?
+            LIMIT 10
+        ''', (show_tmdb_id, season, episode)).fetchall()
+        
+        result = {
+            'character_name': character_name,
+            'show_title': show_title,
+            'season': season,
+            'episode': episode,
+            'actor_name': None,
+            'show_year': show_row['year'],
+            'show_overview': show_row['overview'],
+            'debug_info': {
+                'searched_character': character_name,
+                'found_show': show_row['title'],
+                'show_tmdb_id': show_tmdb_id,
+                'available_characters': [{'name': c['character_name'], 'actor': c['actor_name']} for c in all_characters]
+            }
+        }
+        
+        if character_row:
+            result['actor_name'] = character_row['actor_name']
+            current_app.logger.info(f"Found character: {character_row['character_name']} played by {character_row['actor_name']}")
+        else:
+            current_app.logger.warning(f"Character not found: {character_name} in {show_title} S{season}E{episode}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching character info: {e}", exc_info=True)
+        return jsonify({'error': 'Database error'}), 500
+
+@admin_bp.route('/api/replace-variables', methods=['POST'])
+@login_required
+@admin_required
+def replace_variables():
+    """
+    API endpoint to replace variables in a prompt with sample data for testing.
+    """
+    data = request.get_json()
+    if not data or 'prompt_text' not in data:
+        return jsonify({'error': 'Missing prompt_text'}), 400
+
+    prompt_text = data['prompt_text']
+    
+    # Sample data for variable replacement (using single brackets)
+    sample_data = {
+        '{character}': data.get('character', 'John Doe'),
+        '{show}': data.get('show', 'Breaking Bad'),
+        '{season}': str(data.get('season', 2)),
+        '{episode}': str(data.get('episode', 5)),
+        '{actor}': data.get('actor', 'Bryan Cranston'),
+        '{year}': str(data.get('year', 2008)),
+        '{genre}': data.get('genre', 'Drama'),
+        '{overview}': data.get('overview', 'A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine.'),
+        '{episode_title}': data.get('episode_title', 'The One Where Walter Gets Angry'),
+        '{episode_overview}': data.get('episode_overview', 'Walter confronts his family about his secret life while dealing with the consequences of his actions.'),
+        '{air_date}': data.get('air_date', 'March 15, 2009'),
+        '{other_characters}': data.get('other_characters', 'Jesse Pinkman, Skyler White, Hank Schrader')
+    }
+
+    # Replace variables in the prompt
+    replaced_prompt = prompt_text
+    for variable, replacement in sample_data.items():
+        replaced_prompt = replaced_prompt.replace(variable, replacement)
+
+    return jsonify({
+        'original_prompt': prompt_text,
+        'replaced_prompt': replaced_prompt,
+        'variables_found': [var for var in sample_data.keys() if var in prompt_text]
+    })
 
 @admin_bp.route('/api/prompt-history/<int:prompt_id>')
 @login_required
@@ -1027,6 +1394,7 @@ def api_characters_for_show():
     """
     API endpoint to get all unique character names for a given show.
     Accepts a 'tmdb_id' query parameter.
+    First tries episode_characters table, then falls back to Plex activity log.
     """
     show_tmdb_id = request.args.get('tmdb_id')
     if not show_tmdb_id:
@@ -1034,14 +1402,46 @@ def api_characters_for_show():
 
     db = get_db()
     try:
-        # Query for distinct character names for the given show
+        # First, try to get characters from episode_characters table
         characters = db.execute(
             "SELECT DISTINCT character_name FROM episode_characters WHERE show_tmdb_id = ?",
             (show_tmdb_id,)
         ).fetchall()
 
-        # Extract just the names into a list
-        character_names = [row['character_name'] for row in characters]
+        character_names = [row['character_name'] for row in characters if row['character_name']]
+        
+        # If no characters found in episode_characters, try Plex activity log fallback
+        if not character_names:
+            # Get show title from sonarr_shows
+            show_row = db.execute('SELECT title FROM sonarr_shows WHERE tmdb_id = ?', (show_tmdb_id,)).fetchone()
+            if show_row:
+                show_title = show_row['title']
+                
+                # Get the most recent Plex activity log entry for this show
+                plex_row = db.execute(
+                    'SELECT raw_payload FROM plex_activity_log WHERE show_title = ? ORDER BY event_timestamp DESC LIMIT 1',
+                    (show_title,)
+                ).fetchone()
+                
+                if plex_row:
+                    import json
+                    try:
+                        payload = json.loads(plex_row['raw_payload'])
+                        metadata = payload.get('Metadata', {})
+                        roles = metadata.get('Role', [])
+                        
+                        # Extract character names from Plex data
+                        plex_characters = []
+                        for role in roles:
+                            character_name = role.get('role')
+                            if character_name:
+                                plex_characters.append(character_name)
+                        
+                        character_names = plex_characters
+                        current_app.logger.info(f"Found {len(character_names)} characters from Plex data for show {show_title}")
+                        
+                    except (json.JSONDecodeError, KeyError) as e:
+                        current_app.logger.error(f"Error parsing Plex data for show {show_title}: {e}")
 
         return jsonify(character_names)
 

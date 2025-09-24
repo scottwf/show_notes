@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 from flask import Flask
 from flask_login import LoginManager
@@ -17,6 +18,12 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='dev',  # IMPORTANT: Change this for production!
         DATABASE=os.path.join(app.instance_path, 'shownotes.sqlite3'),
+        # Session configuration for persistent login
+        SESSION_PERMANENT=True,
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),  # Sessions last 30 days
+        SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
     )
 
     print("DEBUG: Finished configuration setup")

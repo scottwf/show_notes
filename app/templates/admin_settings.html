@@ -94,6 +94,27 @@
           <input type="text" id="plex_client_id" name="plex_client_id" value="{{ settings.plex_client_id or '' }}" class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
         </div>
       </div>
+      
+      <!-- Plex Webhook Integration -->
+      <div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-400 dark:border-amber-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
+        <div class="flex items-center mb-3">
+          <svg class="w-6 h-6 text-amber-500 dark:text-amber-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg>
+          <h3 class="font-semibold text-xl text-amber-800 dark:text-amber-200">Plex Webhook Integration</h3>
+        </div>
+        <p class="text-amber-700 dark:text-amber-300 mb-4 text-sm">To enable Plex events in this app, you need to add a webhook in your Plex server settings. Follow these steps:</p>
+        <ol class="list-decimal list-inside mb-4 text-amber-800 dark:text-amber-200 space-y-1 text-sm">
+          <li>Open your <span class="font-semibold">Plex Web App</span> and sign in as an admin.</li>
+          <li>Click the <span class="font-semibold">Settings</span> (wrench icon) in the top right.</li>
+          <li>In the left sidebar, under <span class="font-semibold">Settings</span>, click <span class="font-semibold">Webhooks</span> (you may need to expand <span class="font-semibold">Advanced</span> to find it).</li>
+          <li>Click <span class="font-semibold">Add Webhook</span>.</li>
+          <li>Paste the following URL into the webhook URL field:</li>
+        </ol>
+        <div class="bg-slate-100 dark:bg-slate-800 border border-amber-300 dark:border-amber-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
+          <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ site_url }}/plex/webhook</span>
+        </div>
+        <p class="text-amber-700 dark:text-amber-300 text-sm">Click <span class="font-semibold">Save</span>. Plex will now send event notifications to this app.</p>
+        <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">You can test the webhook by playing or pausing media in Plex and checking this app for activity.</p>
+      </div>
       <script>
         document.addEventListener('DOMContentLoaded', function() {
           var btn = document.getElementById('gen-plex-secret');
@@ -193,6 +214,37 @@
           </div>
         </div>
         <button type="button" data-service="sonarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
+        
+        <!-- Sonarr Webhook Integration -->
+        <div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-400 dark:border-blue-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
+          <div class="flex items-center mb-3">
+            <svg class="w-6 h-6 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg>
+            <h3 class="font-semibold text-xl text-blue-800 dark:text-blue-200">Sonarr Webhook Integration</h3>
+          </div>
+          <p class="text-blue-700 dark:text-blue-300 mb-4 text-sm">To enable automatic library syncing when Sonarr adds or updates content, add a webhook in your Sonarr settings:</p>
+          <ol class="list-decimal list-inside mb-4 text-blue-800 dark:text-blue-200 space-y-1 text-sm">
+            <li>Open your <span class="font-semibold">Sonarr Web Interface</span>.</li>
+            <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
+            <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
+            <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
+            <li>Set the following configuration:</li>
+          </ol>
+          <div class="bg-slate-100 dark:bg-slate-800 border border-blue-300 dark:border-blue-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
+            <strong>Name:</strong> ShowNotes<br>
+            <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ sonarr_webhook_url }}</span><br>
+            <strong>Method:</strong> POST (not PUT)<br>
+            <strong>Username:</strong> (leave empty)<br>
+            <strong>Password:</strong> (leave empty)<br>
+            <strong>On Download:</strong> ✓<br>
+            <strong>On Series Delete:</strong> ✓<br>
+            <strong>On Episode File Delete:</strong> ✓<br>
+            <strong>On Episode File Delete For Upgrade:</strong> ✓<br>
+            <strong>On Rename:</strong> ✓<br>
+            <strong>On Health:</strong> ✓ (optional, for periodic syncs)
+          </div>
+          <p class="text-blue-700 dark:text-blue-300 text-sm">Click <span class="font-semibold">Save</span>. Sonarr will now automatically sync your library when content changes.</p>
+          <p class="text-xs text-blue-600 dark:text-blue-400 mt-3">This eliminates the need for manual library syncing from the Tasks page.</p>
+        </div>
       </div>
     </details>
 
@@ -222,6 +274,37 @@
           </div>
         </div>
         <button type="button" data-service="radarr" class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
+        
+        <!-- Radarr Webhook Integration -->
+        <div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 dark:border-green-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
+          <div class="flex items-center mb-3">
+            <svg class="w-6 h-6 text-green-500 dark:text-green-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg>
+            <h3 class="font-semibold text-xl text-green-800 dark:text-green-200">Radarr Webhook Integration</h3>
+          </div>
+          <p class="text-green-700 dark:text-green-300 mb-4 text-sm">To enable automatic library syncing when Radarr adds or updates content, add a webhook in your Radarr settings:</p>
+          <ol class="list-decimal list-inside mb-4 text-green-800 dark:text-green-200 space-y-1 text-sm">
+            <li>Open your <span class="font-semibold">Radarr Web Interface</span>.</li>
+            <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
+            <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
+            <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
+            <li>Set the following configuration:</li>
+          </ol>
+          <div class="bg-slate-100 dark:bg-slate-800 border border-green-300 dark:border-green-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
+            <strong>Name:</strong> ShowNotes<br>
+            <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ radarr_webhook_url }}</span><br>
+            <strong>Method:</strong> POST (not PUT)<br>
+            <strong>Username:</strong> (leave empty)<br>
+            <strong>Password:</strong> (leave empty)<br>
+            <strong>On Download:</strong> ✓<br>
+            <strong>On Movie Delete:</strong> ✓<br>
+            <strong>On Movie File Delete:</strong> ✓<br>
+            <strong>On Movie File Delete For Upgrade:</strong> ✓<br>
+            <strong>On Rename:</strong> ✓<br>
+            <strong>On Health:</strong> ✓ (optional, for periodic syncs)
+          </div>
+          <p class="text-green-700 dark:text-green-300 text-sm">Click <span class="font-semibold">Save</span>. Radarr will now automatically sync your library when content changes.</p>
+          <p class="text-xs text-green-600 dark:text-green-400 mt-3">This eliminates the need for manual library syncing from the Tasks page.</p>
+        </div>
       </div>
     </details>
 
@@ -282,87 +365,6 @@
 </form>
 
     <!-- Library Synchronization Section has been moved to Admin > Tasks -->
-  
-
-<div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-400 dark:border-amber-500 p-4 sm:p-6 mt-10 rounded-r-lg shadow-md max-w-2xl mx-auto">
-  <div class="flex items-center mb-3">
-    <svg class="w-6 h-6 text-amber-500 dark:text-amber-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg> Info
-    <h3 class="font-semibold text-xl text-amber-800 dark:text-amber-200">Plex Webhook Integration</h3>
-  </div>
-  <p class="text-amber-700 dark:text-amber-300 mb-4 text-sm">To enable Plex events in this app, you need to add a webhook in your Plex server settings. Follow these steps:</p>
-  <ol class="list-decimal list-inside mb-4 text-amber-800 dark:text-amber-200 space-y-1 text-sm">
-    <li>Open your <span class="font-semibold">Plex Web App</span> and sign in as an admin.</li>
-    <li>Click the <span class="font-semibold">Settings</span> (wrench icon) in the top right.</li>
-    <li>In the left sidebar, under <span class="font-semibold">Settings</span>, click <span class="font-semibold">Webhooks</span> (you may need to expand <span class="font-semibold">Advanced</span> to find it).</li>
-    <li>Click <span class="font-semibold">Add Webhook</span>.</li>
-    <li>Paste the following URL into the webhook URL field:</li>
-  </ol>
-  <div class="bg-slate-100 dark:bg-slate-800 border border-amber-300 dark:border-amber-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-    <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ site_url }}/plex/webhook</span>
-  </div>
-  <p class="text-amber-700 dark:text-amber-300 text-sm">Click <span class="font-semibold">Save</span>. Plex will now send event notifications to this app.</p>
-  <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">You can test the webhook by playing or pausing media in Plex and checking this app for activity.</p>
-</div>
-
-<div class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-400 dark:border-blue-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md max-w-2xl mx-auto">
-  <div class="flex items-center mb-3">
-    <svg class="w-6 h-6 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg> Info
-    <h3 class="font-semibold text-xl text-blue-800 dark:text-blue-200">Sonarr Webhook Integration</h3>
-  </div>
-  <p class="text-blue-700 dark:text-blue-300 mb-4 text-sm">To enable automatic library syncing when Sonarr adds or updates content, add a webhook in your Sonarr settings:</p>
-  <ol class="list-decimal list-inside mb-4 text-blue-800 dark:text-blue-200 space-y-1 text-sm">
-    <li>Open your <span class="font-semibold">Sonarr Web Interface</span>.</li>
-    <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
-    <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
-    <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
-    <li>Set the following configuration:</li>
-  </ol>
-  <div class="bg-slate-100 dark:bg-slate-800 border border-blue-300 dark:border-blue-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-    <strong>Name:</strong> ShowNotes<br>
-    <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ sonarr_webhook_url }}</span><br>
-    <strong>Method:</strong> POST (not PUT)<br>
-    <strong>Username:</strong> (leave empty)<br>
-    <strong>Password:</strong> (leave empty)<br>
-    <strong>On Download:</strong> ✓<br>
-    <strong>On Series Delete:</strong> ✓<br>
-    <strong>On Episode File Delete:</strong> ✓<br>
-    <strong>On Episode File Delete For Upgrade:</strong> ✓<br>
-    <strong>On Rename:</strong> ✓<br>
-    <strong>On Health:</strong> ✓ (optional, for periodic syncs)
-  </div>
-  <p class="text-blue-700 dark:text-blue-300 text-sm">Click <span class="font-semibold">Save</span>. Sonarr will now automatically sync your library when content changes.</p>
-  <p class="text-xs text-blue-600 dark:text-blue-400 mt-3">This eliminates the need for manual library syncing from the Tasks page.</p>
-</div>
-
-<div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 dark:border-green-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md max-w-2xl mx-auto">
-  <div class="flex items-center mb-3">
-    <svg class="w-6 h-6 text-green-500 dark:text-green-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z"/></svg> Info
-    <h3 class="font-semibold text-xl text-green-800 dark:text-green-200">Radarr Webhook Integration</h3>
-  </div>
-  <p class="text-green-700 dark:text-green-300 mb-4 text-sm">To enable automatic library syncing when Radarr adds or updates content, add a webhook in your Radarr settings:</p>
-  <ol class="list-decimal list-inside mb-4 text-green-800 dark:text-green-200 space-y-1 text-sm">
-    <li>Open your <span class="font-semibold">Radarr Web Interface</span>.</li>
-    <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
-    <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
-    <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
-    <li>Set the following configuration:</li>
-  </ol>
-  <div class="bg-slate-100 dark:bg-slate-800 border border-green-300 dark:border-green-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-    <strong>Name:</strong> ShowNotes<br>
-    <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ radarr_webhook_url }}</span><br>
-    <strong>Method:</strong> POST (not PUT)<br>
-    <strong>Username:</strong> (leave empty)<br>
-    <strong>Password:</strong> (leave empty)<br>
-    <strong>On Download:</strong> ✓<br>
-    <strong>On Movie Delete:</strong> ✓<br>
-    <strong>On Movie File Delete:</strong> ✓<br>
-    <strong>On Movie File Delete For Upgrade:</strong> ✓<br>
-    <strong>On Rename:</strong> ✓<br>
-    <strong>On Health:</strong> ✓ (optional, for periodic syncs)
-  </div>
-  <p class="text-green-700 dark:text-green-300 text-sm">Click <span class="font-semibold">Save</span>. Radarr will now automatically sync your library when content changes.</p>
-  <p class="text-xs text-green-600 dark:text-green-400 mt-3">This eliminates the need for manual library syncing from the Tasks page.</p>
-</div>
 
 <script src="{{ url_for('static', filename='admin_settings.js') }}" defer></script>
 {% endblock %}

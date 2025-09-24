@@ -1,0 +1,770 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Prompt Management{% endblock %}
+
+{% block admin_page_header %}Prompt Management & Testing{% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+    <!-- Search and Filter Controls -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Search & Filter Prompts</h2>
+            <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <input type="text" id="search-input" placeholder="Search prompts..." 
+                       class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <select id="source-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Sources</option>
+                    <option value="database">Database</option>
+                    <option value="prompt_builder">Prompt Builder</option>
+                    <option value="static">Static Prompts</option>
+                </select>
+                <select id="category-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">All Categories</option>
+                    <option value="character">Character</option>
+                    <option value="episode">Episode</option>
+                    <option value="season">Season</option>
+                    <option value="show">Show</option>
+                    <option value="general">General</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button id="expand-all" class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md text-sm hover:bg-blue-200 dark:hover:bg-blue-900/50">
+                Expand All
+            </button>
+            <button id="collapse-all" class="px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-sm hover:bg-slate-200 dark:hover:bg-slate-600">
+                Collapse All
+            </button>
+            <button id="test-selected" class="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md text-sm hover:bg-green-200 dark:hover:bg-green-900/50">
+                Test Selected
+            </button>
+        </div>
+    </div>
+
+    <!-- Database Prompts Section -->
+    <div class="prompt-section" data-source="database">
+        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Editable Database Prompts</h2>
+                    <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium" id="db-count">{{ prompts_from_db|length if prompts_from_db else 0 }}</span>
+                </div>
+                <button class="toggle-section px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-sm hover:bg-slate-200 dark:hover:bg-slate-600">
+                    <span class="toggle-text">Collapse</span>
+                </button>
+            </div>
+            <div class="section-content p-4 sm:p-6">
+                {% if prompts_from_db %}
+                    <div class="space-y-4">
+                        {% for prompt in prompts_from_db %}
+                        <div class="prompt-card" data-category="{{ prompt.category|default('general') }}" data-name="{{ prompt.name|lower }}">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" class="prompt-checkbox" data-prompt-id="{{ prompt.id }}" data-prompt-type="database">
+                                    <h3 class="text-lg font-semibold text-blue-600 dark:text-blue-500">{{ prompt.name }}</h3>
+                                    {% if prompt.category %}
+                                    <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-full text-xs">{{ prompt.category }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">Last updated: {{ prompt.updated_at|default('Unknown') }}</span>
+                                    <button class="toggle-prompt px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs hover:bg-slate-200 dark:hover:bg-slate-600">
+                                        <span class="toggle-text">Collapse</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="prompt-content">
+                                <form method="POST" action="{{ url_for('admin.view_prompts') }}" class="space-y-3">
+                                    <input type="hidden" name="prompt_id" value="{{ prompt.id }}">
+                                    <div class="relative">
+                                        <!-- Variable Insertion Toolbar -->
+                                        <div class="mb-2 p-2 bg-slate-100 dark:bg-slate-700 rounded-md">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Insert Variables:</span>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{character}}">Character</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{show}}">Show</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{season}}">Season</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{episode}}">Episode</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{actor}}">Actor</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{year}}">Year</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{genre}}">Genre</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{overview}}">Overview</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{episode_title}}">Episode Title</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{episode_overview}}">Episode Overview</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{air_date}}">Air Date</button>
+                                                <button type="button" class="insert-variable px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-variable="{{other_characters}}">Other Characters</button>
+                                            </div>
+                                        </div>
+                                        <textarea name="prompt_text" 
+                                                  class="w-full h-40 p-3 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                                                  placeholder="Enter prompt text... Use variables like {{character}}, {{show}}, {{season}}, etc.">{{ prompt.prompt }}</textarea>
+                                        <div class="absolute top-2 right-2 text-xs text-slate-500 dark:text-slate-400">
+                                            <span class="char-count">{{ prompt.prompt|length }}</span> characters
+                                        </div>
+                                    </div>
+                                    <!-- Variable Preview -->
+                                    <div class="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-xs font-medium text-amber-700 dark:text-amber-300">Variable Preview:</span>
+                                            <button type="button" class="toggle-preview px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded text-xs hover:bg-amber-200 dark:hover:bg-amber-900/50">
+                                                <span class="toggle-text">Show Preview</span>
+                                            </button>
+                                        </div>
+                                        <div class="preview-content hidden mt-2">
+                                            <div class="text-xs text-amber-600 dark:text-amber-400 mb-1">Available variables will be replaced with sample data:</div>
+                                            <div class="bg-white dark:bg-slate-800 rounded p-2 text-xs font-mono text-slate-700 dark:text-slate-300 preview-text">
+                                                <!-- Preview will be generated here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                                Save Changes
+                                            </button>
+                                            <button type="button" class="view-history-btn px-4 py-2 bg-slate-500 text-white rounded-md hover:bg-slate-600 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2" data-prompt-id="{{ prompt.id }}">
+                                                View History
+                                            </button>
+                                            <button type="button" class="test-prompt-btn px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2" data-prompt-id="{{ prompt.id }}" data-prompt-text="{{ prompt.prompt|e }}">
+                                                Test Prompt
+                                            </button>
+                                        </div>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            ID: {{ prompt.id }}
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-slate-500 dark:text-slate-400">No database prompts found.</p>
+                        <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Create your first prompt in the database to get started.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Builder Section -->
+    <div class="prompt-section" data-source="prompt_builder">
+        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 bg-sky-500 rounded-full"></div>
+                    <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Dynamic Prompt Builder Functions</h2>
+                    <span class="px-2 py-1 bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 rounded-full text-xs font-medium" id="builder-count">{{ builder_prompts|length if builder_prompts else 0 }}</span>
+                </div>
+                <button class="toggle-section px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-sm hover:bg-slate-200 dark:hover:bg-slate-600">
+                    <span class="toggle-text">Collapse</span>
+                </button>
+            </div>
+            <div class="section-content p-4 sm:p-6">
+                {% if builder_prompts %}
+                    <div class="space-y-4">
+                        {% for prompt in builder_prompts %}
+                        <div class="prompt-card" data-category="{{ prompt.category|default('general') }}" data-name="{{ prompt.name|lower }}">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" class="prompt-checkbox" data-prompt-name="{{ prompt.name }}" data-prompt-type="builder">
+                                    <h3 class="text-lg font-semibold text-sky-600 dark:text-sky-500">{{ prompt.name }}</h3>
+                                    {% if prompt.category %}
+                                    <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-full text-xs">{{ prompt.category }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">Source: {{ prompt.source }}</span>
+                                    <button class="toggle-prompt px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs hover:bg-slate-200 dark:hover:bg-slate-600">
+                                        <span class="toggle-text">Collapse</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="prompt-content">
+                                <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
+                                    <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono">{{ prompt.text }}</pre>
+                                </div>
+                                <div class="flex items-center justify-between mt-3">
+                                    <div class="flex items-center space-x-2">
+                                        <button class="test-prompt-btn px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2" data-prompt-name="{{ prompt.name }}" data-prompt-type="builder">
+                                            Test Function
+                                        </button>
+                                        <button class="copy-prompt-btn px-4 py-2 bg-slate-500 text-white rounded-md hover:bg-slate-600 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2" data-prompt-text="{{ prompt.text|e }}">
+                                            Copy Docstring
+                                        </button>
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                                        Function: {{ prompt.name }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                            </svg>
+                        </div>
+                        <p class="text-slate-500 dark:text-slate-400">No dynamic prompts found.</p>
+                        <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Check prompt_builder.py for build_ functions.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Static Prompts Section -->
+    <div class="prompt-section" data-source="static">
+        <div class="bg-white dark:bg-slate-800 shadow-lg rounded-sm border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Static Prompt Constants</h2>
+                    <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-xs font-medium" id="static-count">{{ static_prompts|length if static_prompts else 0 }}</span>
+                </div>
+                <button class="toggle-section px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md text-sm hover:bg-slate-200 dark:hover:bg-slate-600">
+                    <span class="toggle-text">Collapse</span>
+                </button>
+            </div>
+            <div class="section-content p-4 sm:p-6">
+                {% if static_prompts %}
+                    <div class="space-y-4">
+                        {% for prompt in static_prompts %}
+                        <div class="prompt-card" data-category="{{ prompt.category|default('general') }}" data-name="{{ prompt.name|lower }}">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center space-x-2">
+                                    <input type="checkbox" class="prompt-checkbox" data-prompt-name="{{ prompt.name }}" data-prompt-type="static">
+                                    <h3 class="text-lg font-semibold text-green-600 dark:text-green-500">{{ prompt.name }}</h3>
+                                    {% if prompt.category %}
+                                    <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-full text-xs">{{ prompt.category }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">Source: {{ prompt.source }}</span>
+                                    <button class="toggle-prompt px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded text-xs hover:bg-slate-200 dark:hover:bg-slate-600">
+                                        <span class="toggle-text">Collapse</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="prompt-content">
+                                <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
+                                    <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono">{{ prompt.text }}</pre>
+                                </div>
+                                <div class="flex items-center justify-between mt-3">
+                                    <div class="flex items-center space-x-2">
+                                        <button class="test-prompt-btn px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2" data-prompt-name="{{ prompt.name }}" data-prompt-type="static">
+                                            Test Prompt
+                                        </button>
+                                        <button class="copy-prompt-btn px-4 py-2 bg-slate-500 text-white rounded-md hover:bg-slate-600 focus:ring-2 focus:ring-slate-500 focus:ring-offset-2" data-prompt-text="{{ prompt.text|e }}">
+                                            Copy Text
+                                        </button>
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                                        Constant: {{ prompt.name }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-slate-500 dark:text-slate-400">No static prompts found.</p>
+                        <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Check prompts.py for PROMPT constants.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Prompt History</h3>
+            <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">&times;</button>
+        </div>
+        <div id="history-modal-content" class="p-6 overflow-y-auto space-y-4">
+            <!-- History items will be injected here -->
+        </div>
+    </div>
+</div>
+
+<!-- Test Prompt Modal -->
+<div id="test-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100">Test Prompt</h3>
+            <button id="close-test-modal-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">&times;</button>
+        </div>
+        <div id="test-modal-content" class="p-6 overflow-y-auto">
+            <!-- Test content will be injected here -->
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Search and filter functionality
+    const searchInput = document.getElementById('search-input');
+    const sourceFilter = document.getElementById('source-filter');
+    const categoryFilter = document.getElementById('category-filter');
+    const expandAllBtn = document.getElementById('expand-all');
+    const collapseAllBtn = document.getElementById('collapse-all');
+    const testSelectedBtn = document.getElementById('test-selected');
+
+    function filterPrompts() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const selectedSource = sourceFilter.value;
+        const selectedCategory = categoryFilter.value;
+
+        document.querySelectorAll('.prompt-card').forEach(card => {
+            const name = card.dataset.name || '';
+            const source = card.closest('.prompt-section').dataset.source;
+            const category = card.dataset.category || '';
+
+            const matchesSearch = name.includes(searchTerm);
+            const matchesSource = !selectedSource || source === selectedSource;
+            const matchesCategory = !selectedCategory || category === selectedCategory;
+
+            if (matchesSearch && matchesSource && matchesCategory) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    searchInput.addEventListener('input', filterPrompts);
+    sourceFilter.addEventListener('change', filterPrompts);
+    categoryFilter.addEventListener('change', filterPrompts);
+
+    // Expand/Collapse functionality
+    function togglePrompt(card) {
+        const content = card.querySelector('.prompt-content');
+        const toggleBtn = card.querySelector('.toggle-prompt .toggle-text');
+        
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            toggleBtn.textContent = 'Collapse';
+        } else {
+            content.style.display = 'none';
+            toggleBtn.textContent = 'Expand';
+        }
+    }
+
+    function toggleSection(section) {
+        const content = section.querySelector('.section-content');
+        const toggleBtn = section.querySelector('.toggle-section .toggle-text');
+        
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            toggleBtn.textContent = 'Collapse';
+        } else {
+            content.style.display = 'none';
+            toggleBtn.textContent = 'Expand';
+        }
+    }
+
+    // Event listeners for toggle buttons
+    document.querySelectorAll('.toggle-prompt').forEach(btn => {
+        btn.addEventListener('click', function() {
+            togglePrompt(this.closest('.prompt-card'));
+        });
+    });
+
+    document.querySelectorAll('.toggle-section').forEach(btn => {
+        btn.addEventListener('click', function() {
+            toggleSection(this.closest('.prompt-section'));
+        });
+    });
+
+    expandAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.prompt-content').forEach(content => {
+            content.style.display = 'block';
+        });
+        document.querySelectorAll('.section-content').forEach(content => {
+            content.style.display = 'block';
+        });
+        document.querySelectorAll('.toggle-text').forEach(text => {
+            text.textContent = 'Collapse';
+        });
+    });
+
+    collapseAllBtn.addEventListener('click', function() {
+        document.querySelectorAll('.prompt-content').forEach(content => {
+            content.style.display = 'none';
+        });
+        document.querySelectorAll('.section-content').forEach(content => {
+            content.style.display = 'block'; // Keep sections expanded
+        });
+        document.querySelectorAll('.toggle-prompt .toggle-text').forEach(text => {
+            text.textContent = 'Expand';
+        });
+    });
+
+    // Character count for textareas
+    document.querySelectorAll('textarea[name="prompt_text"]').forEach(textarea => {
+        const charCount = textarea.parentElement.querySelector('.char-count');
+        textarea.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+        });
+    });
+
+    // Variable insertion functionality using event delegation
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('insert-variable')) {
+            e.preventDefault();
+            const variable = e.target.dataset.variable;
+            const promptCard = e.target.closest('.prompt-card');
+            const textarea = promptCard ? promptCard.querySelector('textarea[name="prompt_text"]') : null;
+            
+            if (textarea) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                const before = text.substring(0, start);
+                const after = text.substring(end, text.length);
+                
+                textarea.value = before + variable + after;
+                textarea.focus();
+                
+                // Set cursor position after the inserted variable
+                const newPosition = start + variable.length;
+                textarea.setSelectionRange(newPosition, newPosition);
+                
+                // Trigger input event to update character count and preview
+                textarea.dispatchEvent(new Event('input'));
+                
+                // Visual feedback
+                e.target.style.backgroundColor = '#10b981';
+                e.target.style.color = 'white';
+                setTimeout(() => {
+                    e.target.style.backgroundColor = '';
+                    e.target.style.color = '';
+                }, 200);
+                
+                console.log(`Inserted variable: ${variable} at position ${newPosition}`);
+            } else {
+                console.error('Could not find textarea for variable insertion');
+            }
+        }
+    });
+
+    // Variable preview functionality
+    function generateVariablePreview(text) {
+        const sampleData = {
+            '{{character}}': 'John Doe',
+            '{{show}}': 'Breaking Bad',
+            '{{season}}': '2',
+            '{{episode}}': '5',
+            '{{actor}}': 'Bryan Cranston',
+            '{{year}}': '2008',
+            '{{genre}}': 'Drama',
+            '{{overview}}': 'A high school chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine.',
+            '{{episode_title}}': 'The One Where Walter Gets Angry',
+            '{{episode_overview}}': 'Walter confronts his family about his secret life while dealing with the consequences of his actions.',
+            '{{air_date}}': 'March 15, 2009',
+            '{{other_characters}}': 'Jesse Pinkman, Skyler White, Hank Schrader'
+        };
+
+        let preview = text;
+        // Sort variables by length (longest first) to avoid partial replacements
+        const sortedVariables = Object.keys(sampleData).sort((a, b) => b.length - a.length);
+        
+        sortedVariables.forEach(variable => {
+            const replacement = sampleData[variable];
+            // Escape special regex characters in the variable
+            const escapedVariable = variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escapedVariable, 'g');
+            preview = preview.replace(regex, `<span class="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">${replacement}</span>`);
+        });
+        return preview;
+    }
+
+    // Toggle preview functionality using event delegation
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('toggle-preview') || e.target.closest('.toggle-preview')) {
+            e.preventDefault();
+            const button = e.target.classList.contains('toggle-preview') ? e.target : e.target.closest('.toggle-preview');
+            const promptCard = button.closest('.prompt-card');
+            const previewContent = promptCard ? promptCard.querySelector('.preview-content') : null;
+            const previewText = promptCard ? promptCard.querySelector('.preview-text') : null;
+            const toggleText = button.querySelector('.toggle-text');
+            const textarea = promptCard ? promptCard.querySelector('textarea[name="prompt_text"]') : null;
+            
+            if (previewContent && previewText && toggleText && textarea) {
+                if (previewContent.classList.contains('hidden')) {
+                    // Show preview
+                    const text = textarea.value;
+                    previewText.innerHTML = generateVariablePreview(text);
+                    previewContent.classList.remove('hidden');
+                    toggleText.textContent = 'Hide Preview';
+                } else {
+                    // Hide preview
+                    previewContent.classList.add('hidden');
+                    toggleText.textContent = 'Show Preview';
+                }
+            }
+        }
+    });
+
+    // Update preview when textarea changes
+    document.querySelectorAll('textarea[name="prompt_text"]').forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            const previewText = this.closest('.prompt-card').querySelector('.preview-text');
+            const previewContent = this.closest('.prompt-card').querySelector('.preview-content');
+            
+            if (previewText && previewContent && !previewContent.classList.contains('hidden')) {
+                const preview = generateVariablePreview(this.value);
+                previewText.innerHTML = preview;
+                console.log('Preview updated:', preview.substring(0, 100) + '...');
+            }
+        });
+    });
+
+    // Debug: Log when page loads
+    console.log('Prompt management page loaded');
+    console.log('Found', document.querySelectorAll('.insert-variable').length, 'variable insertion buttons');
+    console.log('Found', document.querySelectorAll('textarea[name="prompt_text"]').length, 'prompt textareas');
+
+    // Copy functionality
+    document.querySelectorAll('.copy-prompt-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const text = this.dataset.promptText;
+            navigator.clipboard.writeText(text).then(() => {
+                this.textContent = 'Copied!';
+                setTimeout(() => {
+                    this.textContent = this.textContent.includes('Docstring') ? 'Copy Docstring' : 'Copy Text';
+                }, 2000);
+            });
+        });
+    });
+
+    // Test prompt functionality
+    document.querySelectorAll('.test-prompt-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const promptId = this.dataset.promptId;
+            const promptName = this.dataset.promptName;
+            const promptText = this.dataset.promptText;
+            const promptType = this.dataset.promptType;
+
+            // Show test modal
+            const testModal = document.getElementById('test-modal');
+            const testContent = document.getElementById('test-modal-content');
+            
+            testContent.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Test Parameters</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Character</label>
+                                <input type="text" id="test-character" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100" placeholder="Enter character name">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Show</label>
+                                <input type="text" id="test-show" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100" placeholder="Enter show name">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Season</label>
+                                <input type="number" id="test-season" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100" value="1" min="1">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Episode</label>
+                                <input type="number" id="test-episode" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100" value="1" min="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button id="run-test" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Run Test</button>
+                        <button id="cancel-test" class="px-4 py-2 bg-slate-500 text-white rounded-md hover:bg-slate-600">Cancel</button>
+                    </div>
+                    <div id="test-results" class="hidden">
+                        <!-- Test results will be shown here -->
+                    </div>
+                </div>
+            `;
+
+            testModal.classList.remove('hidden');
+
+            // Event listeners for test modal
+            document.getElementById('run-test').addEventListener('click', async function() {
+                const character = document.getElementById('test-character').value;
+                const show = document.getElementById('test-show').value;
+                const season = document.getElementById('test-season').value;
+                const episode = document.getElementById('test-episode').value;
+
+                if (!character || !show) {
+                    alert('Please enter both character and show names');
+                    return;
+                }
+
+                // Run the test
+                const testResults = document.getElementById('test-results');
+                testResults.classList.remove('hidden');
+                testResults.innerHTML = '<div class="text-center py-4"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p class="mt-2 text-slate-600 dark:text-slate-400">Running test...</p></div>';
+
+                try {
+                    const response = await fetch('/admin/api/test-llm-summary', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            test_character: character,
+                            test_show: show,
+                            test_season: parseInt(season),
+                            test_episode: parseInt(episode),
+                            prompt_options: {
+                                include_relationships: true,
+                                include_motivations: true,
+                                include_quote: true,
+                                tone: 'tv_expert'
+                            }
+                        }),
+                    });
+
+                    const results = await response.json();
+                    
+                    testResults.innerHTML = `
+                        <div class="space-y-4">
+                            <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Generated Prompt</h5>
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
+                                <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono">${results.generated_prompt}</pre>
+                            </div>
+                            <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">LLM Response</h5>
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
+                                <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono">${results.llm_response || results.error_message || 'No response received'}</pre>
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    testResults.innerHTML = `<div class="text-red-600 dark:text-red-400">Error running test: ${error.message}</div>`;
+                }
+            });
+
+            document.getElementById('cancel-test').addEventListener('click', function() {
+                testModal.classList.add('hidden');
+            });
+        });
+    });
+
+    // History modal functionality
+    const historyModal = document.getElementById('history-modal');
+    const modalContent = document.getElementById('history-modal-content');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const closeTestModalBtn = document.getElementById('close-test-modal-btn');
+    const historyButtons = document.querySelectorAll('.view-history-btn');
+
+    historyButtons.forEach(button => {
+        button.addEventListener('click', async function() {
+            const promptId = this.dataset.promptId;
+            modalContent.innerHTML = '<p class="text-slate-500 dark:text-slate-400">Loading history...</p>';
+            historyModal.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/admin/api/prompt-history/${promptId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const history = await response.json();
+
+                modalContent.innerHTML = '';
+                if (history.length > 0) {
+                    history.forEach((item, index) => {
+                        const historyItemDiv = document.createElement('div');
+                        historyItemDiv.className = 'p-3 bg-slate-50 dark:bg-slate-700/50 rounded border border-slate-200 dark:border-slate-700';
+
+                        const timestamp = new Date(item.timestamp).toLocaleString();
+
+                        historyItemDiv.innerHTML = `
+                            <div class="flex items-center justify-between mb-2">
+                                <p class="text-sm font-medium text-slate-600 dark:text-slate-400">Version ${history.length - index} - ${timestamp}</p>
+                                <button class="restore-version-btn px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50" data-prompt-text="${item.prompt.replace(/"/g, '&quot;')}">
+                                    Restore This Version
+                                </button>
+                            </div>
+                            <pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-2 bg-slate-100 dark:bg-slate-900 rounded max-h-40 overflow-y-auto">${item.prompt}</pre>
+                        `;
+                        modalContent.appendChild(historyItemDiv);
+                    });
+                } else {
+                    modalContent.innerHTML = '<p class="text-slate-500 dark:text-slate-400">No history found for this prompt.</p>';
+                }
+
+            } catch (error) {
+                console.error('Error fetching prompt history:', error);
+                modalContent.innerHTML = '<p class="text-red-500">Could not load history. Please try again.</p>';
+            }
+        });
+    });
+
+    // Restore version functionality
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('restore-version-btn')) {
+            const promptText = e.target.dataset.promptText;
+            const textarea = document.querySelector('textarea[name="prompt_text"]');
+            if (textarea) {
+                textarea.value = promptText;
+                textarea.dispatchEvent(new Event('input')); // Trigger character count update
+            }
+            historyModal.classList.add('hidden');
+        }
+    });
+
+    function closeModal() {
+        historyModal.classList.add('hidden');
+    }
+
+    function closeTestModal() {
+        document.getElementById('test-modal').classList.add('hidden');
+    }
+
+    closeModalBtn.addEventListener('click', closeModal);
+    closeTestModalBtn.addEventListener('click', closeTestModal);
+
+    // Close modals if clicking outside of them
+    historyModal.addEventListener('click', function(event) {
+        if (event.target === historyModal) {
+            closeModal();
+        }
+    });
+
+    document.getElementById('test-modal').addEventListener('click', function(event) {
+        if (event.target === this) {
+            closeTestModal();
+        }
+    });
+
+    // Close modals on escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            if (!historyModal.classList.contains('hidden')) {
+                closeModal();
+            }
+            if (!document.getElementById('test-modal').classList.contains('hidden')) {
+                closeTestModal();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

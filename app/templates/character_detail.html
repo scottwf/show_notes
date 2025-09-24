@@ -49,6 +49,14 @@
                 {% else %}
                     <!-- Summary Tab -->
                     <div id="tab-summary" class="tab-content space-y-6">
+                        {% if llm_cards.background %}
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Character Background & Role</h3>
+                            <div class="prose prose-slate dark:prose-invert max-w-none">
+                                {{ llm_cards.background | safe }}
+                            </div>
+                        </div>
+                        {% endif %}
                         {% if llm_cards.traits %}
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Personality & Traits</h3>

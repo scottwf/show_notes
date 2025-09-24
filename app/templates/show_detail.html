@@ -24,7 +24,7 @@
             </div>
 
             <!-- Details: Title, Year, Overview, Metadata -->
-            <div class="flex-grow bg-white/98 dark:bg-slate-800/95 backdrop-blur-md rounded-lg p-6 shadow-xl border border-slate-200 dark:border-slate-700">
+            <div class="flex-grow bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                 <div class="text-center md:text-left">
                     <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
                     {% if show.year %}
@@ -147,8 +147,30 @@
         </div>
         {% endif %}
 
+        <!-- Episode Recap Scraping Section -->
+        <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 mb-6">
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Episode Recaps</h2>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">
+                Scrape detailed episode summaries from recap sites like Vulture and Showbiz Junkies to improve LLM-generated character and show summaries.
+            </p>
+            <div class="flex flex-wrap gap-3">
+                <button id="scrape-recaps-btn" 
+                        class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
+                    <span id="scrape-recaps-text">Scrape Episode Recaps</span>
+                </button>
+                <div id="scraping-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                    <span>Scraping recaps...</span>
+                </div>
+            </div>
+            <div id="scraping-results" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <h3 class="font-semibold text-gray-800 dark:text-white mb-2">Scraping Results</h3>
+                <div id="scraping-output" class="text-sm text-gray-600 dark:text-gray-400"></div>
+            </div>
+        </div>
+
         <!-- Seasons and Episodes Section -->
-        <div class="bg-white/98 dark:bg-slate-800/98 backdrop-blur-md shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
+        <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
             <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Seasons & Episodes</h2>
             {% if seasons_with_episodes %}
                 {% for season in seasons_with_episodes %}
@@ -204,4 +226,86 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scrapeBtn = document.getElementById('scrape-recaps-btn');
+    const scrapeText = document.getElementById('scrape-recaps-text');
+    const scrapingStatus = document.getElementById('scraping-status');
+    const scrapingResults = document.getElementById('scraping-results');
+    const scrapingOutput = document.getElementById('scraping-output');
+    
+    if (scrapeBtn) {
+        scrapeBtn.addEventListener('click', async function() {
+            // Show loading state
+            scrapeBtn.disabled = true;
+            scrapeText.textContent = 'Scraping...';
+            scrapingStatus.classList.remove('hidden');
+            scrapingResults.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/admin/api/scrape-show-recaps', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tmdb_id: {{ show.tmdb_id }},
+                        show_title: "{{ show.title }}",
+                        max_episodes: 20
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let output = `<div class="space-y-2">`;
+                    output += `<p><strong>Show:</strong> ${data.show_title}</p>`;
+                    output += `<p><strong>Recaps found:</strong> ${data.recaps_found}</p>`;
+                    output += `<p><strong>Recaps stored:</strong> ${data.recaps_stored}</p>`;
+                    output += `<p><strong>Total episode summaries:</strong> ${data.total_episode_summaries}</p>`;
+                    
+                    if (data.recaps && data.recaps.length > 0) {
+                        output += `<div class="mt-3">`;
+                        output += `<p class="font-semibold">Recent recaps found:</p>`;
+                        output += `<ul class="list-disc list-inside space-y-1 mt-1">`;
+                        data.recaps.forEach(recap => {
+                            output += `<li>${recap.title} (S${recap.season}E${recap.episode}) from ${recap.source}</li>`;
+                        });
+                        output += `</ul></div>`;
+                    }
+                    
+                    output += `<div class="mt-3 p-2 bg-green-100 dark:bg-green-900 rounded text-green-800 dark:text-green-200">`;
+                    output += `<strong>Success!</strong> Episode recaps have been scraped and stored. LLM-generated summaries for this show will now be more accurate and detailed.`;
+                    output += `</div></div>`;
+                    
+                    scrapingOutput.innerHTML = output;
+                    scrapingResults.classList.remove('hidden');
+                } else {
+                    let errorOutput = `<div class="space-y-2">`;
+                    errorOutput += `<p class="text-red-600 dark:text-red-400"><strong>Error:</strong> ${data.error}</p>`;
+                    if (data.suggestion) {
+                        errorOutput += `<p class="text-blue-600 dark:text-blue-400"><strong>Suggestion:</strong> ${data.suggestion}</p>`;
+                    }
+                    errorOutput += `<div class="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 rounded text-yellow-800 dark:text-yellow-200">`;
+                    errorOutput += `<strong>Note:</strong> The scraping system has been updated with proper browser headers to avoid blocking. If scraping still fails, the site structure may have changed and the scraping rules may need updates.`;
+                    errorOutput += `</div></div>`;
+                    
+                    scrapingOutput.innerHTML = errorOutput;
+                    scrapingResults.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                scrapingOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+                scrapingResults.classList.remove('hidden');
+            } finally {
+                // Reset button state
+                scrapeBtn.disabled = false;
+                scrapeText.textContent = 'Scrape Episode Recaps';
+                scrapingStatus.classList.add('hidden');
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -37,58 +37,6 @@ Key Functionalities:
   datetime objects, and other data manipulations required across the application.
 """
 
-def cache_image(image_url, image_type_folder, cache_key_prefix, source_service):
-    """
-    Constructs a proxied URL for an image, to be handled by the image_proxy route.
-
-    This function takes an image URL from an external service (like Sonarr or Radarr)
-    and prepares a new URL that points to this application's `image_proxy` endpoint.
-    It correctly resolves relative URLs to absolute ones using the service's base
-    URL from the settings.
-
-    The actual fetching and caching of the image is performed by the `image_proxy`
-    route when this generated URL is accessed by a client (e.g., an `<img>` tag).
-
-    Args:
-        image_url (str): The original URL of the image, which can be relative (e.g., "/image/4.jpg")
-                         or absolute.
-        image_type_folder (str): A string indicating the type of image (e.g., 'poster', 'background').
-                                 This is primarily for organizational context for the calling function.
-        cache_key_prefix (str): A prefix used to construct a unique cache key, helping to avoid
-                                collisions (e.g., 'show_poster_{tmdb_id}').
-        source_service (str): The originating service ('sonarr' or 'radarr'). This is crucial for
-                              determining the correct base URL and API key to use for resolving
-                              relative paths.
-
-    Returns:
-        str or None: A string containing the relative URL for the `main.image_proxy` endpoint
-                     (e.g., "/image_proxy/poster/123"). Returns None if the input `image_url` is empty.
-    """
-    if not image_url:
-        return None
-
-    # This function's role is now simplified. The image_proxy route handles all logic.
-    # We just need to give it the right 'type' and 'id' (tmdb_id).
-    # The cache_key_prefix is expected to contain the necessary info.
-    # Example prefix: "show_poster_12345" or "movie_background_67890"
-
-    try:
-        parts = cache_key_prefix.split('_')
-        media_type_indicator = parts[0] # 'show' or 'movie'
-        image_type = parts[1] # 'poster' or 'background'
-        tmdb_id = int(parts[2])
-
-        if image_type not in ['poster', 'background']:
-            current_app.logger.warning(f"Invalid image type '{image_type}' in cache_key_prefix '{cache_key_prefix}'.")
-            return None
-        
-        # Return the URL that points to our new image_proxy endpoint
-        return url_for('main.image_proxy', type=image_type, id=tmdb_id, _external=False)
-
-    except (IndexError, ValueError) as e:
-        current_app.logger.error(f"Could not parse cache_key_prefix '{cache_key_prefix}' to generate image_proxy URL. Error: {e}")
-        return None
-
 def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
     """
     Internally requests a proxied image URL to trigger the caching mechanism.
@@ -122,31 +70,6 @@ def _trigger_image_cache(proxy_image_url, item_title_for_logging=""):
                 current_app.logger.warning(f"Failed to trigger image cache for '{item_title_for_logging}' via {proxy_image_url}. Status: {response.status_code}")
     except Exception as e:
         current_app.logger.error(f"Error triggering image cache for '{item_title_for_logging}' ({proxy_image_url}): {e}")
-
-def _clean_title(title):
-    """
-    Cleans a title string to provide a simpler, more consistent format for matching.
-
-    This function performs several operations to normalize a title:
-    1.  Removes content within parentheses (e.g., "(2022)").
-    2.  Strips out special characters and punctuation, leaving only alphanumeric
-        characters and whitespace.
-    3.  Normalizes multiple whitespace characters into a single space.
-    4.  Removes any leading or trailing whitespace.
-
-    Args:
-        title (str): The input title string to be cleaned.
-
-    Returns:
-        str: The cleaned and normalized title string.
-    """
-    # Remove content in parentheses (like year)
-    title = re.sub(r'\s*\(.*?\)\s*', '', title)
-    # Remove special characters (punctuation) but keep letters, numbers, and whitespace
-    title = re.sub(r'[^\w\s]', '', title)
-    # Normalize whitespace to single spaces and strip
-    title = re.sub(r'\s+', ' ', title).strip()
-    return title
 
 # --- Connection Test Functions --- 
 
@@ -569,127 +492,6 @@ def get_all_radarr_movies():
         current_app.logger.error(f"get_all_radarr_movies: Error decoding Radarr movies JSON response: {e}")
         return None
 
-def get_sonarr_poster(show_title):
-    """
-    Retrieves the poster URL for a specific show from Sonarr's library data.
-
-    This function first fetches all shows from Sonarr and then performs a fuzzy
-    string match on the title to find the correct show and return its poster URL.
-    This can be inefficient and is a candidate for optimization by using a local
-    database cache first.
-
-    Args:
-        show_title (str): The title of the show to search for.
-
-    Returns:
-        str or None: The URL of the show's poster. Returns None if the show is not
-                     found or an error occurs.
-    """
-    # This function is inefficient as it fetches all shows.
-    # A better approach would be to query the local `sonarr_shows` table.
-    # Consider this function for deprecation or refactoring.
-    current_app.logger.info(f"--- Starting Sonarr Poster Search for: '{show_title}' ---")
-    with current_app.app_context():
-        sonarr_url = database.get_setting('sonarr_url')
-    if not sonarr_url:
-        current_app.logger.error("get_sonarr_poster: Sonarr URL not configured.")
-        return None
-
-    all_shows = get_all_sonarr_shows()
-    if not all_shows:
-        current_app.logger.warning("get_sonarr_poster: Got no shows back from Sonarr.")
-        return None
-
-    plex_title = show_title
-    for show in all_shows:
-        sonarr_title = show.get('title', '')
-        ratio = fuzz.token_set_ratio(plex_title, sonarr_title)
-        current_app.logger.debug(f"Comparing '{plex_title}' with Sonarr's '{sonarr_title}'. Ratio: {ratio}")
-        if ratio > 90:
-            current_app.logger.info(f"MATCH FOUND! Title: '{sonarr_title}', Ratio: {ratio}")
-            candidate_posters_data = []
-            for image in show.get('images', []):
-                if image.get('coverType') == 'poster':
-                    url = image.get('remoteUrl') or image.get('url') # Prefer remoteUrl if available
-                    if url:
-                        candidate_posters_data.append({'url': url, 'is_remote': bool(image.get('remoteUrl'))})
-
-            if not candidate_posters_data:
-                current_app.logger.warning(f"Match found for '{sonarr_title}', but no poster images in object.")
-                return None # Explicitly return None if no candidates
-
-            preferred_poster_url = None
-            # Try to find a poster URL whose path does not contain '/season/'
-            for poster_data in candidate_posters_data:
-                temp_full_url_for_path_check = poster_data['url']
-                if not temp_full_url_for_path_check.startswith('http'): # Handle relative URLs for path checking
-                    temp_full_url_for_path_check = f"{sonarr_url.rstrip('/')}/{poster_data['url'].lstrip('/')}"
-                
-                parsed_image_url = urllib.parse.urlparse(temp_full_url_for_path_check)
-                if '/season/' not in parsed_image_url.path.lower():
-                    preferred_poster_url = poster_data['url']
-                    break # Found a preferred non-season specific poster
-            
-            # If no non-season poster was found, just take the first candidate overall
-            if not preferred_poster_url and candidate_posters_data:
-                preferred_poster_url = candidate_posters_data[0]['url']
-            
-            final_poster_url = None
-            if preferred_poster_url:
-                if not preferred_poster_url.startswith('http'): # Construct full URL if relative
-                    base_url = sonarr_url.rstrip('/')
-                    img_path = preferred_poster_url.lstrip('/')
-                    final_poster_url = f"{base_url}/{img_path}"
-                else:
-                    final_poster_url = preferred_poster_url
-            
-            if final_poster_url:
-                current_app.logger.info(f"Selected Sonarr poster for '{sonarr_title}'. URL: {final_poster_url}")
-                return final_poster_url
-            
-            # This path should ideally not be reached if candidate_posters_data was not empty
-            current_app.logger.warning(f"--- Sonarr Poster Search FAILED for: '{show_title}' --- No show met the 90% ratio threshold.")
-    
-    return None
-
-def get_radarr_poster(movie_title):
-    """
-    Retrieves the poster URL for a specific movie from Radarr's library data.
-
-    Similar to `get_sonarr_poster`, this function fetches all movies from Radarr
-    and uses fuzzy matching to find the correct one. It is also a candidate for
-    optimization.
-
-    Args:
-        movie_title (str): The title of the movie to search for.
-
-    Returns:
-        str or None: The URL of the movie's poster, or None if not found.
-    """
-    # This function is inefficient. Refactor to use the local DB.
-    all_movies = get_all_radarr_movies()
-    if not all_movies:
-        current_app.logger.warning("get_radarr_poster: Got no movies back from Radarr.")
-        return None
-
-    plex_title = movie_title
-    for movie in all_movies:
-        radarr_title = movie.get('title', '')
-        ratio = fuzz.token_set_ratio(plex_title, radarr_title)
-        current_app.logger.debug(f"Comparing '{plex_title}' with Radarr's '{radarr_title}'. Ratio: {ratio}")
-        if ratio > 90:
-            current_app.logger.info(f"MATCH FOUND! Title: '{radarr_title}', Ratio: {ratio}")
-            for image in movie.get('images', []):
-                if image.get('coverType') == 'poster' and image.get('url'):
-                    relative_url = image.get('url')
-                    full_url = f"{radarr_url.rstrip('/')}{relative_url}"
-                    current_app.logger.info(f"Found Radarr poster for '{movie_title}'. URL: {full_url}")
-                    return full_url
-            current_app.logger.warning(f"Match found for '{radarr_title}', but no poster image in object.")
-
-    current_app.logger.warning(f"--- Radarr Poster Search FAILED for: '{movie_title}' --- No movie met the 90% ratio threshold.")
-    return None
-
 
 def get_sonarr_show_details(series_id):
     """
@@ -859,15 +661,19 @@ def sync_sonarr_library():
                     db.rollback() # Rollback this show's transaction
                     continue # Skip to next show
 
-                # Trigger image caching directly
+                # Trigger image caching directly (only if we have a request context)
                 show_tmdb_id = show_data.get("tmdbId")
                 if show_tmdb_id:
-                    if final_poster_url:
-                        proxy_poster_url = url_for('main.image_proxy', type='poster', id=show_tmdb_id)
-                        _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {show_data.get('title')}")
-                    if final_fanart_url:
-                        proxy_fanart_url = url_for('main.image_proxy', type='background', id=show_tmdb_id)
-                        _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {show_data.get('title')}")
+                    try:
+                        if final_poster_url:
+                            proxy_poster_url = url_for('main.image_proxy', type='poster', id=show_tmdb_id)
+                            _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {show_data.get('title')}")
+                        if final_fanart_url:
+                            proxy_fanart_url = url_for('main.image_proxy', type='background', id=show_tmdb_id)
+                            _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {show_data.get('title')}")
+                    except RuntimeError as e:
+                        # Skip image caching if we're outside a request context (e.g., webhook background thread)
+                        current_app.logger.debug(f"Skipping image caching for show '{show_data.get('title')}' - no request context: {e}")
                 else:
                     current_app.logger.warning(f"Skipping image trigger for show '{show_data.get('title')}' due to missing TMDB ID.")
 
@@ -1315,15 +1121,19 @@ def sync_radarr_library():
             
             movies_synced_count += 1
 
-            # Trigger image caching directly
+            # Trigger image caching directly (only if we have a request context)
             movie_tmdb_id = movie_to_insert.get('tmdb_id')
             if movie_db_id and movie_tmdb_id:
-                if poster_url:
-                    proxy_poster_url = url_for('main.image_proxy', type='poster', id=movie_tmdb_id)
-                    _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {movie_to_insert.get('title')}")
-                if fanart_url:
-                    proxy_fanart_url = url_for('main.image_proxy', type='background', id=movie_tmdb_id)
-                    _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {movie_to_insert.get('title')}")
+                try:
+                    if poster_url:
+                        proxy_poster_url = url_for('main.image_proxy', type='poster', id=movie_tmdb_id)
+                        _trigger_image_cache(proxy_poster_url, item_title_for_logging=f"Poster for {movie_to_insert.get('title')}")
+                    if fanart_url:
+                        proxy_fanart_url = url_for('main.image_proxy', type='background', id=movie_tmdb_id)
+                        _trigger_image_cache(proxy_fanart_url, item_title_for_logging=f"Fanart for {movie_to_insert.get('title')}")
+                except RuntimeError as e:
+                    # Skip image caching if we're outside a request context (e.g., webhook background thread)
+                    current_app.logger.debug(f"Skipping image caching for movie '{movie_to_insert.get('title')}' - no request context: {e}")
             elif not movie_tmdb_id:
                  current_app.logger.warning(f"Skipping image trigger for movie '{movie_to_insert.get('title')}' due to missing TMDB ID.")
 

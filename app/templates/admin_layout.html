@@ -1,19 +1,21 @@
-{% extends "base.html" %}
-
-{% block title %}{% block admin_page_title %}{% endblock %} - Admin Panel - ShowNotes{% endblock %}
-
-{% block head %}
-  {{ super() }} {# Includes Alpine.js and darkmode.js from base.html #}
+<!DOCTYPE html>
+<html lang="en" class="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block admin_page_title %}{% endblock %} - Admin Panel - ShowNotes</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='admin_layout.css') }}">
   {% block admin_extra_css %}{% endblock %}
-  {% block admin_extra_js %}
-    <script src="{{ url_for('static', filename='admin_search.js') }}" defer></script>
-  {% endblock %}
-{% endblock %}
 
-{% block content %}
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="{{ url_for('static', filename='darkmode.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='admin_search.js') }}" defer></script>
+  {% block admin_extra_js %}{% endblock %}
+</head>
+<body>
 <div x-data="{ sidebarOpen: false }" class="flex flex-col h-screen bg-slate-100 dark:bg-slate-900">
-    <!-- Top bar - MOVED OUTSIDE and made full width -->
+    <!-- Top bar - Admin header with admin search -->
     <header class="relative flex items-center justify-between h-16 px-4 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700 w-full z-10 shrink-0">
         <div class="flex items-center space-x-3">
             <!-- Mobile menu button for sidebar -->
@@ -28,21 +30,21 @@
             {% block admin_page_header %}{% endblock %}
         </div>
 
-        <!-- Admin Search Bar (New) -->
+        <!-- Admin Search Bar -->
         <div class="flex-grow max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl mx-4">
-          <form id="admin-search-form" class="relative">
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
-                    </svg>
+            <form id="admin-search-form" class="relative">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"/>
+                        </svg>
+                    </div>
+                    <input id="admin-search-input" type="text" placeholder="Search admin pages, shows & movies (Ctrl+K)" class="block w-full pl-10 pr-3 py-1.5 text-sm rounded-md text-gray-900 dark:text-gray-100 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-colors duration-150" autocomplete="off">
                 </div>
-                <input id="admin-search-input" type="text" placeholder="Search (Ctrl+K)" class="block w-full pl-10 pr-3 py-1.5 text-sm rounded-md text-gray-900 dark:text-gray-100 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-colors duration-150" autocomplete="off">
-            </div>
-            <div id="admin-search-results" class="absolute left-0 right-0 mt-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-md z-[100] hidden overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700">
-              <!-- Results will be populated by JavaScript -->
-            </div>
-          </form>
+                <div id="admin-search-results" class="absolute left-0 right-0 mt-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-md z-[100] hidden overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700">
+                    <!-- Results will be populated by JavaScript -->
+                </div>
+            </form>
         </div>
 
         <div class="flex items-center space-x-3">
@@ -66,92 +68,103 @@
                 <a href="{{ url_for('admin.dashboard') }}" class="text-xl font-semibold text-white hover:text-sky-400">
                     Admin Panel
                 </a>
-                <button @click="sidebarOpen = false" class="text-gray-400 lg:hidden hover:text-white focus:outline-none">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button @click="sidebarOpen = false" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
                 </button>
             </div>
 
-            <!-- Sidebar links -->
-            <nav class="flex-1 px-2 py-4 space-y-2 text-sm text-gray-400">
-            <a href="{{ url_for('admin.dashboard') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.dashboard' %}bg-slate-700 text-white{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                Dashboard
-            </a>
-            <a href="{{ url_for('admin.settings') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.settings' %}bg-slate-700 text-white{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                Services
-            </a>
-            <a href="{{ url_for('admin.tasks') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.tasks' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                </svg>
-                Tasks
-            </a>
-            <!-- Add other admin links here as they are built -->
-            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4M4 7l8 5 8-5"></path></svg>
-                Database <span class="ml-auto text-xs">(Soon)</span>
-            </a>
-            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.33 12.048c.29-.28.47-.662.47-1.082a2.083 2.083 0 00-2.083-2.083c-.42 0-.792.174-1.07.456M12 14.5v.01M9.663 9.01L12 11.5l2.337-2.49M12 14.5a2.5 2.5 0 002.5-2.5V9.5a2.5 2.5 0 10-5 0v2.5a2.5 2.5 0 002.5 2.5z"></path></svg>
-                LLM Prompts <span class="ml-auto text-xs">(Soon)</span>
-            </a>
-            <!-- Users link disabled: no admin.users_list route available -->
-            <a href="#" class="flex items-center px-2 py-2 rounded-md text-gray-400 cursor-not-allowed opacity-60">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 016-6h6M21 13.5A4.5 4.5 0 1116.5 9 4.5 4.5 0 0121 13.5z"></path></svg>
-                Users (Soon)
-            </a>
-            <a href="{{ url_for('admin.logbook_view') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.logbook_view' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                Logbook
-            </a>
-            <a href="{{ url_for('admin.logs_view') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.logs_view' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                Logs
-            </a>
-            <a href="{{ url_for('admin.api_usage_logs') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.api_usage_logs' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> {# Icon for API/Billing/Usage #}
-                </svg>
-                API Usage Logs
-            </a>
-            <a href="{{ url_for('admin.view_prompts') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.view_prompts' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-                View Prompts
-            </a>
-            <a href="{{ url_for('admin.test_llm_summary') }}" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white {% if request.endpoint == 'admin.test_llm_summary' %}bg-slate-700 text-white{% else %}text-gray-400{% endif %}">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20h4a2 2 0 002-2V6a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a2 2 0 002 2zM7 2h10v4H7z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 14s.5-1 2-1 2.5 1 4 1 2.5-1 4-1 1.5 1 1.5 1"></path>
-                </svg>
-                Test LLM Summary
-            </a>
-            <a href="#" class="flex items-center px-2 py-2 rounded-md hover:bg-slate-700 hover:text-white">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10a4 4 0 118 0c0 1.657-1.343 3-3 3s-3 1.343-3 3v1m0 4h.01"></path></svg>
-                Help <span class="ml-auto text-xs">(Soon)</span>
-            </a>
-        </nav>
+            <!-- Sidebar content -->
+            <nav class="flex-1 px-4 py-4 space-y-2">
+                <a href="{{ url_for('admin.dashboard') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.dashboard' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z"></path>
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="{{ url_for('admin.settings') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.settings' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Services
+                </a>
+                <a href="{{ url_for('admin.tasks') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.tasks' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                    </svg>
+                    Tasks
+                </a>
+                <div class="flex items-center px-4 py-2 text-sm font-medium text-gray-500 rounded-md">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                    </svg>
+                    Database <span class="ml-2 text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">Soon</span>
+                </div>
+                <div class="flex items-center px-4 py-2 text-sm font-medium text-gray-500 rounded-md">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    LLM Prompts <span class="ml-2 text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">Soon</span>
+                </div>
+                <div class="flex items-center px-4 py-2 text-sm font-medium text-gray-500 rounded-md">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    </svg>
+                    Users <span class="ml-2 text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">Soon</span>
+                </div>
+                <a href="{{ url_for('admin.logbook_view') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.logbook_view' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Logbook
+                </a>
+                <a href="{{ url_for('admin.logs_view') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.logs_view' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    Logs
+                </a>
+                <a href="{{ url_for('admin.api_usage_logs') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.api_usage_logs' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                    API Usage Logs
+                </a>
+                <a href="{{ url_for('admin.view_prompts') }}" class="flex items-center px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:bg-slate-700 hover:text-white transition-colors {% if request.endpoint == 'admin.view_prompts' %}bg-slate-700 text-white{% endif %}">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    Manage Prompts
+                </a>
+                <div class="flex items-center px-4 py-2 text-sm font-medium text-gray-500 rounded-md">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Help <span class="ml-2 text-xs bg-gray-600 text-gray-300 px-2 py-1 rounded">Soon</span>
+                </div>
+            </nav>
+        </aside>
 
-        <!-- Sidebar footer (links moved to top bar) -->
-        <div class="px-4 py-2 mt-auto border-t border-slate-700 dark:border-gray-700">
-        </div>
-    </aside>
+        <!-- Main content area -->
+        <main class="flex-1 overflow-y-auto">
+            <div class="p-6">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="mb-4 p-4 rounded-md {% if category == 'error' %}bg-red-100 border border-red-400 text-red-700{% elif category == 'success' %}bg-green-100 border border-green-400 text-green-700{% else %}bg-blue-100 border border-blue-400 text-blue-700{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
 
-    <!-- Main content area -->
-    <div class="flex flex-col flex-1 w-full overflow-x-hidden overflow-y-auto lg:pt-0 pt-16">
-        <main class="flex-1 p-4 sm:p-6">
-            {# Flash messages are inherited from base.html and will appear at the top of base.html's body #}
-            {% block admin_page_content %}{% endblock %}
+                {% block admin_page_content %}{% endblock %}
+            </div>
         </main>
     </div>
 </div>
-
-
-
-{% endblock %}
+</body>
+</html>

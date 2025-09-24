@@ -75,13 +75,16 @@ This document outlines the planned features and development stages for the ShowN
 - [x] **LLM Testing Tools:** Implemented cache clearing functionality and refresh buttons for character pages to facilitate prompt development and testing.
 - [x] **UI Readability Improvements:** Fixed transparency issues in show detail page cards, ensuring optimal text readability in both light and dark modes.
 - [x] **Targeted Sonarr Sync:** Implemented episode-specific metadata updates via Sonarr webhooks for better data freshness.
+- [x] **Episode Recap Scraping System:** Built a comprehensive system to scrape detailed episode summaries from recap sites (Vulture, Showbiz Junkies) with user-driven show selection, automatic episode info extraction, database storage, and integration with grounded LLM prompts to improve character and show summary accuracy.
 
 ## Next Steps
 
 ### **Immediate Priorities**
 - [ ] **LLM Test Page Character Fetching:** Complete the character autocomplete functionality for the LLM test page to dynamically load characters based on selected show.
 - [ ] **Character Data Consistency:** Address TMDB ID mismatches in character data that can cause characters to appear in wrong episodes/shows.
-- [ ] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with version history and testing capabilities.
+- [x] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with testing capabilities.
+- [ ] **Prompt Version History:** Implement version tracking for prompt templates with ability to view and restore previous versions.
+- [ ] **Dynamic Recap Site Management:** Create an admin interface to add new recap sites with LLM-powered rule generation. Allow admins to provide a site domain and sample episode recap URLs, then use an LLM to analyze the site structure and generate scraping rules (regex patterns, content selectors, etc.) that are stored in the database for future-proofing the scraping system.
 
 ### **UI/UX Improvements**
 - [ ] **Enhanced Character Detail Page:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).

@@ -114,10 +114,16 @@ def get_llm_response(prompt_text, llm_model_name=None, provider=None):
             end_time = time.perf_counter()
             response_text = chat_completion.choices[0].message.content
             usage = chat_completion.usage
-            # Basic cost calculation for gpt-3.5-turbo (example, can be expanded)
+            # Cost calculation for different OpenAI models
             cost = 0
-            if chosen_model == "gpt-3.5-turbo": # Example, expand for other models or use a pricing API/library
+            if chosen_model == "gpt-3.5-turbo":
                 cost = (usage.prompt_tokens * 0.0005 / 1000) + (usage.completion_tokens * 0.0015 / 1000)
+            elif chosen_model == "gpt-4o":
+                cost = (usage.prompt_tokens * 0.005 / 1000) + (usage.completion_tokens * 0.015 / 1000)
+            elif chosen_model == "gpt-4":
+                cost = (usage.prompt_tokens * 0.03 / 1000) + (usage.completion_tokens * 0.06 / 1000)
+            elif chosen_model == "gpt-4-turbo":
+                cost = (usage.prompt_tokens * 0.01 / 1000) + (usage.completion_tokens * 0.03 / 1000)
             processing_time_ms = int((end_time - start_time) * 1000)
             _log_api_usage(
                 db, "openai", chosen_model,

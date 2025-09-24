@@ -1,0 +1,716 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Manage Prompts{% endblock %}
+
+{% block extra_head %}
+<style>
+.keyboard-selected {
+    background-color: #3b82f6 !important;
+    color: white !important;
+}
+.keyboard-selected .text-gray-800,
+.keyboard-selected .text-gray-100,
+.keyboard-selected .text-gray-600,
+.keyboard-selected .text-gray-400 {
+    color: white !important;
+}
+</style>
+{% endblock %}
+
+{% block admin_page_header %}Prompt Management{% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+    <!-- Prompt Type Selector -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Prompt Type</h2>
+        <select id="prompt-type" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
+            <option value="character">Character Summary</option>
+            <option value="show">Show Summary</option>
+            <option value="season">Season Summary</option>
+            <option value="episode">Episode Summary</option>
+        </select>
+    </div>
+
+    <!-- Prompt Editor -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Prompt Template</h2>
+        
+        <!-- Variables Reference -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-4">
+            <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">Available Variables</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{character}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Character name</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{show}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Show title</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{season}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Season number</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{episode}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Episode number</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{actor}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Actor name</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{year}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Show year</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{overview}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Show overview</div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-2 rounded border">
+                    <code class="text-blue-600 dark:text-blue-400">{episode_title}</code>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Episode title</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompt Textarea -->
+        <div>
+            <label for="test-prompt" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Prompt Template</label>
+            <textarea id="test-prompt" rows="8" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 font-mono text-sm" placeholder="Enter your prompt template here..."></textarea>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-4 flex gap-3">
+            <button id="save-prompt" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium">
+                Save Prompt Template
+            </button>
+            <button id="test-grounded-llm" class="px-6 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 font-medium">
+                Test Grounded LLM
+            </button>
+            <button id="test-recap-scraping" class="px-6 py-3 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 font-medium">
+                Test Recap Scraping
+            </button>
+        </div>
+    </div>
+
+    <!-- Show and Character Selection -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Show & Character</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Show Selection -->
+            <div>
+                <label for="test-show-search" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Show</label>
+                <div class="relative">
+                    <input type="text" id="test-show-search" autocomplete="off" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100" placeholder="Search for a show...">
+                    <div id="test-show-results" class="hidden absolute mt-1 shadow-lg max-h-72 left-0 right-0 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg z-50 overflow-y-auto border border-slate-200 dark:border-slate-700"></div>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Try "Nine Perfect Strangers" or "The Good Doctor" for shows with character data</p>
+                <input type="hidden" id="test-show-tmdb-id" value="">
+            </div>
+            
+            <!-- Character Selection -->
+            <div>
+                <label for="test_character" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Character</label>
+                <select id="test_character" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100" disabled>
+                    <option value="">-- Select a show first --</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Season and Episode Selection -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Season & Episode</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="test-season" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Season</label>
+                <input type="number" min="1" id="test-season" value="1" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
+            </div>
+            <div>
+                <label for="test-episode" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Episode</label>
+                <input type="number" min="1" id="test-episode" value="1" class="w-full p-3 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100">
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Button -->
+    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div class="flex justify-center">
+            <button id="test-variables" class="px-8 py-4 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium text-lg">
+                Run LLM Test
+            </button>
+        </div>
+    </div>
+
+    <!-- LLM Response -->
+    <div id="test-result" class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6 hidden">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">LLM Response</h2>
+        
+        <!-- LLM Info -->
+        <div id="llm-info" class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 mb-4 hidden">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Provider:</span>
+                    <span id="llm-provider" class="text-slate-600 dark:text-slate-400">-</span>
+                </div>
+                <div>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Model:</span>
+                    <span id="llm-model" class="text-slate-600 dark:text-slate-400">-</span>
+                </div>
+                <div>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Time:</span>
+                    <span id="llm-time" class="text-slate-600 dark:text-slate-400">-</span>
+                </div>
+                <div>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">Cost:</span>
+                    <span id="llm-cost" class="text-slate-600 dark:text-slate-400">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Content -->
+        <div id="test-output" class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+            <p class="text-slate-500 dark:text-slate-400">No response yet. Click "Run LLM Test" to see results.</p>
+        </div>
+    </div>
+
+    <!-- Visual Preview -->
+    <div id="visual-preview" class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-6 hidden">
+        <h2 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Visual Preview</h2>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">How the content will appear to users:</p>
+        
+        <div id="preview-content" class="bg-slate-50 dark:bg-slate-900 rounded-lg p-6">
+            <p class="text-slate-500 dark:text-slate-400">No preview available. Run a test to see the preview.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const promptTypeSelect = document.getElementById('prompt-type');
+    const showSearchInput = document.getElementById('test-show-search');
+    const showResultsDiv = document.getElementById('test-show-results');
+    const characterSelect = document.getElementById('test_character');
+    const seasonInput = document.getElementById('test-season');
+    const episodeInput = document.getElementById('test-episode');
+    const testPromptTextarea = document.getElementById('test-prompt');
+    const testButton = document.getElementById('test-variables');
+    const saveButton = document.getElementById('save-prompt');
+    const groundedTestButton = document.getElementById('test-grounded-llm');
+    const recapScrapingButton = document.getElementById('test-recap-scraping');
+    const testResult = document.getElementById('test-result');
+    const testOutput = document.getElementById('test-output');
+    const visualPreview = document.getElementById('visual-preview');
+    const previewContent = document.getElementById('preview-content');
+    const llmInfo = document.getElementById('llm-info');
+
+    let debounceTimer;
+    let currentHighlightIndex = -1;
+    const highlightClass = 'bg-slate-100 dark:bg-slate-700';
+
+    // Prompt templates
+    const promptTemplates = {
+        'character': 'Provide a character summary for {character} from {show}, up to Season {season}, Episode {episode}. Include their personality, motivations, key relationships, and importance to the story.',
+        'show': 'Provide a comprehensive summary of the TV show {show} ({year}). Include the premise, main characters, themes, and overall story arc.',
+        'season': 'Provide a season summary for Season {season} of {show}. Include the overall story arc, character development, major plot points, and season finale.',
+        'episode': 'Provide a detailed summary of {episode_title} from {show}, Season {season}, Episode {episode}. Include the plot, character development, and key events.'
+    };
+
+    // Load prompt template when type changes
+    async function loadPromptForType(promptType) {
+        // First try to load from database
+        try {
+            const response = await fetch(`/admin/api/get-prompt?type=${promptType}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.prompt) {
+                    testPromptTextarea.value = data.prompt;
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading saved prompt:', error);
+        }
+        
+        // Fallback to default template
+        testPromptTextarea.value = promptTemplates[promptType] || '';
+    }
+
+    // Load latest episode for show
+    async function loadLatestEpisodeForShow(tmdbId) {
+        if (!tmdbId) return;
+
+        try {
+            const response = await fetch(`/admin/api/latest-episode?tmdb_id=${tmdbId}`);
+            if (!response.ok) throw new Error('Failed to fetch latest episode');
+            const data = await response.json();
+
+            if (data.season && data.episode) {
+                seasonInput.value = data.season;
+                episodeInput.value = data.episode;
+                console.log(`Loaded latest episode: Season ${data.season}, Episode ${data.episode}`);
+            }
+        } catch (error) {
+            console.error('Error loading latest episode:', error);
+        }
+    }
+
+    // Fetch characters for show
+    async function fetchCharactersForShow(tmdbId) {
+        if (!tmdbId) {
+            characterSelect.innerHTML = '<option value="">-- Select a show first --</option>';
+            characterSelect.disabled = true;
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/api/characters-for-show?tmdb_id=${tmdbId}`);
+            if (!response.ok) throw new Error('Failed to fetch characters');
+            const characters = await response.json();
+
+            characterSelect.innerHTML = '<option value="">-- Select a character --</option>';
+            characters.forEach(character => {
+                const option = document.createElement('option');
+                option.value = character;
+                option.textContent = character;
+                characterSelect.appendChild(option);
+            });
+            characterSelect.disabled = false;
+        } catch (error) {
+            console.error('Error fetching characters:', error);
+            characterSelect.innerHTML = '<option value="">Error loading characters</option>';
+            characterSelect.disabled = true;
+        }
+    }
+
+    // Show search functionality
+    async function fetchAndDisplayResults(query) {
+        if (!query) {
+            showResultsDiv.classList.add('hidden');
+            showResultsDiv.innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+            if (!response.ok) throw new Error('Search request failed');
+            const results = await response.json();
+
+            if (results.length === 0) {
+                showResultsDiv.innerHTML = '<div class="px-4 py-2 text-sm text-slate-500">No shows found</div>';
+                showResultsDiv.classList.remove('hidden');
+                return;
+            }
+
+            showResultsDiv.innerHTML = '';
+            results.forEach((show, index) => {
+                const div = document.createElement('div');
+                div.className = `px-4 py-2 text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 ${index === currentHighlightIndex ? highlightClass : ''}`;
+                div.textContent = show.title;
+                div.addEventListener('click', () => {
+                    showSearchInput.value = show.title;
+                    document.getElementById('test-show-tmdb-id').value = show.tmdb_id;
+                    showResultsDiv.classList.add('hidden');
+                    fetchCharactersForShow(show.tmdb_id);
+                    loadLatestEpisodeForShow(show.tmdb_id);
+                });
+                showResultsDiv.appendChild(div);
+            });
+            showResultsDiv.classList.remove('hidden');
+        } catch (error) {
+            console.error('Error fetching search results:', error);
+            showResultsDiv.innerHTML = '<div class="px-4 py-2 text-sm text-red-500">Error fetching results</div>';
+            showResultsDiv.classList.remove('hidden');
+        }
+    }
+
+    // Event listeners
+    promptTypeSelect.addEventListener('change', function() {
+        loadPromptForType(this.value);
+    });
+
+    // Save prompt functionality
+    saveButton.addEventListener('click', async function() {
+        const promptType = promptTypeSelect.value;
+        const promptText = testPromptTextarea.value.trim();
+        
+        if (!promptText) {
+            alert('Please enter a prompt template to save');
+            return;
+        }
+
+        // Show loading state
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+
+        try {
+            const response = await fetch('/admin/api/save-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt_type: promptType,
+                    prompt_text: promptText
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to save prompt');
+            
+            alert('Prompt template saved successfully!');
+        } catch (error) {
+            console.error('Save error:', error);
+            alert('Error saving prompt template: ' + error.message);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save Prompt Template';
+        }
+    });
+
+    // Grounded LLM Test functionality
+    groundedTestButton.addEventListener('click', async function() {
+        const promptType = promptTypeSelect.value;
+        const showTmdbId = document.getElementById('test-show-tmdb-id').value;
+        const character = characterSelect.value.trim();
+        const season = seasonInput.value;
+        const episode = episodeInput.value;
+        const show = showSearchInput.value.trim();
+
+        if (!showTmdbId) {
+            alert('Please select a show first.');
+            return;
+        }
+
+        if (promptType === 'character' && !character) {
+            alert('Please select a character first.');
+            return;
+        }
+
+        if (!season || !episode) {
+            alert('Please set season and episode values.');
+            return;
+        }
+
+        // Show loading state
+        groundedTestButton.disabled = true;
+        groundedTestButton.textContent = 'Running Grounded Test...';
+        testOutput.innerHTML = '<p class="text-slate-500 dark:text-slate-400">Running grounded LLM test with episode data...</p>';
+        testResult.classList.remove('hidden');
+        visualPreview.classList.add('hidden');
+        llmInfo.classList.add('hidden');
+
+        try {
+            const response = await fetch('/admin/api/test-grounded-llm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    prompt_type: promptType,
+                    tmdb_id: parseInt(showTmdbId),
+                    season: parseInt(season),
+                    episode: parseInt(episode),
+                    character_name: character,
+                    show_title: show
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                testOutput.innerHTML = `<pre class="whitespace-pre-wrap text-sm">${data.response}</pre>`;
+                
+                // Show LLM info
+                llmInfo.innerHTML = `
+                    <div class="text-sm text-slate-600 dark:text-slate-400">
+                        <strong>Provider:</strong> ${data.llm_info.provider} | 
+                        <strong>Model:</strong> ${data.llm_info.model} | 
+                        <strong>Time:</strong> ${data.llm_info.time}ms | 
+                        <strong>Cost:</strong> $${data.llm_info.cost.toFixed(4)}
+                    </div>
+                `;
+                llmInfo.classList.remove('hidden');
+                
+                // Update visual preview
+                updateVisualPreview(data.response, {
+                    character: character,
+                    show: show,
+                    season: season,
+                    episode: episode
+                });
+                visualPreview.classList.remove('hidden');
+                
+            } else {
+                testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${data.error}</p>`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+        } finally {
+            groundedTestButton.disabled = false;
+            groundedTestButton.textContent = 'Test Grounded LLM';
+        }
+    });
+
+    // Recap Scraping Test functionality
+    recapScrapingButton.addEventListener('click', async function() {
+        // Show loading state
+        recapScrapingButton.disabled = true;
+        recapScrapingButton.textContent = 'Scraping Recaps...';
+        testOutput.innerHTML = '<p class="text-slate-500 dark:text-slate-400">Scraping recent recaps from Vulture and Showbiz Junkies...</p>';
+        testResult.classList.remove('hidden');
+        visualPreview.classList.add('hidden');
+        llmInfo.classList.add('hidden');
+
+        try {
+            const response = await fetch('/admin/api/test-recap-scraping', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                let output = `<h3 class="font-semibold mb-2">Recap Scraping Results</h3>`;
+                output += `<p><strong>Total recaps found:</strong> ${data.total_recaps_found}</p>`;
+                output += `<p><strong>Matched to shows in database:</strong> ${data.matched_recaps}</p>`;
+                
+                if (data.recaps && data.recaps.length > 0) {
+                    output += `<h4 class="font-semibold mt-4 mb-2">Recent Recaps Found:</h4>`;
+                    output += `<ul class="list-disc list-inside space-y-1">`;
+                    data.recaps.forEach(recap => {
+                        output += `<li><strong>${recap.show_title}</strong> - ${recap.title} (S${recap.season}E${recap.episode})</li>`;
+                    });
+                    output += `</ul>`;
+                }
+                
+                if (data.matched && data.matched.length > 0) {
+                    output += `<h4 class="font-semibold mt-4 mb-2">Successfully Matched & Stored:</h4>`;
+                    output += `<ul class="list-disc list-inside space-y-1">`;
+                    data.matched.forEach(recap => {
+                        output += `<li><strong>${recap.matched_show}</strong> - ${recap.title} (S${recap.season}E${recap.episode}) from ${recap.source}</li>`;
+                    });
+                    output += `</ul>`;
+                }
+                
+                testOutput.innerHTML = output;
+                
+            } else {
+                testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${data.error}</p>`;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+        } finally {
+            recapScrapingButton.disabled = false;
+            recapScrapingButton.textContent = 'Test Recap Scraping';
+        }
+    });
+
+    showSearchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            fetchAndDisplayResults(this.value);
+        }, 300);
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!showSearchInput.contains(e.target) && !showResultsDiv.contains(e.target)) {
+            showResultsDiv.classList.add('hidden');
+        }
+    });
+
+    // Keyboard navigation for search results
+    showSearchInput.addEventListener('keydown', function(e) {
+        const results = showResultsDiv.querySelectorAll('div');
+        if (results.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            currentHighlightIndex = Math.min(currentHighlightIndex + 1, results.length - 1);
+            updateHighlight(results);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            currentHighlightIndex = Math.max(currentHighlightIndex - 1, -1);
+            updateHighlight(results);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentHighlightIndex >= 0 && currentHighlightIndex < results.length) {
+                results[currentHighlightIndex].click();
+            }
+        } else if (e.key === 'Escape') {
+            showResultsDiv.classList.add('hidden');
+            currentHighlightIndex = -1;
+        }
+    });
+
+    function updateHighlight(results) {
+        results.forEach((result, index) => {
+            if (index === currentHighlightIndex) {
+                result.classList.add(highlightClass);
+            } else {
+                result.classList.remove(highlightClass);
+            }
+        });
+    }
+
+    // LLM Test functionality
+    testButton.addEventListener('click', async function() {
+        const prompt = testPromptTextarea.value.trim();
+        if (!prompt) {
+            alert('Please enter a prompt template');
+            return;
+        }
+
+        const show = showSearchInput.value.trim();
+        const character = characterSelect.value.trim();
+        const season = seasonInput.value;
+        const episode = episodeInput.value;
+        const showTmdbId = document.getElementById('test-show-tmdb-id').value;
+
+        // Check if prompt contains variables that need show/character data
+        const hasShowVariable = prompt.includes('{show}') || prompt.includes('{year}') || prompt.includes('{overview}');
+        const hasCharacterVariable = prompt.includes('{character}') || prompt.includes('{actor}');
+        const hasEpisodeVariable = prompt.includes('{season}') || prompt.includes('{episode}') || prompt.includes('{episode_title}');
+
+        if (hasShowVariable && !showTmdbId) {
+            alert('This prompt contains show variables ({show}, {year}, {overview}) but no show is selected. Please select a show first.');
+            return;
+        }
+
+        if (hasCharacterVariable && !character) {
+            alert('This prompt contains character variables ({character}, {actor}) but no character is selected. Please select a character first.');
+            return;
+        }
+
+        if (hasEpisodeVariable && (!season || !episode)) {
+            alert('This prompt contains episode variables ({season}, {episode}, {episode_title}) but season/episode are not set. Please set season and episode values.');
+            return;
+        }
+
+        // Show loading state
+        testButton.disabled = true;
+        testButton.textContent = 'Running...';
+        testOutput.innerHTML = '<p class="text-slate-500 dark:text-slate-400">Running LLM test...</p>';
+        testResult.classList.remove('hidden');
+        visualPreview.classList.add('hidden');
+        llmInfo.classList.add('hidden');
+
+        try {
+            // Get character info for better variable replacement
+            let characterInfo = {};
+            if (character && document.getElementById('test-show-tmdb-id').value) {
+                try {
+                    const response = await fetch(`/admin/api/get-character-info?tmdb_id=${document.getElementById('test-show-tmdb-id').value}&character_name=${encodeURIComponent(character)}`);
+                    if (response.ok) {
+                        characterInfo = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Error fetching character info:', error);
+                }
+            }
+
+            // Prepare test data
+            const testData = {
+                character: character || '[Character Name]',
+                show: show || '[Show Title]',
+                season: season || '1',
+                episode: episode || '1',
+                actor: characterInfo.actor_name || '[Actor Name]',
+                year: characterInfo.year || '[Year]',
+                overview: characterInfo.overview || '[Show Overview]',
+                episode_title: '[Episode Title]'
+            };
+
+            // Replace variables in prompt
+            let processedPrompt = prompt;
+            Object.entries(testData).forEach(([variable, replacement]) => {
+                processedPrompt = processedPrompt.replace(new RegExp(`{${variable}}`, 'g'), replacement);
+            });
+            
+            // Debug logging
+            console.log('Original prompt:', prompt);
+            console.log('Test data:', testData);
+            console.log('Processed prompt:', processedPrompt);
+
+            // Make LLM request
+            const response = await fetch('/admin/api/test-llm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: processedPrompt,
+                    prompt_type: promptTypeSelect.value,
+                    test_data: testData
+                })
+            });
+
+            if (!response.ok) throw new Error(`LLM request failed: ${response.status}`);
+            const result = await response.json();
+
+            // Display response
+            if (result.error) {
+                testOutput.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-800/30 border border-red-300 dark:border-red-700"><span class="font-medium">Error:</span> ${result.error}</div>`;
+            } else if (result.content) {
+                testOutput.innerHTML = `<pre class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap p-3 bg-slate-100 dark:bg-slate-900 rounded max-h-[500px] overflow-y-auto">${result.content}</pre>`;
+                
+                // Update LLM info
+                if (result.llm_info) {
+                    document.getElementById('llm-provider').textContent = result.llm_info.provider || '-';
+                    document.getElementById('llm-model').textContent = result.llm_info.model || '-';
+                    document.getElementById('llm-time').textContent = result.llm_info.time || '-';
+                    document.getElementById('llm-cost').textContent = result.llm_info.cost || '-';
+                    llmInfo.classList.remove('hidden');
+                }
+
+                // Update visual preview
+                updateVisualPreview(result.content, testData);
+                visualPreview.classList.remove('hidden');
+            } else {
+                testOutput.innerHTML = '<p class="text-slate-500 dark:text-slate-400">No response received.</p>';
+            }
+        } catch (error) {
+            console.error('LLM test error:', error);
+            testOutput.innerHTML = `<div class="p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-800/30 border border-red-300 dark:border-red-700"><span class="font-medium">Error:</span> ${error.message}</div>`;
+        } finally {
+            testButton.disabled = false;
+            testButton.textContent = 'Run LLM Test';
+        }
+    });
+
+    // Update visual preview
+    function updateVisualPreview(content, testData) {
+        const promptType = promptTypeSelect.value;
+        
+        if (promptType === 'character') {
+            previewContent.innerHTML = `
+                <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 max-w-md mx-auto">
+                    <div class="w-32 h-32 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4 flex items-center justify-center">
+                        <span class="text-slate-500 dark:text-slate-400 text-sm">POSTER NOT AVAILABLE</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 text-center mb-2">${testData.character}</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 text-center mb-2">Played by ${testData.actor}</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 text-center mb-4">Season ${testData.season} Episode ${testData.episode}</p>
+                    <div class="text-sm text-slate-700 dark:text-slate-300">
+                        <h4 class="font-semibold mb-2">Character Summary</h4>
+                        <div class="prose prose-sm max-w-none">${content.replace(/\n/g, '<br>')}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            previewContent.innerHTML = `
+                <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">${promptType.charAt(0).toUpperCase() + promptType.slice(1)} Summary</h3>
+                    <div class="prose prose-sm max-w-none text-slate-700 dark:text-slate-300">${content.replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+        }
+    }
+
+    // Initialize with default prompt
+    loadPromptForType('character');
+});
+</script>
+{% endblock %}

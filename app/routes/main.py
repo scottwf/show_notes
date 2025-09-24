@@ -38,8 +38,8 @@ from flask_login import login_user, login_required, logout_user # current_user i
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
-from ..utils import get_sonarr_poster, get_radarr_poster
-from ..prompt_builder import build_character_prompt, build_character_chat_prompt
+
+from ..prompt_builder import build_character_prompt
 from ..llm_services import get_llm_response
 from ..utils import parse_llm_markdown_sections, parse_relationships_section, parse_traits_section, parse_events_section, parse_quote_section, parse_motivations_section, parse_importance_section
 
@@ -629,7 +629,7 @@ def login():
             if check_password_hash(user_record['password_hash'], password):
                 user_obj = current_app.login_manager._user_callback(user_record['id'])
                 if user_obj:
-                    login_user(user_obj)
+                    login_user(user_obj, remember=True)  # Enable persistent login for admin too
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
@@ -719,7 +719,7 @@ def callback():
     # Log in the user
     user_obj = current_app.login_manager._user_callback(user_record['id'])
     if user_obj:
-        login_user(user_obj)
+        login_user(user_obj, remember=True)  # Enable persistent login
         session['user_id'] = user_obj.id
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
@@ -1490,41 +1490,9 @@ def character_detail(show_id, season_number, episode_number, character_id):
         character_name = "Unknown Character"
         current_app.logger.warning(f"Character name not found for character_id {character_id} in show {show_title}. Defaulting to 'Unknown Character'.")
 
-    if request.method == 'POST':
-        data = request.get_json()
-        user_message = data.get('message')
-        if not user_message:
-            return jsonify({'error': 'Empty message'}), 400
-
-        if 'chat_history' not in session:
-            session['chat_history'] = []
-
-        session['chat_history'].append({'role': 'user', 'content': user_message})
-
-        prompt = build_character_chat_prompt(
-            character=character_name,
-            show=show_title,
-            season=season_number,
-            episode=episode_number,
-            chat_history=session['chat_history'],
-            show_context=show_context,
-            episode_context=episode_context,
-            character_context=character_context
-        )
-        llm_reply, error = get_llm_response(prompt)
-
-        if error:
-            return jsonify({'error': error}), 500
-
-        session['chat_history'].append({'role': 'assistant', 'content': llm_reply})
-        session.modified = True
-
-        return jsonify({'reply': llm_reply})
-
-    session.pop('chat_history', None)
     
     llm_fields = [
-        'llm_relationships', 'llm_motivations', 'llm_quote', 'llm_traits', 'llm_events', 'llm_importance',
+        'llm_background', 'llm_relationships', 'llm_motivations', 'llm_quote', 'llm_traits', 'llm_events', 'llm_importance',
         'llm_raw_response', 'llm_last_updated', 'llm_source'
     ]
     
@@ -1539,6 +1507,7 @@ def character_detail(show_id, season_number, episode_number, character_id):
     if has_llm_data:
         # Use cached data
         llm_sections = {
+            'Character Background & Role': character.get('llm_background'),
             'Significant Relationships': character.get('llm_relationships'),
             'Primary Motivations & Inner Conflicts': character.get('llm_motivations'),
             'Notable Quote': character.get('llm_quote'),
@@ -1584,6 +1553,7 @@ def character_detail(show_id, season_number, episode_number, character_id):
                 model_source = f"{provider.capitalize()} {model}"
             db.execute(
                 '''UPDATE episode_characters SET
+                    llm_background = ?,
                     llm_relationships = ?,
                     llm_motivations = ?,
                     llm_quote = ?,
@@ -1595,6 +1565,7 @@ def character_detail(show_id, season_number, episode_number, character_id):
                     llm_source = ?
                   WHERE id = ?''',
                 (
+                    llm_sections.get('Character Background & Role'),
                     llm_sections.get('Significant Relationships'),
                     llm_sections.get('Primary Motivations & Inner Conflicts'),
                     llm_sections.get('Notable Quote'),
