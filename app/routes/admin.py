@@ -1181,48 +1181,78 @@ def scrape_show_recaps():
                     'Upgrade-Insecure-Requests': '1',
                 }
                 
-                # Try to find recaps on the site's main page or search
-                search_urls = [
-                    f"{base_url}/",
-                    f"{base_url}/search?q={show_title.replace(' ', '+')}",
-                    f"{base_url}/tv/",
-                    f"{base_url}/recaps/"
-                ]
-                
                 site_recaps = []
                 
-                for search_url in search_urls:
-                    try:
-                        response = requests.get(search_url, headers=headers, timeout=10)
-                        if response.status_code == 200:
-                            html = response.text
+                # First, try to use sample URLs if they contain our show
+                sample_urls = json.loads(site['sample_urls'] or '[]')
+                for sample_url in sample_urls:
+                    if sample_url and show_title.lower() in sample_url.lower():
+                        current_app.logger.info(f"Found matching sample URL for {show_title}: {sample_url}")
+                        try:
+                            # Extract title from URL for initial matching
+                            parsed_url = urllib.parse.urlparse(sample_url)
+                            path_parts = [part for part in parsed_url.path.split('/') if part]
+                            url_title = path_parts[-1].replace('-', ' ').title() if path_parts else sample_url
                             
-                            # Look for recap links using patterns
-                            for pattern in link_patterns:
-                                matches = re.findall(pattern, html, re.IGNORECASE)
-                                for match in matches:
-                                    if len(match) >= 2:
-                                        url = match[0] if match[0].startswith('http') else f"{base_url}{match[0]}"
-                                        title = match[1]
-                                        
-                                        # Check if this recap is for our show
-                                        if show_title.lower() in title.lower():
-                                            # Scrape the detailed recap
-                                            detailed_recap = scrape_detailed_recap(
-                                                url, title, site_name, title_patterns, content_patterns, headers
-                                            )
-                                            if detailed_recap:
-                                                detailed_recap['tmdb_id'] = tmdb_id
-                                                detailed_recap['source'] = site_name
-                                                site_recaps.append(detailed_recap)
-                        
-                        # Rate limiting
-                        import time
-                        time.sleep(rate_limit)
-                        
-                    except Exception as e:
-                        current_app.logger.warning(f"Error scraping {search_url}: {e}")
-                        continue
+                            # Scrape the detailed recap directly
+                            detailed_recap = scrape_detailed_recap(
+                                sample_url, url_title, site_name, title_patterns, content_patterns, headers
+                            )
+                            if detailed_recap:
+                                detailed_recap['tmdb_id'] = tmdb_id
+                                detailed_recap['source'] = site_name
+                                site_recaps.append(detailed_recap)
+                                current_app.logger.info(f"Successfully scraped recap from sample URL: {sample_url}")
+                            
+                            # Rate limiting
+                            import time
+                            time.sleep(rate_limit)
+                            
+                        except Exception as e:
+                            current_app.logger.warning(f"Error scraping sample URL {sample_url}: {e}")
+                            continue
+                
+                # If no sample URLs matched, try to find recaps on the site's main page or search
+                if not site_recaps:
+                    search_urls = [
+                        f"{base_url}/",
+                        f"{base_url}/search?q={show_title.replace(' ', '+')}",
+                        f"{base_url}/tv/",
+                        f"{base_url}/recaps/"
+                    ]
+                    
+                    for search_url in search_urls:
+                        try:
+                            response = requests.get(search_url, headers=headers, timeout=10)
+                            if response.status_code == 200:
+                                html = response.text
+                                
+                                # Look for recap links using patterns
+                                for pattern in link_patterns:
+                                    matches = re.findall(pattern, html, re.IGNORECASE)
+                                    for match in matches:
+                                        if len(match) >= 2:
+                                            url = match[0] if match[0].startswith('http') else f"{base_url}{match[0]}"
+                                            title = match[1]
+                                            
+                                            # Check if this recap is for our show
+                                            if show_title.lower() in title.lower():
+                                                # Scrape the detailed recap
+                                                detailed_recap = scrape_detailed_recap(
+                                                    url, title, site_name, title_patterns, content_patterns, headers
+                                                )
+                                                if detailed_recap:
+                                                    detailed_recap['tmdb_id'] = tmdb_id
+                                                    detailed_recap['source'] = site_name
+                                                    site_recaps.append(detailed_recap)
+                            
+                            # Rate limiting
+                            import time
+                            time.sleep(rate_limit)
+                            
+                        except Exception as e:
+                            current_app.logger.warning(f"Error scraping {search_url}: {e}")
+                            continue
                 
                 all_recaps.extend(site_recaps)
                 current_app.logger.info(f"Found {len(site_recaps)} recaps from {site_name}")
@@ -1700,13 +1730,17 @@ def scrape_detailed_recap(url, title, site_name, title_patterns, content_pattern
         # Extract episode info from title
         episode_info = None
         for pattern in title_patterns:
-            match = re.search(pattern, final_title, re.IGNORECASE)
-            if match:
-                if len(match.groups()) == 2:
-                    episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
-                elif len(match.groups()) == 1:
-                    episode_info = {'season': 1, 'episode': int(match.group(1))}
-                break
+            try:
+                match = re.search(pattern, final_title, re.IGNORECASE)
+                if match:
+                    if len(match.groups()) == 2:
+                        episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                    elif len(match.groups()) == 1:
+                        episode_info = {'season': 1, 'episode': int(match.group(1))}
+                    break
+            except Exception as e:
+                current_app.logger.warning(f"Error with title pattern '{pattern}' on title '{final_title}': {e}")
+                continue
         
         # If no episode info in title, try to extract from URL
         if not episode_info:
@@ -1724,13 +1758,17 @@ def scrape_detailed_recap(url, title, site_name, title_patterns, content_pattern
             
             for part in path_parts:
                 for pattern in url_patterns:
-                    match = re.search(pattern, part, re.IGNORECASE)
-                    if match:
-                        if len(match.groups()) == 2:
-                            episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
-                        elif len(match.groups()) == 1:
-                            episode_info = {'season': 1, 'episode': int(match.group(1))}
-                        break
+                    try:
+                        match = re.search(pattern, part, re.IGNORECASE)
+                        if match:
+                            if len(match.groups()) == 2:
+                                episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                            elif len(match.groups()) == 1:
+                                episode_info = {'season': 1, 'episode': int(match.group(1))}
+                            break
+                    except Exception as e:
+                        current_app.logger.warning(f"Error with URL pattern '{pattern}' on part '{part}': {e}")
+                        continue
                 if episode_info:
                     break
         
