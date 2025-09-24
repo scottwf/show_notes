@@ -1620,6 +1620,131 @@ def test_site_scraping(site_id):
         current_app.logger.error(f"Error testing site scraping: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@admin_bp.route('/api/test-patterns', methods=['POST'])
+@login_required
+@admin_required
+def test_patterns():
+    """Test scraping patterns against sample URLs without saving to database"""
+    try:
+        data = request.get_json()
+        site_name = data.get('site_name')
+        base_url = data.get('base_url')
+        sample_urls = data.get('sample_urls', [])
+        link_patterns = data.get('link_patterns', [])
+        title_patterns = data.get('title_patterns', [])
+        content_patterns = data.get('content_patterns', [])
+        
+        if not site_name or not base_url or not sample_urls:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        current_app.logger.info(f"Testing patterns for {site_name} with {len(sample_urls)} sample URLs")
+        
+        # Test each sample URL
+        test_results = []
+        import requests
+        import re
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
+        for url in sample_urls[:3]:  # Test first 3 URLs
+            try:
+                # Fetch the page
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    test_results.append({
+                        'url': url,
+                        'title': f"HTTP {response.status_code}",
+                        'status': 'error',
+                        'error': f'Failed to fetch: HTTP {response.status_code}'
+                    })
+                    continue
+                
+                html = response.text
+                
+                # Extract title - try multiple methods
+                title = "No title found"
+                
+                # Method 1: Try h1 tags first
+                h1_matches = re.findall(r'<h1[^>]*>([^<]+)</h1>', html, re.IGNORECASE)
+                if h1_matches:
+                    # Filter out social media buttons
+                    for h1_text in h1_matches:
+                        h1_clean = h1_text.strip()
+                        if not any(social in h1_clean.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                            title = h1_clean
+                            break
+                
+                # Method 2: Try title tag if h1 didn't work
+                if title == "No title found":
+                    title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+                    if title_match:
+                        title_text = title_match.group(1).strip()
+                        # Filter out social media buttons
+                        if not any(social in title_text.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                            title = title_text
+                
+                # Method 3: Extract from URL if title tag is overridden
+                if title == "No title found" or any(social in title.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                    import urllib.parse
+                    parsed_url = urllib.parse.urlparse(url)
+                    path_parts = [part for part in parsed_url.path.split('/') if part]
+                    if path_parts:
+                        url_title = path_parts[-1].replace('-', ' ').title()
+                        title = url_title
+                
+                # Test episode info extraction
+                episode_info = None
+                for pattern in title_patterns:
+                    match = re.search(pattern, title, re.IGNORECASE)
+                    if match:
+                        if len(match.groups()) == 2:
+                            episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                        elif len(match.groups()) == 1:
+                            episode_info = {'season': 1, 'episode': int(match.group(1))}
+                        break
+                
+                # Test content extraction
+                content_found = False
+                for pattern in content_patterns:
+                    match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        content_found = True
+                        break
+                
+                test_results.append({
+                    'url': url,
+                    'title': title,
+                    'episode_info': episode_info,
+                    'content_extracted': content_found,
+                    'status': 'success'
+                })
+                
+            except Exception as e:
+                test_results.append({
+                    'url': url,
+                    'title': f"Error: {str(e)}",
+                    'status': 'error',
+                    'error': str(e)
+                })
+        
+        return jsonify({
+            'success': True,
+            'site_name': site_name,
+            'results': test_results,
+            'message': f'Tested {len(test_results)} sample URLs for {site_name}'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error testing patterns: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @admin_bp.route('/api/latest-episode')
 @login_required
 @admin_required

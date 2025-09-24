@@ -89,6 +89,24 @@
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                             Provide 2-3 sample URLs to help generate scraping rules
                         </p>
+                        
+                        <!-- Test Button and Results -->
+                        <div class="mt-3">
+                            <button type="button" id="test-patterns-btn" 
+                                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
+                                <span id="test-patterns-text">Test Patterns</span>
+                            </button>
+                            <div id="test-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center mt-2">
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+                                <span>Testing patterns...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Test Results -->
+                        <div id="test-results" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-semibold text-gray-800 dark:text-white mb-2">Test Results</h4>
+                            <div id="test-output" class="text-sm text-gray-600 dark:text-gray-400"></div>
+                        </div>
                     </div>
 
                     <div class="flex justify-end space-x-3 pt-4">
@@ -140,6 +158,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Generate rules button
     generateRulesBtn.addEventListener('click', function() {
         generateScrapingRules();
+    });
+
+    // Test patterns button
+    const testPatternsBtn = document.getElementById('test-patterns-btn');
+    const testStatus = document.getElementById('test-status');
+    const testResults = document.getElementById('test-results');
+    const testOutput = document.getElementById('test-output');
+    
+    testPatternsBtn.addEventListener('click', function() {
+        testPatterns();
     });
 
     // Form submission
@@ -334,6 +362,100 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     };
+
+    function testPatterns() {
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+
+        if (!siteName || !baseUrl || !sampleUrls) {
+            alert('Please fill in site name, base URL, and sample URLs before testing.');
+            return;
+        }
+
+        // Show loading state
+        testPatternsBtn.disabled = true;
+        testPatternsBtn.querySelector('#test-patterns-text').textContent = 'Testing...';
+        testStatus.classList.remove('hidden');
+        testResults.classList.add('hidden');
+
+        // First generate rules, then test them
+        fetch('/admin/api/generate-scraping-rules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                site_name: siteName,
+                base_url: baseUrl,
+                sample_urls: sampleUrls.split('\n').filter(url => url.trim())
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.rules) {
+                // Now test the generated rules
+                return fetch('/admin/api/test-patterns', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        site_name: siteName,
+                        base_url: baseUrl,
+                        sample_urls: sampleUrls.split('\n').filter(url => url.trim()),
+                        link_patterns: JSON.parse(data.rules.link_patterns),
+                        title_patterns: JSON.parse(data.rules.title_patterns),
+                        content_patterns: JSON.parse(data.rules.content_patterns)
+                    })
+                });
+            } else {
+                throw new Error('Failed to generate rules: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let output = `<div class="space-y-3">`;
+                output += `<p class="text-green-600 dark:text-green-400 font-semibold">✓ Test completed for ${data.site_name}!</p>`;
+                
+                data.results.forEach((result, index) => {
+                    output += `<div class="border border-gray-200 dark:border-gray-600 rounded p-3">`;
+                    output += `<div class="font-medium text-gray-800 dark:text-white">${index + 1}. ${result.title}</div>`;
+                    
+                    if (result.status === 'success') {
+                        if (result.episode_info) {
+                            output += `<div class="text-sm text-blue-600 dark:text-blue-400">Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}</div>`;
+                        }
+                        output += `<div class="text-sm ${result.content_extracted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}">Content extracted: ${result.content_extracted ? 'Yes' : 'No'}</div>`;
+                    } else {
+                        output += `<div class="text-sm text-red-600 dark:text-red-400">Error: ${result.error}</div>`;
+                    }
+                    
+                    output += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">${result.url}</div>`;
+                    output += `</div>`;
+                });
+                
+                output += `</div>`;
+                testOutput.innerHTML = output;
+                testResults.classList.remove('hidden');
+            } else {
+                testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Test failed: ${data.error}</p>`;
+                testResults.classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error testing patterns:', error);
+            testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+            testResults.classList.remove('hidden');
+        })
+        .finally(() => {
+            // Reset button state
+            testPatternsBtn.disabled = false;
+            testPatternsBtn.querySelector('#test-patterns-text').textContent = 'Test Patterns';
+            testStatus.classList.add('hidden');
+        });
+    }
 
     window.editSite = function(id) {
         fetch(`/admin/api/recap-sites/${id}`)
