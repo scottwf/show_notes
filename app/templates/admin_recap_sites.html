@@ -459,6 +459,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const siteName = document.getElementById('site-name').value;
         const baseUrl = document.getElementById('base-url').value;
         const sampleUrls = document.getElementById('sample-urls').value;
+        const siteId = document.getElementById('site-id').value;
 
         if (!siteName || !baseUrl || !sampleUrls) {
             alert('Please fill in site name, base URL, and sample URLs before testing.');
@@ -476,26 +477,101 @@ document.addEventListener('DOMContentLoaded', function() {
         testStatus.classList.remove('hidden');
         testResults.classList.add('hidden');
 
-        // Get existing patterns from the form (if any) or use basic patterns
-        const linkPatterns = [
-            '<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
-            '<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
-        ];
-        
-        const titlePatterns = [
-            'Season\\s+(\\d+).*Episode\\s+(\\d+)',
-            'S(\\d+)E(\\d+)',
-            'Episode\\s+(\\d+)',
-            'episode-(\\d+)',
-            'season-(\\d+)-episode-(\\d+)'
-        ];
-        
-        const contentPatterns = [
-            '<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
-            '<article[^>]*>(.*?)</article>',
-            '<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)</div>',
-            '<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)</div>'
-        ];
+        // Get existing patterns from the database
+        if (siteId) {
+            // Fetch the site data to get the actual patterns
+            fetch(`/admin/api/recap-sites/${siteId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.site) {
+                        const site = data.site;
+                        let linkPatterns, titlePatterns, contentPatterns;
+                        
+                        try {
+                            linkPatterns = JSON.parse(site.link_patterns || '[]');
+                            titlePatterns = JSON.parse(site.title_patterns || '[]');
+                            contentPatterns = JSON.parse(site.content_patterns || '[]');
+                        } catch (e) {
+                            console.error('Error parsing patterns:', e);
+                            linkPatterns = [];
+                            titlePatterns = [];
+                            contentPatterns = [];
+                        }
+                        
+                        // If no patterns exist, use basic fallback patterns
+                        if (linkPatterns.length === 0) {
+                            linkPatterns = [
+                                '<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
+                                '<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
+                            ];
+                        }
+                        
+                        if (titlePatterns.length === 0) {
+                            titlePatterns = [
+                                'Season\\s+(\\d+).*Episode\\s+(\\d+)',
+                                'S(\\d+)E(\\d+)',
+                                'Episode\\s+(\\d+)',
+                                'episode-(\\d+)',
+                                'season-(\\d+)-episode-(\\d+)'
+                            ];
+                        }
+                        
+                        if (contentPatterns.length === 0) {
+                            contentPatterns = [
+                                '<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
+                                '<article[^>]*>(.*?)</article>',
+                                '<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)</div>',
+                                '<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)</div>'
+                            ];
+                        }
+                        
+                        // Now test with the actual patterns
+                        testWithPatterns(linkPatterns, titlePatterns, contentPatterns);
+                    } else {
+                        throw new Error('Failed to load site data');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading site patterns:', error);
+                    testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error loading site patterns: ${error.message}</p>`;
+                    testResults.classList.remove('hidden');
+                    testOnlyBtn.disabled = false;
+                    testOnlyText.textContent = '🧪 Test Only';
+                    testStatus.classList.add('hidden');
+                });
+        } else {
+            // No site ID, use basic patterns
+            const linkPatterns = [
+                '<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
+                '<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
+            ];
+            
+            const titlePatterns = [
+                'Season\\s+(\\d+).*Episode\\s+(\\d+)',
+                'S(\\d+)E(\\d+)',
+                'Episode\\s+(\\d+)',
+                'episode-(\\d+)',
+                'season-(\\d+)-episode-(\\d+)'
+            ];
+            
+            const contentPatterns = [
+                '<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
+                '<article[^>]*>(.*?)</article>',
+                '<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)</div>',
+                '<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)</div>'
+            ];
+            
+            testWithPatterns(linkPatterns, titlePatterns, contentPatterns);
+        }
+    }
+    
+    // Helper function to test with specific patterns
+    function testWithPatterns(linkPatterns, titlePatterns, contentPatterns) {
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+        const testOnlyBtn = document.getElementById('test-only-btn');
+        const testOnlyText = document.getElementById('test-only-text');
 
         // Test the patterns
         fetch('/admin/api/test-patterns', {
