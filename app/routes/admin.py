@@ -1399,14 +1399,102 @@ def generate_scraping_rules():
         if not site_name or not base_url or not sample_urls:
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
-        # Analyze the sample URLs to generate site-specific patterns
         current_app.logger.info(f"Generating rules for {site_name} with {len(sample_urls)} sample URLs")
         
-        # Extract common URL patterns from sample URLs
+        # Use LLM to analyze sample URLs and generate intelligent patterns
+        from app.llm_services import get_llm_response
+        
+        # Create a prompt for the LLM to analyze the URLs and generate patterns
+        prompt = f"""
+You are a web scraping expert. I need you to analyze these sample URLs from {site_name} and generate regex patterns for scraping episode recaps.
+
+Sample URLs:
+{chr(10).join(sample_urls)}
+
+Base URL: {base_url}
+
+Please analyze the URL structure and generate three types of regex patterns:
+
+1. LINK_PATTERNS: Patterns to find recap links in HTML (should capture href and link text)
+2. TITLE_PATTERNS: Patterns to extract season/episode numbers from titles
+3. CONTENT_PATTERNS: Patterns to extract the main recap content from HTML
+
+For each type, provide 2-4 patterns that would work for this site. Consider:
+- URL structure (paths, segments, naming conventions)
+- Common HTML patterns for recap sites
+- Episode numbering formats (S1E1, Season 1 Episode 1, etc.)
+- Content container patterns (article, div with classes, etc.)
+
+Respond in this exact JSON format:
+{{
+    "link_patterns": [
+        "pattern1",
+        "pattern2"
+    ],
+    "title_patterns": [
+        "pattern1", 
+        "pattern2"
+    ],
+    "content_patterns": [
+        "pattern1",
+        "pattern2"
+    ]
+}}
+
+Only return the JSON, no other text.
+"""
+        
+        # Get LLM response
+        response_text, error = get_llm_response(prompt)
+        
+        if error:
+            current_app.logger.error(f"LLM error generating rules: {error}")
+            # Fallback to basic pattern generation
+            return generate_basic_patterns(site_name, base_url, sample_urls)
+        
+        # Parse LLM response
+        try:
+            import json
+            llm_rules = json.loads(response_text.strip())
+            
+            # Validate the response has the expected structure
+            if not all(key in llm_rules for key in ['link_patterns', 'title_patterns', 'content_patterns']):
+                raise ValueError("Invalid LLM response structure")
+            
+            # Ensure all patterns are lists
+            for key in ['link_patterns', 'title_patterns', 'content_patterns']:
+                if not isinstance(llm_rules[key], list):
+                    llm_rules[key] = [llm_rules[key]]
+            
+            current_app.logger.info(f"Successfully generated LLM rules for {site_name}")
+            
+            return jsonify({
+                'success': True,
+                'rules': {
+                    'link_patterns': json.dumps(llm_rules['link_patterns']),
+                    'title_patterns': json.dumps(llm_rules['title_patterns']),
+                    'content_patterns': json.dumps(llm_rules['content_patterns'])
+                },
+                'source': 'llm'
+            })
+            
+        except (json.JSONDecodeError, ValueError) as e:
+            current_app.logger.error(f"Failed to parse LLM response: {e}")
+            current_app.logger.error(f"LLM response: {response_text}")
+            # Fallback to basic pattern generation
+            return generate_basic_patterns(site_name, base_url, sample_urls)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating scraping rules: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def generate_basic_patterns(site_name, base_url, sample_urls):
+    """Fallback basic pattern generation when LLM fails"""
+    try:
+        # Analyze URL structure to generate patterns
         url_segments = []
         for url in sample_urls:
             if url.strip():
-                # Extract path segments that might indicate recap structure
                 import urllib.parse
                 parsed = urllib.parse.urlparse(url.strip())
                 path_segments = [seg for seg in parsed.path.split('/') if seg]
@@ -1437,7 +1525,6 @@ def generate_scraping_rules():
         if any('/article/' in url for url in sample_urls):
             link_patterns.append(r'<a[^>]+href="([^"]*\/article\/[^"]*)"[^>]*>([^<]+)</a>')
         
-        # Fallback to basic patterns if no specific patterns found
         if not link_patterns:
             link_patterns = [
                 r'<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
@@ -1468,11 +1555,12 @@ def generate_scraping_rules():
                 'link_patterns': json.dumps(link_patterns),
                 'title_patterns': json.dumps(title_patterns),
                 'content_patterns': json.dumps(content_patterns)
-            }
+            },
+            'source': 'basic'
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error generating scraping rules: {e}", exc_info=True)
+        current_app.logger.error(f"Error in basic pattern generation: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @admin_bp.route('/api/test-site-scraping/<int:site_id>', methods=['POST'])

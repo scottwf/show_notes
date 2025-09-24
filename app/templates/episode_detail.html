@@ -99,7 +99,7 @@
                             {% endif %}
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-400 ml-4">
-                            {% if recap.created_at and hasattr(recap.created_at, 'strftime') %}
+                            {% if recap.created_at %}
                                 {{ recap.created_at.strftime('%b %d, %Y') }}
                             {% else %}
                                 Unknown date
