@@ -1395,15 +1395,44 @@ def generate_scraping_rules():
         if not site_name or not base_url or not sample_urls:
             return jsonify({'success': False, 'error': 'Missing required fields'}), 400
         
-        # For now, return basic patterns - in the future, this would use an LLM
-        # to analyze the sample URLs and generate appropriate regex patterns
+        # Analyze the sample URLs to generate site-specific patterns
+        current_app.logger.info(f"Generating rules for {site_name} with {len(sample_urls)} sample URLs")
         
-        # Basic patterns that work for most sites
-        link_patterns = [
-            r'<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
-            r'<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
-        ]
+        # Extract common URL patterns from sample URLs
+        url_segments = []
+        for url in sample_urls:
+            if url.strip():
+                # Extract path segments that might indicate recap structure
+                import urllib.parse
+                parsed = urllib.parse.urlparse(url.strip())
+                path_segments = [seg for seg in parsed.path.split('/') if seg]
+                url_segments.extend(path_segments)
         
+        # Generate site-specific link patterns based on URL structure
+        link_patterns = []
+        
+        # Check if URLs contain common recap patterns
+        if any('recap' in seg.lower() for seg in url_segments):
+            link_patterns.append(r'<a[^>]+href="([^"]*recap[^"]*)"[^>]*>([^<]+)</a>')
+        
+        if any('episode' in seg.lower() for seg in url_segments):
+            link_patterns.append(r'<a[^>]+href="([^"]*episode[^"]*)"[^>]*>([^<]+)</a>')
+        
+        # Check for common URL structures
+        if any('/tv/' in url for url in sample_urls):
+            link_patterns.append(r'<a[^>]+href="([^"]*\/tv\/[^"]*)"[^>]*>([^<]+)</a>')
+        
+        if any('/article/' in url for url in sample_urls):
+            link_patterns.append(r'<a[^>]+href="([^"]*\/article\/[^"]*)"[^>]*>([^<]+)</a>')
+        
+        # Fallback to basic patterns if no specific patterns found
+        if not link_patterns:
+            link_patterns = [
+                r'<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
+                r'<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
+            ]
+        
+        # Standard title and content patterns (these are usually consistent across sites)
         title_patterns = [
             r'Season\s+(\d+).*Episode\s+(\d+)',
             r'S(\d+)E(\d+)',
@@ -1412,7 +1441,8 @@ def generate_scraping_rules():
         
         content_patterns = [
             r'<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
-            r'<article[^>]*>(.*?)</article>'
+            r'<article[^>]*>(.*?)</article>',
+            r'<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)</div>'
         ]
         
         import json

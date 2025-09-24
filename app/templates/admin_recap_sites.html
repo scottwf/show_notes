@@ -238,8 +238,14 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // The rules will be automatically applied to the form
-                alert('Scraping rules generated successfully! Review and save the site.');
+                // Apply the generated rules to the form
+                if (data.rules) {
+                    // Note: The rules are generated but not displayed in the form
+                    // They will be saved when the site is saved
+                    alert('Scraping rules generated successfully! The rules will be saved when you save the site.');
+                } else {
+                    alert('Scraping rules generated successfully! Review and save the site.');
+                }
             } else {
                 alert('Failed to generate rules: ' + data.error);
             }
@@ -298,6 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('is-active').checked = site.is_active;
                     document.getElementById('rate-limit').value = site.rate_limit_seconds;
                     document.getElementById('user-agent').value = site.user_agent || '';
+                    document.getElementById('sample-urls').value = ''; // Clear sample URLs for existing sites
                     siteModal.classList.remove('hidden');
                 } else {
                     alert('Failed to load site: ' + data.error);
