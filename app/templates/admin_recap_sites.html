@@ -1,0 +1,333 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Recap Sites Management</h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">
+                Manage recap sites and their scraping rules. Add new sites or modify existing ones.
+            </p>
+        </div>
+        <button id="add-site-btn" 
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
+            Add New Site
+        </button>
+    </div>
+
+    <!-- Current Sites -->
+    <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg border border-slate-200 dark:border-slate-700">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Current Recap Sites</h2>
+        </div>
+        <div class="p-6">
+            <div id="sites-list" class="space-y-4">
+                <!-- Sites will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Site Modal -->
+    <div id="site-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 id="modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">Add New Recap Site</h3>
+                </div>
+                <form id="site-form" class="p-6 space-y-4">
+                    <input type="hidden" id="site-id" name="id">
+                    
+                    <div>
+                        <label for="site-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Site Name *
+                        </label>
+                        <input type="text" id="site-name" name="site_name" required
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white">
+                    </div>
+
+                    <div>
+                        <label for="base-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Base URL *
+                        </label>
+                        <input type="url" id="base-url" name="base_url" required
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white">
+                    </div>
+
+                    <div class="flex items-center">
+                        <input type="checkbox" id="is-active" name="is_active" checked
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="is-active" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                            Active
+                        </label>
+                    </div>
+
+                    <div>
+                        <label for="rate-limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Rate Limit (seconds)
+                        </label>
+                        <input type="number" id="rate-limit" name="rate_limit_seconds" value="30" min="1"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white">
+                    </div>
+
+                    <div>
+                        <label for="user-agent" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            User Agent
+                        </label>
+                        <textarea id="user-agent" name="user_agent" rows="2"
+                                  class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white"
+                                  placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."></textarea>
+                    </div>
+
+                    <div>
+                        <label for="sample-urls" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Sample Episode Recap URLs (one per line)
+                        </label>
+                        <textarea id="sample-urls" name="sample_urls" rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-700 dark:text-white"
+                                  placeholder="https://example.com/show-episode-1-recap/&#10;https://example.com/show-episode-2-recap/"></textarea>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Provide 2-3 sample URLs to help generate scraping rules
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4">
+                        <button type="button" id="cancel-btn"
+                                class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-slate-600 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors">
+                            Cancel
+                        </button>
+                        <button type="button" id="generate-rules-btn"
+                                class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
+                            Generate Rules with LLM
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
+                            Save Site
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sitesList = document.getElementById('sites-list');
+    const addSiteBtn = document.getElementById('add-site-btn');
+    const siteModal = document.getElementById('site-modal');
+    const siteForm = document.getElementById('site-form');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const generateRulesBtn = document.getElementById('generate-rules-btn');
+    const modalTitle = document.getElementById('modal-title');
+
+    // Load sites on page load
+    loadSites();
+
+    // Add site button
+    addSiteBtn.addEventListener('click', function() {
+        modalTitle.textContent = 'Add New Recap Site';
+        siteForm.reset();
+        document.getElementById('site-id').value = '';
+        siteModal.classList.remove('hidden');
+    });
+
+    // Cancel button
+    cancelBtn.addEventListener('click', function() {
+        siteModal.classList.add('hidden');
+    });
+
+    // Generate rules button
+    generateRulesBtn.addEventListener('click', function() {
+        generateScrapingRules();
+    });
+
+    // Form submission
+    siteForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        saveSite();
+    });
+
+    // Close modal on outside click
+    siteModal.addEventListener('click', function(e) {
+        if (e.target === siteModal) {
+            siteModal.classList.add('hidden');
+        }
+    });
+
+    function loadSites() {
+        fetch('/admin/api/recap-sites')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displaySites(data.sites);
+                } else {
+                    console.error('Failed to load sites:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading sites:', error);
+            });
+    }
+
+    function displaySites(sites) {
+        sitesList.innerHTML = '';
+        
+        if (sites.length === 0) {
+            sitesList.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No recap sites configured.</p>';
+            return;
+        }
+
+        sites.forEach(site => {
+            const siteDiv = document.createElement('div');
+            siteDiv.className = 'border border-slate-200 dark:border-slate-600 rounded-lg p-4';
+            siteDiv.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">${site.site_name}</h3>
+                            <span class="px-2 py-1 text-xs font-medium rounded-full ${site.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}">
+                                ${site.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">${site.base_url}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            Rate limit: ${site.rate_limit_seconds}s | Created: ${new Date(site.created_at).toLocaleDateString()}
+                        </p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="editSite(${site.id})" 
+                                class="px-3 py-1 text-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
+                            Edit
+                        </button>
+                        <button onclick="deleteSite(${site.id})" 
+                                class="px-3 py-1 text-sm bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800 transition-colors">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+            sitesList.appendChild(siteDiv);
+        });
+    }
+
+    function generateScrapingRules() {
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+
+        if (!siteName || !baseUrl || !sampleUrls) {
+            alert('Please fill in site name, base URL, and sample URLs before generating rules.');
+            return;
+        }
+
+        generateRulesBtn.disabled = true;
+        generateRulesBtn.textContent = 'Generating...';
+
+        fetch('/admin/api/generate-scraping-rules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                site_name: siteName,
+                base_url: baseUrl,
+                sample_urls: sampleUrls.split('\n').filter(url => url.trim())
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // The rules will be automatically applied to the form
+                alert('Scraping rules generated successfully! Review and save the site.');
+            } else {
+                alert('Failed to generate rules: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error generating rules:', error);
+            alert('Error generating rules: ' + error.message);
+        })
+        .finally(() => {
+            generateRulesBtn.disabled = false;
+            generateRulesBtn.textContent = 'Generate Rules with LLM';
+        });
+    }
+
+    function saveSite() {
+        const formData = new FormData(siteForm);
+        const data = Object.fromEntries(formData.entries());
+        data.is_active = document.getElementById('is-active').checked;
+
+        const url = data.id ? `/admin/api/recap-sites/${data.id}` : '/admin/api/recap-sites';
+        const method = data.id ? 'PUT' : 'POST';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                siteModal.classList.add('hidden');
+                loadSites();
+            } else {
+                alert('Failed to save site: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving site:', error);
+            alert('Error saving site: ' + error.message);
+        });
+    }
+
+    // Global functions for inline event handlers
+    window.editSite = function(id) {
+        fetch(`/admin/api/recap-sites/${id}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const site = data.site;
+                    modalTitle.textContent = 'Edit Recap Site';
+                    document.getElementById('site-id').value = site.id;
+                    document.getElementById('site-name').value = site.site_name;
+                    document.getElementById('base-url').value = site.base_url;
+                    document.getElementById('is-active').checked = site.is_active;
+                    document.getElementById('rate-limit').value = site.rate_limit_seconds;
+                    document.getElementById('user-agent').value = site.user_agent || '';
+                    siteModal.classList.remove('hidden');
+                } else {
+                    alert('Failed to load site: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading site:', error);
+                alert('Error loading site: ' + error.message);
+            });
+    };
+
+    window.deleteSite = function(id) {
+        if (confirm('Are you sure you want to delete this recap site?')) {
+            fetch(`/admin/api/recap-sites/${id}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadSites();
+                } else {
+                    alert('Failed to delete site: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting site:', error);
+                alert('Error deleting site: ' + error.message);
+            });
+        }
+    };
+});
+</script>
+{% endblock %}

@@ -1185,6 +1185,251 @@ def scrape_show_recaps():
         else:
             return jsonify({'error': f'Failed to scrape recaps for {show_title}: {str(e)}'}), 500
 
+# Recap Sites Management
+@admin_bp.route('/recap-sites')
+@login_required
+@admin_required
+def recap_sites():
+    """Recap sites management page"""
+    return render_template('admin_recap_sites.html')
+
+@admin_bp.route('/api/recap-sites', methods=['GET'])
+@login_required
+@admin_required
+def get_recap_sites():
+    """Get all recap sites"""
+    try:
+        db = get_db()
+        sites = db.execute("""
+            SELECT id, site_name, base_url, is_active, rate_limit_seconds, 
+                   user_agent, link_patterns, title_patterns, content_patterns,
+                   created_at, updated_at
+            FROM recap_sites 
+            ORDER BY site_name
+        """).fetchall()
+        
+        sites_list = []
+        for site in sites:
+            sites_list.append({
+                'id': site['id'],
+                'site_name': site['site_name'],
+                'base_url': site['base_url'],
+                'is_active': bool(site['is_active']),
+                'rate_limit_seconds': site['rate_limit_seconds'],
+                'user_agent': site['user_agent'],
+                'link_patterns': site['link_patterns'],
+                'title_patterns': site['title_patterns'],
+                'content_patterns': site['content_patterns'],
+                'created_at': site['created_at'],
+                'updated_at': site['updated_at']
+            })
+        
+        return jsonify({'success': True, 'sites': sites_list})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting recap sites: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/recap-sites', methods=['POST'])
+@login_required
+@admin_required
+def create_recap_site():
+    """Create a new recap site"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['site_name', 'base_url']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'}), 400
+        
+        db = get_db()
+        
+        # Check if site already exists
+        existing = db.execute(
+            "SELECT id FROM recap_sites WHERE site_name = ?", 
+            (data['site_name'],)
+        ).fetchone()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Site with this name already exists'}), 400
+        
+        # Insert new site
+        db.execute("""
+            INSERT INTO recap_sites 
+            (site_name, base_url, is_active, rate_limit_seconds, user_agent,
+             link_patterns, title_patterns, content_patterns, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        """, (
+            data['site_name'],
+            data['base_url'],
+            data.get('is_active', True),
+            data.get('rate_limit_seconds', 30),
+            data.get('user_agent', ''),
+            data.get('link_patterns', '[]'),
+            data.get('title_patterns', '[]'),
+            data.get('content_patterns', '[]')
+        ))
+        
+        db.commit()
+        return jsonify({'success': True, 'message': 'Recap site created successfully'})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating recap site: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/recap-sites/<int:site_id>', methods=['GET'])
+@login_required
+@admin_required
+def get_recap_site(site_id):
+    """Get a specific recap site"""
+    try:
+        db = get_db()
+        site = db.execute("""
+            SELECT id, site_name, base_url, is_active, rate_limit_seconds, 
+                   user_agent, link_patterns, title_patterns, content_patterns,
+                   created_at, updated_at
+            FROM recap_sites 
+            WHERE id = ?
+        """, (site_id,)).fetchone()
+        
+        if not site:
+            return jsonify({'success': False, 'error': 'Site not found'}), 404
+        
+        site_data = {
+            'id': site['id'],
+            'site_name': site['site_name'],
+            'base_url': site['base_url'],
+            'is_active': bool(site['is_active']),
+            'rate_limit_seconds': site['rate_limit_seconds'],
+            'user_agent': site['user_agent'],
+            'link_patterns': site['link_patterns'],
+            'title_patterns': site['title_patterns'],
+            'content_patterns': site['content_patterns'],
+            'created_at': site['created_at'],
+            'updated_at': site['updated_at']
+        }
+        
+        return jsonify({'success': True, 'site': site_data})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting recap site: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/recap-sites/<int:site_id>', methods=['PUT'])
+@login_required
+@admin_required
+def update_recap_site(site_id):
+    """Update a recap site"""
+    try:
+        data = request.get_json()
+        
+        db = get_db()
+        
+        # Check if site exists
+        existing = db.execute("SELECT id FROM recap_sites WHERE id = ?", (site_id,)).fetchone()
+        if not existing:
+            return jsonify({'success': False, 'error': 'Site not found'}), 404
+        
+        # Update site
+        db.execute("""
+            UPDATE recap_sites 
+            SET site_name = ?, base_url = ?, is_active = ?, rate_limit_seconds = ?,
+                user_agent = ?, link_patterns = ?, title_patterns = ?, content_patterns = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        """, (
+            data['site_name'],
+            data['base_url'],
+            data.get('is_active', True),
+            data.get('rate_limit_seconds', 30),
+            data.get('user_agent', ''),
+            data.get('link_patterns', '[]'),
+            data.get('title_patterns', '[]'),
+            data.get('content_patterns', '[]'),
+            site_id
+        ))
+        
+        db.commit()
+        return jsonify({'success': True, 'message': 'Recap site updated successfully'})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating recap site: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/recap-sites/<int:site_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_recap_site(site_id):
+    """Delete a recap site"""
+    try:
+        db = get_db()
+        
+        # Check if site exists
+        existing = db.execute("SELECT id FROM recap_sites WHERE id = ?", (site_id,)).fetchone()
+        if not existing:
+            return jsonify({'success': False, 'error': 'Site not found'}), 404
+        
+        # Delete site
+        db.execute("DELETE FROM recap_sites WHERE id = ?", (site_id,))
+        db.commit()
+        
+        return jsonify({'success': True, 'message': 'Recap site deleted successfully'})
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting recap site: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/generate-scraping-rules', methods=['POST'])
+@login_required
+@admin_required
+def generate_scraping_rules():
+    """Generate scraping rules using LLM"""
+    try:
+        data = request.get_json()
+        site_name = data.get('site_name')
+        base_url = data.get('base_url')
+        sample_urls = data.get('sample_urls', [])
+        
+        if not site_name or not base_url or not sample_urls:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        # For now, return basic patterns - in the future, this would use an LLM
+        # to analyze the sample URLs and generate appropriate regex patterns
+        
+        # Basic patterns that work for most sites
+        link_patterns = [
+            r'<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
+            r'<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
+        ]
+        
+        title_patterns = [
+            r'Season\s+(\d+).*Episode\s+(\d+)',
+            r'S(\d+)E(\d+)',
+            r'Episode\s+(\d+)'
+        ]
+        
+        content_patterns = [
+            r'<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
+            r'<article[^>]*>(.*?)</article>'
+        ]
+        
+        import json
+        
+        return jsonify({
+            'success': True,
+            'rules': {
+                'link_patterns': json.dumps(link_patterns),
+                'title_patterns': json.dumps(title_patterns),
+                'content_patterns': json.dumps(content_patterns)
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error generating scraping rules: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @admin_bp.route('/api/latest-episode')
 @login_required
 @admin_required

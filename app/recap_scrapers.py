@@ -161,6 +161,7 @@ class VultureScraper(BaseRecapScraper):
         # Find recap links using multiple patterns for Vulture's structure
         link_patterns = [
             r'<a[^>]+href="([^"]*\/article\/[^"]*recap[^"]*)"[^>]*>([^<]+)<\/a>',
+            r'<a[^>]+href="([^"]*\/article\/[^"]*recap[^"]*)"[^>]*>.*?<span[^>]*>([^<]+)<\/span>.*?<\/a>',
             r'<a[^>]+href="([^"]*\/tv-recaps\/[^"]*)"[^>]*>([^<]+)<\/a>',
             r'<a[^>]+href="([^"]*\/article\/[^"]*episode[^"]*)"[^>]*>([^<]+)<\/a>'
         ]
@@ -414,14 +415,19 @@ class RecapScrapingManager:
                 # If no recaps found with episode info, try a more flexible approach
                 if not show_recaps and show_title.lower() in ['task']:
                     logger.info(f"No structured recaps found for {show_title}, trying flexible matching...")
-                    # For shows with limited episodes, be more flexible
+                    # For shows with limited episodes, be more flexible but still filter by show title
                     for recap in recaps:
-                        if any(keyword in recap['title'].lower() for keyword in [show_title.lower(), 'recap']):
+                        # Only consider recaps that actually mention the show title
+                        if show_title.lower() in recap['title'].lower() or show_title.lower() in recap['show_title'].lower():
                             # Try to extract episode info from the actual page content
                             try:
                                 detailed_recap = scraper.scrape_episode_summary(recap['url'])
                                 if detailed_recap and detailed_recap.get('season') and detailed_recap.get('episode'):
-                                    show_recaps.append(detailed_recap)
+                                    # Double-check that this recap is actually for the right show
+                                    if show_title.lower() in detailed_recap.get('show_title', '').lower():
+                                        show_recaps.append(detailed_recap)
+                                    else:
+                                        logger.warning(f"Recap from {recap['url']} is not for {show_title}")
                                 else:
                                     logger.warning(f"Could not extract episode info from {recap['url']}")
                             except Exception as e:
