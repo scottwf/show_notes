@@ -1574,6 +1574,10 @@ def test_site_scraping(site_id):
                         url_title = path_parts[-1].replace('-', ' ').title()
                         title = url_title
                 
+                # Decode HTML entities
+                import html
+                title = html.unescape(title)
+                
                 # Test episode info extraction
                 episode_info = None
                 for pattern in title_patterns:
@@ -1698,6 +1702,10 @@ def test_patterns():
                     if path_parts:
                         url_title = path_parts[-1].replace('-', ' ').title()
                         title = url_title
+                
+                # Decode HTML entities
+                import html
+                title = html.unescape(title)
                 
                 # Test episode info extraction
                 episode_info = None
