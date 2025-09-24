@@ -237,6 +237,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function autoSaveGeneratedPatterns(rules) {
         const siteId = document.getElementById('site-id').value;
         
+        console.log('Auto-save called with rules:', rules);
+        console.log('Site ID:', siteId);
+        
         if (!siteId) {
             console.log('No site ID - cannot auto-save patterns for new site');
             return;
@@ -244,6 +247,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!rules || !rules.link_patterns || !rules.title_patterns || !rules.content_patterns) {
             console.log('Invalid rules object - cannot auto-save patterns');
+            console.log('Rules structure:', {
+                hasRules: !!rules,
+                hasLinkPatterns: !!(rules && rules.link_patterns),
+                hasTitlePatterns: !!(rules && rules.title_patterns),
+                hasContentPatterns: !!(rules && rules.content_patterns)
+            });
             return;
         }
         
@@ -513,8 +522,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             contentPatterns = [];
                         }
                         
+                        console.log('Loaded patterns from database:', {
+                            linkPatterns: linkPatterns.length,
+                            titlePatterns: titlePatterns.length,
+                            contentPatterns: contentPatterns.length
+                        });
+                        
                         // If no patterns exist, use basic fallback patterns
                         if (linkPatterns.length === 0) {
+                            console.log('No link patterns found, using fallback patterns');
                             linkPatterns = [
                                 '<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
                                 '<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
@@ -522,6 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         if (titlePatterns.length === 0) {
+                            console.log('No title patterns found, using fallback patterns');
                             titlePatterns = [
                                 'Season\\s+(\\d+).*Episode\\s+(\\d+)',
                                 'S(\\d+)E(\\d+)',
@@ -532,6 +549,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         if (contentPatterns.length === 0) {
+                            console.log('No content patterns found, using fallback patterns');
                             contentPatterns = [
                                 '<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
                                 '<article[^>]*>(.*?)</article>',
