@@ -147,6 +147,18 @@ document.addEventListener('DOMContentLoaded', function() {
         modalTitle.textContent = 'Add New Recap Site';
         siteForm.reset();
         document.getElementById('site-id').value = '';
+        
+        // Clear previous test results when adding a new site
+        const testResults = document.getElementById('test-results');
+        const testOutput = document.getElementById('test-output');
+        if (testResults) {
+            testResults.innerHTML = '';
+            testResults.classList.add('hidden');
+        }
+        if (testOutput) {
+            testOutput.innerHTML = '';
+        }
+        
         siteModal.classList.remove('hidden');
     });
 
@@ -478,6 +490,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     } catch (e) {
                         document.getElementById('sample-urls').value = '';
                     }
+                    
+                    // Clear previous test results when editing a different site
+                    const testResults = document.getElementById('test-results');
+                    const testOutput = document.getElementById('test-output');
+                    if (testResults) {
+                        testResults.innerHTML = '';
+                        testResults.classList.add('hidden');
+                    }
+                    if (testOutput) {
+                        testOutput.innerHTML = '';
+                    }
+                    
                     siteModal.classList.remove('hidden');
                 } else {
                     alert('Failed to load site: ' + data.error);
