@@ -1655,7 +1655,6 @@ def test_site_scraping(site_id):
                 
                 # Method 3: Extract from URL if title tag is overridden
                 if title == "No title found" or any(social in title.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
-                    import urllib.parse
                     parsed_url = urllib.parse.urlparse(url)
                     path_parts = [part for part in parsed_url.path.split('/') if part]
                     if path_parts:
@@ -1663,8 +1662,7 @@ def test_site_scraping(site_id):
                         title = url_title
                 
                 # Decode HTML entities
-                import html
-                title = html.unescape(title)
+                title = html_module.unescape(title)
                 
                 # Test episode info extraction
                 episode_info = None
@@ -1735,6 +1733,8 @@ def test_patterns():
         test_results = []
         import requests
         import re
+        import html as html_module
+        import urllib.parse
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -1784,7 +1784,6 @@ def test_patterns():
                 
                 # Method 3: Extract from URL if title tag is overridden
                 if title == "No title found" or any(social in title.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
-                    import urllib.parse
                     parsed_url = urllib.parse.urlparse(url)
                     path_parts = [part for part in parsed_url.path.split('/') if part]
                     if path_parts:
@@ -1792,8 +1791,7 @@ def test_patterns():
                         title = url_title
                 
                 # Decode HTML entities
-                import html
-                title = html.unescape(title)
+                title = html_module.unescape(title)
                 
                 # Test episode info extraction
                 episode_info = None

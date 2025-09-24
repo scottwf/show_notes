@@ -124,6 +124,33 @@ class BaseRecapScraper:
         
         return None
     
+    def extract_episode_info_from_url(self, url: str) -> Optional[Dict]:
+        """Extract episode info from URL when not in title or content"""
+        import urllib.parse
+        
+        parsed_url = urllib.parse.urlparse(url)
+        path_parts = [part for part in parsed_url.path.split('/') if part]
+        
+        # Look for episode patterns in URL path
+        url_patterns = [
+            r'episode-(\d+)',  # episode-3
+            r'episode(\d+)',   # episode3
+            r's(\d+)e(\d+)',   # s1e3
+            r'season-(\d+)-episode-(\d+)',  # season-1-episode-3
+            r'season(\d+)episode(\d+)',     # season1episode3
+        ]
+        
+        for part in path_parts:
+            for pattern in url_patterns:
+                match = re.search(pattern, part, re.IGNORECASE)
+                if match:
+                    if len(match.groups()) == 2:
+                        return {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                    elif len(match.groups()) == 1:
+                        return {'season': 1, 'episode': int(match.group(1))}
+        
+        return None
+    
     def normalize_show_title(self, title: str) -> str:
         """Normalize show title for matching"""
         # Remove common suffixes and normalize
@@ -218,11 +245,15 @@ class VultureScraper(BaseRecapScraper):
         if not episode_info:
             episode_info = self.extract_episode_info_from_content(html, title)
         
+        # If still no episode info, try to extract from URL
+        if not episode_info:
+            episode_info = self.extract_episode_info_from_url(url)
+        
         # Extract content using regex - look for article content
         content_patterns = [
+            r'<article[^>]*>(.*?)</article>',
             r'<div[^>]*class="[^"]*article-content[^"]*"[^>]*>(.*?)</div>',
-            r'<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
-            r'<article[^>]*>(.*?)</article>'
+            r'<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>'
         ]
         
         content = ""
@@ -326,6 +357,10 @@ class ShowbizJunkiesScraper(BaseRecapScraper):
         
         # Extract episode info from title
         episode_info = self.extract_episode_info(title)
+        
+        # If no episode info in title, try to extract from URL
+        if not episode_info:
+            episode_info = self.extract_episode_info_from_url(url)
         
         # Extract content using regex - look for entry content
         content_patterns = [
