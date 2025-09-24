@@ -1276,6 +1276,15 @@ def episode_detail(tmdb_id, season_number, episode_number):
     # Add runtime if available (example field name, adjust if different in your schema)
     # episode_dict['runtime_minutes'] = episode_dict.get('runtime', None)
 
+    # Fetch episode recaps
+    episode_recaps = []
+    if show_tmdb_id:
+        episode_recaps = db.execute(
+            'SELECT * FROM episode_summaries WHERE tmdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY created_at DESC',
+            (show_tmdb_id, season_number, episode_number)
+        ).fetchall()
+        episode_recaps = [dict(row) for row in episode_recaps]
+
     # Debug episode_characters before rendering
     current_app.logger.info(f"[DEBUG] Episode {tmdb_id} S{season_number}E{episode_number} found {len(episode_characters)} characters:")
     for char in episode_characters:
@@ -1285,7 +1294,8 @@ def episode_detail(tmdb_id, season_number, episode_number):
                            show=show_dict,
                            episode=episode_dict,
                            season_number=season_number,
-                           episode_characters=episode_characters)
+                           episode_characters=episode_characters,
+                           episode_recaps=episode_recaps)
 
 @main_bp.route('/image_proxy/<string:type>/<int:id>')
 @login_required

@@ -1543,12 +1543,36 @@ def test_site_scraping(site_id):
                 
                 html = response.text
                 
-                # Extract title
-                title_match = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.IGNORECASE)
-                if not title_match:
-                    title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+                # Extract title - try multiple methods
+                title = "No title found"
                 
-                title = title_match.group(1).strip() if title_match else "No title found"
+                # Method 1: Try h1 tags first
+                h1_matches = re.findall(r'<h1[^>]*>([^<]+)</h1>', html, re.IGNORECASE)
+                if h1_matches:
+                    # Filter out social media buttons
+                    for h1_text in h1_matches:
+                        h1_clean = h1_text.strip()
+                        if not any(social in h1_clean.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                            title = h1_clean
+                            break
+                
+                # Method 2: Try title tag if h1 didn't work
+                if title == "No title found":
+                    title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+                    if title_match:
+                        title_text = title_match.group(1).strip()
+                        # Filter out social media buttons
+                        if not any(social in title_text.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                            title = title_text
+                
+                # Method 3: Extract from URL if title tag is overridden
+                if title == "No title found" or any(social in title.lower() for social in ['share on', 'tweet', 'facebook', 'linkedin']):
+                    import urllib.parse
+                    parsed_url = urllib.parse.urlparse(url)
+                    path_parts = [part for part in parsed_url.path.split('/') if part]
+                    if path_parts:
+                        url_title = path_parts[-1].replace('-', ' ').title()
+                        title = url_title
                 
                 # Test episode info extraction
                 episode_info = None
