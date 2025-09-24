@@ -242,6 +242,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        if (!rules || !rules.link_patterns || !rules.title_patterns || !rules.content_patterns) {
+            console.log('Invalid rules object - cannot auto-save patterns');
+            return;
+        }
+        
         // Save patterns to database
         fetch(`/admin/api/recap-sites/${siteId}`, {
             method: 'PUT',
@@ -377,6 +382,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusText.textContent = 'Testing generated patterns...';
                 generateAndTestText.textContent = 'Testing...';
                 
+                // Store the rules for later use
+                const generatedRules = data.rules;
+                
                 return fetch('/admin/api/test-patterns', {
                     method: 'POST',
                     headers: {
@@ -390,6 +398,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         title_patterns: JSON.parse(data.rules.title_patterns),
                         content_patterns: JSON.parse(data.rules.content_patterns)
                     })
+                }).then(testResponse => {
+                    // Add the rules to the test response
+                    return testResponse.json().then(testData => {
+                        testData.rules = generatedRules;
+                        return testData;
+                    });
                 });
             } else {
                 throw new Error('Failed to generate rules: ' + (data.error || 'Unknown error'));
@@ -433,8 +447,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update button states - now we have patterns
                 updateButtonStates(true);
                 
-                // Auto-save the generated patterns to the database
-                autoSaveGeneratedPatterns(data.rules);
+                // Auto-save the generated patterns to the database (only if rules exist)
+                if (data.rules) {
+                    autoSaveGeneratedPatterns(data.rules);
+                } else {
+                    console.log('No rules to auto-save - patterns were not generated');
+                }
             } else {
                 testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Test failed: ${data.error}</p>`;
                 testResults.classList.remove('hidden');
