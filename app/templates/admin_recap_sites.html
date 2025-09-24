@@ -256,13 +256,30 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Save patterns to database
+        // Get current site data to include all required fields
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const isActive = document.getElementById('is-active').checked;
+        const rateLimit = document.getElementById('rate-limit').value;
+        const userAgent = document.getElementById('user-agent').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+        
+        // Convert sample URLs to JSON array
+        const sampleUrlsArray = sampleUrls.split('\n').filter(url => url.trim()).map(url => url.trim());
+        
+        // Save patterns to database with all required fields
         fetch(`/admin/api/recap-sites/${siteId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                site_name: siteName,
+                base_url: baseUrl,
+                is_active: isActive,
+                rate_limit_seconds: parseInt(rateLimit) || 30,
+                user_agent: userAgent,
+                sample_urls: JSON.stringify(sampleUrlsArray),
                 link_patterns: rules.link_patterns,
                 title_patterns: rules.title_patterns,
                 content_patterns: rules.content_patterns
