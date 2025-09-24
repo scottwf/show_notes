@@ -1170,7 +1170,7 @@ def scrape_show_recaps():
                 content_patterns = json.loads(site['content_patterns'] or '[]')
                 
                 current_app.logger.info(f"Site {site_name}: {len(link_patterns)} link patterns, {len(title_patterns)} title patterns, {len(content_patterns)} content patterns")
-                rate_limit = site['rate_limit_seconds'] or 30
+                rate_limit = site['rate_limit_seconds'] or 5  # Reduced from 30 to 5 seconds
                 user_agent = site['user_agent'] or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 
                 current_app.logger.info(f"Scraping {site_name} for {show_title}")
@@ -1210,9 +1210,9 @@ def scrape_show_recaps():
                                 site_recaps.append(detailed_recap)
                                 current_app.logger.info(f"Successfully scraped recap from sample URL: {sample_url}")
                             
-                            # Rate limiting
+                            # Reduced rate limiting
                             import time
-                            time.sleep(rate_limit)
+                            time.sleep(2)  # Reduced from rate_limit to 2 seconds
                             
                         except Exception as e:
                             current_app.logger.warning(f"Error scraping sample URL {sample_url}: {e}")
@@ -1252,9 +1252,9 @@ def scrape_show_recaps():
                                                     detailed_recap['source'] = site_name
                                                     site_recaps.append(detailed_recap)
                             
-                            # Rate limiting
+                            # Reduced rate limiting
                             import time
-                            time.sleep(rate_limit)
+                            time.sleep(2)  # Reduced from rate_limit to 2 seconds
                             
                         except Exception as e:
                             current_app.logger.warning(f"Error scraping {search_url}: {e}")
@@ -1275,7 +1275,7 @@ def scrape_show_recaps():
             return jsonify({
                 'success': False,
                 'error': f'No recaps found for "{show_title}". This may be due to rate limiting from recap sites or the show not having recent recaps available.',
-                'suggestion': 'Try again later or check if the show has recent episodes with recaps on Vulture or Showbiz Junkies.'
+                'suggestion': 'Try again later or check if the show has recent episodes with recaps on the configured sites. The scraping system has been optimized for faster performance.'
             })
         
         # Get updated episode count for this show
@@ -1694,7 +1694,7 @@ def scrape_detailed_recap(url, title, site_name, title_patterns, content_pattern
         import html as html_module
         import urllib.parse
         
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         if response.status_code != 200:
             return None
         
@@ -1906,7 +1906,7 @@ def test_site_scraping(site_id):
         for url in sample_urls[:3]:  # Test first 3 URLs
             try:
                 # Fetch the page
-                response = requests.get(url, headers=headers, timeout=10)
+                response = requests.get(url, headers=headers, timeout=15)
                 if response.status_code != 200:
                     test_results.append({
                         'url': url,
@@ -2035,7 +2035,7 @@ def test_patterns():
         for url in sample_urls[:3]:  # Test first 3 URLs
             try:
                 # Fetch the page
-                response = requests.get(url, headers=headers, timeout=10)
+                response = requests.get(url, headers=headers, timeout=15)
                 if response.status_code != 200:
                     test_results.append({
                         'url': url,
