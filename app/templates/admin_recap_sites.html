@@ -233,6 +233,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Auto-save generated patterns to database
+    function autoSaveGeneratedPatterns(rules) {
+        const siteId = document.getElementById('site-id').value;
+        
+        if (!siteId) {
+            console.log('No site ID - cannot auto-save patterns for new site');
+            return;
+        }
+        
+        // Save patterns to database
+        fetch(`/admin/api/recap-sites/${siteId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                link_patterns: rules.link_patterns,
+                title_patterns: rules.title_patterns,
+                content_patterns: rules.content_patterns
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Patterns auto-saved successfully');
+            } else {
+                console.error('Failed to auto-save patterns:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error auto-saving patterns:', error);
+        });
+    }
+
     // Close modal on outside click
     siteModal.addEventListener('click', function(e) {
         if (e.target === siteModal) {
@@ -398,6 +432,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Update button states - now we have patterns
                 updateButtonStates(true);
+                
+                // Auto-save the generated patterns to the database
+                autoSaveGeneratedPatterns(data.rules);
             } else {
                 testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Test failed: ${data.error}</p>`;
                 testResults.classList.remove('hidden');
