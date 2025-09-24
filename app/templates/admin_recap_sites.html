@@ -310,7 +310,20 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(`Test completed!\n\nFound ${data.results.length} recaps:\n${data.results.map(r => `- ${r.title}`).join('\n')}`);
+                    let message = `Test completed for ${data.site_name}!\n\n`;
+                    data.results.forEach((result, index) => {
+                        message += `${index + 1}. ${result.title}\n`;
+                        if (result.status === 'success') {
+                            if (result.episode_info) {
+                                message += `   Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}\n`;
+                            }
+                            message += `   Content extracted: ${result.content_extracted ? 'Yes' : 'No'}\n`;
+                        } else {
+                            message += `   Error: ${result.error}\n`;
+                        }
+                        message += `   URL: ${result.url}\n\n`;
+                    });
+                    alert(message);
                 } else {
                     alert('Test failed: ' + data.error);
                 }

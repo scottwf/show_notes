@@ -1422,6 +1422,14 @@ def generate_scraping_rules():
         if any('episode' in seg.lower() for seg in url_segments):
             link_patterns.append(r'<a[^>]+href="([^"]*episode[^"]*)"[^>]*>([^<]+)</a>')
         
+        # Check for season recap patterns
+        if any('season' in seg.lower() for seg in url_segments):
+            link_patterns.append(r'<a[^>]+href="([^"]*season[^"]*recap[^"]*)"[^>]*>([^<]+)</a>')
+        
+        # Check for show/series recap patterns
+        if any('series' in seg.lower() or 'show' in seg.lower() for seg in url_segments):
+            link_patterns.append(r'<a[^>]+href="([^"]*(?:series|show)[^"]*recap[^"]*)"[^>]*>([^<]+)</a>')
+        
         # Check for common URL structures
         if any('/tv/' in url for url in sample_urls):
             link_patterns.append(r'<a[^>]+href="([^"]*\/tv\/[^"]*)"[^>]*>([^<]+)</a>')
@@ -1440,7 +1448,10 @@ def generate_scraping_rules():
         title_patterns = [
             r'Season\s+(\d+).*Episode\s+(\d+)',
             r'S(\d+)E(\d+)',
-            r'Episode\s+(\d+)'
+            r'Episode\s+(\d+)',
+            r'Season\s+(\d+)\s+Recap',  # Season recaps
+            r'Series\s+Recap',  # Show/series recaps
+            r'Show\s+Recap'  # Show recaps
         ]
         
         content_patterns = [
@@ -1495,15 +1506,84 @@ def test_site_scraping(site_id):
         # Test scraping using the site's patterns
         current_app.logger.info(f"Testing scraping for {site['site_name']} with {len(sample_urls)} sample URLs")
         
-        # For now, return a simple test result
-        # In the future, this would actually test the scraping patterns
+        # Parse the scraping patterns
+        try:
+            link_patterns = json.loads(site['link_patterns'] or '[]')
+            title_patterns = json.loads(site['title_patterns'] or '[]')
+            content_patterns = json.loads(site['content_patterns'] or '[]')
+        except:
+            link_patterns = title_patterns = content_patterns = []
+        
+        # Test each sample URL
         test_results = []
+        import requests
+        import re
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
         for url in sample_urls[:3]:  # Test first 3 URLs
-            test_results.append({
-                'url': url,
-                'title': f"Test recap from {site['site_name']}",
-                'status': 'success'
-            })
+            try:
+                # Fetch the page
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    test_results.append({
+                        'url': url,
+                        'title': f"HTTP {response.status_code}",
+                        'status': 'error',
+                        'error': f'Failed to fetch: HTTP {response.status_code}'
+                    })
+                    continue
+                
+                html = response.text
+                
+                # Extract title
+                title_match = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.IGNORECASE)
+                if not title_match:
+                    title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+                
+                title = title_match.group(1).strip() if title_match else "No title found"
+                
+                # Test episode info extraction
+                episode_info = None
+                for pattern in title_patterns:
+                    match = re.search(pattern, title, re.IGNORECASE)
+                    if match:
+                        if len(match.groups()) == 2:
+                            episode_info = {'season': int(match.group(1)), 'episode': int(match.group(2))}
+                        elif len(match.groups()) == 1:
+                            episode_info = {'season': 1, 'episode': int(match.group(1))}
+                        break
+                
+                # Test content extraction
+                content_found = False
+                for pattern in content_patterns:
+                    match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        content_found = True
+                        break
+                
+                test_results.append({
+                    'url': url,
+                    'title': title,
+                    'episode_info': episode_info,
+                    'content_extracted': content_found,
+                    'status': 'success'
+                })
+                
+            except Exception as e:
+                test_results.append({
+                    'url': url,
+                    'title': f"Error: {str(e)}",
+                    'status': 'error',
+                    'error': str(e)
+                })
         
         return jsonify({
             'success': True,
