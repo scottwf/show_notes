@@ -1156,6 +1156,8 @@ def scrape_show_recaps():
                 'error': 'No active recap sites configured'
             })
         
+        current_app.logger.info(f"Found {len(sites)} active recap sites for scraping {show_title}")
+        
         # Scrape recaps using dynamic patterns
         all_recaps = []
         
@@ -1166,6 +1168,8 @@ def scrape_show_recaps():
                 link_patterns = json.loads(site['link_patterns'] or '[]')
                 title_patterns = json.loads(site['title_patterns'] or '[]')
                 content_patterns = json.loads(site['content_patterns'] or '[]')
+                
+                current_app.logger.info(f"Site {site_name}: {len(link_patterns)} link patterns, {len(title_patterns)} title patterns, {len(content_patterns)} content patterns")
                 rate_limit = site['rate_limit_seconds'] or 30
                 user_agent = site['user_agent'] or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 
@@ -1185,6 +1189,8 @@ def scrape_show_recaps():
                 
                 # First, try to use sample URLs if they contain our show
                 sample_urls = json.loads(site['sample_urls'] or '[]')
+                current_app.logger.info(f"Site {site_name} has {len(sample_urls)} sample URLs: {sample_urls}")
+                
                 for sample_url in sample_urls:
                     if sample_url and show_title.lower() in sample_url.lower():
                         current_app.logger.info(f"Found matching sample URL for {show_title}: {sample_url}")
