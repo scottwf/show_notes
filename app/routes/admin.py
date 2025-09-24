@@ -1090,7 +1090,7 @@ def test_recap_scraping():
         from app.recap_scrapers import recap_scraping_manager
         
         # Test scraping recent recaps
-        logger.info("Testing recap scraping...")
+        current_app.logger.info("Testing recap scraping...")
         recaps = recap_scraping_manager.scrape_recent_recaps(days_back=7)
         
         # Match recaps to shows in database
@@ -1109,7 +1109,7 @@ def test_recap_scraping():
         })
         
     except Exception as e:
-        logger.error(f"Error in recap scraping test: {e}", exc_info=True)
+        current_app.logger.error(f"Error in recap scraping test: {e}", exc_info=True)
         return jsonify({'error': f'Failed to test recap scraping: {str(e)}'}), 500
 
 @admin_bp.route('/api/scrape-show-recaps', methods=['POST'])
@@ -1134,7 +1134,7 @@ def scrape_show_recaps():
         from app.recap_scrapers import recap_scraping_manager
         
         # Scrape recaps for the specific show
-        logger.info(f"Scraping recaps for show: {show_title}")
+        current_app.logger.info(f"Scraping recaps for show: {show_title}")
         recaps = recap_scraping_manager.scrape_show_recaps(show_title, max_episodes)
         
         if not recaps:
@@ -1173,7 +1173,7 @@ def scrape_show_recaps():
         
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Error scraping recaps for {show_title}: {e}", exc_info=True)
+        current_app.logger.error(f"Error scraping recaps for {show_title}: {e}", exc_info=True)
         
         # Provide more specific error messages
         if "pattern" in error_msg.lower() and "match" in error_msg.lower():

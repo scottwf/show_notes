@@ -276,9 +276,16 @@ class ShowbizJunkiesScraper(BaseRecapScraper):
         
         recaps = []
         
-        # Find recap links using regex
-        link_pattern = r'<a[^>]+href="([^"]*\/tv-recaps\/[^"]*)"[^>]*>([^<]+)<\/a>'
-        matches = re.findall(link_pattern, html, re.IGNORECASE)
+        # Find recap links using regex - Showbiz Junkies uses /tv/ URLs
+        link_patterns = [
+            r'<a[^>]+href="([^"]*\/tv\/[^"]*recap[^"]*)"[^>]*>([^<]+)<\/a>',
+            r'<a[^>]+href="([^"]*\/tv-recaps\/[^"]*)"[^>]*>([^<]+)<\/a>'
+        ]
+        
+        matches = []
+        for pattern in link_patterns:
+            pattern_matches = re.findall(pattern, html, re.IGNORECASE)
+            matches.extend(pattern_matches)
         
         for url, title in matches:
             title = re.sub(r'<[^>]+>', '', title).strip()  # Remove HTML tags
