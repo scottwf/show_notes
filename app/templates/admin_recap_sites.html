@@ -385,6 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Store the rules for later use
                 const generatedRules = data.rules;
                 
+                // Test the generated rules
                 return fetch('/admin/api/test-patterns', {
                     method: 'POST',
                     headers: {
@@ -398,20 +399,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         title_patterns: JSON.parse(data.rules.title_patterns),
                         content_patterns: JSON.parse(data.rules.content_patterns)
                     })
-                }).then(testResponse => {
+                })
+                .then(testResponse => testResponse.json())
+                .then(testData => {
                     // Add the rules to the test response
-                    return testResponse.json().then(testData => {
-                        testData.rules = generatedRules;
-                        return testData;
-                    });
+                    testData.rules = generatedRules;
+                    return testData;
                 });
             } else {
                 throw new Error('Failed to generate rules: ' + (data.error || 'Unknown error'));
             }
-        })
-        .then(response => {
-            console.log('Test patterns response status:', response.status);
-            return response.json();
         })
         .then(data => {
             console.log('Test patterns response data:', data);
