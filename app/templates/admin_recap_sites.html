@@ -93,18 +93,19 @@
                         <!-- Action Buttons -->
                         <div class="mt-3">
                             <div class="flex space-x-3 mb-3">
-                                <button type="button" id="test-patterns-btn" 
-                                        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
-                                    <span id="test-patterns-text">🧪 Test Patterns</span>
-                                </button>
-                                <button type="button" id="generate-rules-btn"
+                                <button type="button" id="generate-and-test-btn" 
                                         class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
-                                    🤖 Generate Rules with LLM
+                                    <span id="generate-and-test-text">🤖 Generate & Test Rules</span>
+                                </button>
+                                <button type="button" id="test-only-btn" 
+                                        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        disabled>
+                                    <span id="test-only-text">🧪 Test Only</span>
                                 </button>
                             </div>
                             <div id="test-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center mb-3">
-                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-                                <span>Testing patterns...</span>
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                                <span id="status-text">Generating and testing patterns...</span>
                             </div>
                         </div>
                         
@@ -120,12 +121,12 @@
                         <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">📋 Setup Workflow:</h4>
                         <ol class="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-decimal list-inside">
                             <li><strong>Add sample URLs</strong> - Enter 2-3 episode recap URLs from this site above</li>
-                            <li><strong>Generate Rules</strong> - Click "Generate Rules with LLM" to create scraping patterns</li>
-                            <li><strong>Test Patterns</strong> - Click "Test Patterns" to verify the patterns work correctly</li>
+                            <li><strong>Generate & Test</strong> - Click "Generate & Test Rules" to create and test scraping patterns in one step</li>
+                            <li><strong>Test Only</strong> - If patterns exist, use "Test Only" to verify they still work</li>
                             <li><strong>Save Site</strong> - Click "Save Site" to store the configuration</li>
                         </ol>
                         <div class="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                            💡 <strong>Tip:</strong> Always test patterns before saving to ensure they work!
+                            💡 <strong>Tip:</strong> The "Test Only" button is enabled after patterns are generated!
                         </div>
                     </div>
 
@@ -152,7 +153,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const siteModal = document.getElementById('site-modal');
     const siteForm = document.getElementById('site-form');
     const cancelBtn = document.getElementById('cancel-btn');
-    const generateRulesBtn = document.getElementById('generate-rules-btn');
     const modalTitle = document.getElementById('modal-title');
 
     // Load sites on page load
@@ -174,6 +174,9 @@ document.addEventListener('DOMContentLoaded', function() {
             testOutput.innerHTML = '';
         }
         
+        // Reset button states for new site
+        resetButtonStates();
+        
         siteModal.classList.remove('hidden');
     });
 
@@ -182,19 +185,20 @@ document.addEventListener('DOMContentLoaded', function() {
         siteModal.classList.add('hidden');
     });
 
-    // Generate rules button
-    generateRulesBtn.addEventListener('click', function() {
-        generateScrapingRules();
-    });
-
-    // Test patterns button
-    const testPatternsBtn = document.getElementById('test-patterns-btn');
+    // Generate and test button
+    const generateAndTestBtn = document.getElementById('generate-and-test-btn');
+    const testOnlyBtn = document.getElementById('test-only-btn');
     const testStatus = document.getElementById('test-status');
     const testResults = document.getElementById('test-results');
     const testOutput = document.getElementById('test-output');
+    const statusText = document.getElementById('status-text');
     
-    testPatternsBtn.addEventListener('click', function() {
-        testPatterns();
+    generateAndTestBtn.addEventListener('click', function() {
+        generateAndTestRules();
+    });
+    
+    testOnlyBtn.addEventListener('click', function() {
+        testPatternsOnly();
     });
 
     // Form submission
@@ -202,6 +206,32 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         saveSite();
     });
+
+    // Helper function to reset button states
+    function resetButtonStates() {
+        const generateAndTestBtn = document.getElementById('generate-and-test-btn');
+        const testOnlyBtn = document.getElementById('test-only-btn');
+        const generateAndTestText = document.getElementById('generate-and-test-text');
+        
+        generateAndTestBtn.disabled = false;
+        testOnlyBtn.disabled = true;
+        generateAndTestText.textContent = '🤖 Generate & Test Rules';
+    }
+
+    // Helper function to check if patterns exist and update button states
+    function updateButtonStates(hasPatterns) {
+        const generateAndTestBtn = document.getElementById('generate-and-test-btn');
+        const testOnlyBtn = document.getElementById('test-only-btn');
+        const generateAndTestText = document.getElementById('generate-and-test-text');
+        
+        if (hasPatterns) {
+            generateAndTestText.textContent = '🔄 Regenerate & Test Rules';
+            testOnlyBtn.disabled = false;
+        } else {
+            generateAndTestText.textContent = '🤖 Generate & Test Rules';
+            testOnlyBtn.disabled = true;
+        }
+    }
 
     // Close modal on outside click
     siteModal.addEventListener('click', function(e) {
@@ -267,6 +297,233 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
             sitesList.appendChild(siteDiv);
+        });
+    }
+
+    // New combined function: Generate and test rules
+    function generateAndTestRules() {
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+
+        if (!siteName || !baseUrl || !sampleUrls) {
+            alert('Please fill in site name, base URL, and sample URLs before generating rules.');
+            return;
+        }
+
+        // Show loading state
+        const generateAndTestBtn = document.getElementById('generate-and-test-btn');
+        const testOnlyBtn = document.getElementById('test-only-btn');
+        const generateAndTestText = document.getElementById('generate-and-test-text');
+        const statusText = document.getElementById('status-text');
+        
+        generateAndTestBtn.disabled = true;
+        testOnlyBtn.disabled = true;
+        generateAndTestText.textContent = 'Generating...';
+        statusText.textContent = 'Generating rules with LLM...';
+        testStatus.classList.remove('hidden');
+        testResults.classList.add('hidden');
+
+        // First generate rules
+        fetch('/admin/api/generate-scraping-rules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                site_name: siteName,
+                base_url: baseUrl,
+                sample_urls: sampleUrls.split('\n').filter(url => url.trim())
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.rules) {
+                // Update status and test the generated rules
+                statusText.textContent = 'Testing generated patterns...';
+                generateAndTestText.textContent = 'Testing...';
+                
+                return fetch('/admin/api/test-patterns', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        site_name: siteName,
+                        base_url: baseUrl,
+                        sample_urls: sampleUrls.split('\n').filter(url => url.trim()),
+                        link_patterns: JSON.parse(data.rules.link_patterns),
+                        title_patterns: JSON.parse(data.rules.title_patterns),
+                        content_patterns: JSON.parse(data.rules.content_patterns)
+                    })
+                });
+            } else {
+                throw new Error('Failed to generate rules: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .then(response => {
+            console.log('Test patterns response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Test patterns response data:', data);
+            if (data.success) {
+                let output = `<div class="space-y-3">`;
+                output += `<p class="text-green-600 dark:text-green-400 font-semibold">✓ Rules generated and tested for ${data.site_name}!</p>`;
+                
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach((result, index) => {
+                        output += `<div class="border border-gray-200 dark:border-gray-600 rounded p-3">`;
+                        output += `<div class="font-medium text-gray-800 dark:text-white">${index + 1}. ${result.title}</div>`;
+                        
+                        if (result.status === 'success') {
+                            if (result.episode_info) {
+                                output += `<div class="text-sm text-blue-600 dark:text-blue-400">Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}</div>`;
+                            }
+                            output += `<div class="text-sm ${result.content_extracted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}">Content extracted: ${result.content_extracted ? 'Yes' : 'No'}</div>`;
+                        } else {
+                            output += `<div class="text-sm text-red-600 dark:text-red-400">Error: ${result.error}</div>`;
+                        }
+                        
+                        output += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">${result.url}</div>`;
+                        output += `</div>`;
+                    });
+                } else {
+                    output += `<p class="text-yellow-600 dark:text-yellow-400">No results found. Check the sample URLs and patterns.</p>`;
+                }
+                
+                output += `</div>`;
+                testOutput.innerHTML = output;
+                testResults.classList.remove('hidden');
+                
+                // Update button states - now we have patterns
+                updateButtonStates(true);
+            } else {
+                testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Test failed: ${data.error}</p>`;
+                testResults.classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error generating and testing rules:', error);
+            testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+            testResults.classList.remove('hidden');
+        })
+        .finally(() => {
+            // Reset button state
+            generateAndTestBtn.disabled = false;
+            testOnlyBtn.disabled = false;
+            generateAndTestText.textContent = '🔄 Regenerate & Test Rules';
+            testStatus.classList.add('hidden');
+        });
+    }
+
+    // Test patterns only (when patterns already exist)
+    function testPatternsOnly() {
+        const siteName = document.getElementById('site-name').value;
+        const baseUrl = document.getElementById('base-url').value;
+        const sampleUrls = document.getElementById('sample-urls').value;
+
+        if (!siteName || !baseUrl || !sampleUrls) {
+            alert('Please fill in site name, base URL, and sample URLs before testing.');
+            return;
+        }
+
+        // Show loading state
+        const testOnlyBtn = document.getElementById('test-only-btn');
+        const testOnlyText = document.getElementById('test-only-text');
+        const statusText = document.getElementById('status-text');
+        
+        testOnlyBtn.disabled = true;
+        testOnlyText.textContent = 'Testing...';
+        statusText.textContent = 'Testing existing patterns...';
+        testStatus.classList.remove('hidden');
+        testResults.classList.add('hidden');
+
+        // Get existing patterns from the form (if any) or use basic patterns
+        const linkPatterns = [
+            '<a[^>]+href="([^"]*)"[^>]*>([^<]*recap[^<]*)</a>',
+            '<a[^>]+href="([^"]*)"[^>]*>([^<]*episode[^<]*)</a>'
+        ];
+        
+        const titlePatterns = [
+            'Season\\s+(\\d+).*Episode\\s+(\\d+)',
+            'S(\\d+)E(\\d+)',
+            'Episode\\s+(\\d+)',
+            'episode-(\\d+)',
+            'season-(\\d+)-episode-(\\d+)'
+        ];
+        
+        const contentPatterns = [
+            '<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*?)</div>',
+            '<article[^>]*>(.*?)</article>',
+            '<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>(.*?)</div>',
+            '<div[^>]*class="[^"]*post-content[^"]*"[^>]*>(.*?)</div>'
+        ];
+
+        // Test the patterns
+        fetch('/admin/api/test-patterns', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                site_name: siteName,
+                base_url: baseUrl,
+                sample_urls: sampleUrls.split('\n').filter(url => url.trim()),
+                link_patterns: linkPatterns,
+                title_patterns: titlePatterns,
+                content_patterns: contentPatterns
+            })
+        })
+        .then(response => {
+            console.log('Test patterns response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Test patterns response data:', data);
+            if (data.success) {
+                let output = `<div class="space-y-3">`;
+                output += `<p class="text-green-600 dark:text-green-400 font-semibold">✓ Test completed for ${data.site_name}!</p>`;
+                
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach((result, index) => {
+                        output += `<div class="border border-gray-200 dark:border-gray-600 rounded p-3">`;
+                        output += `<div class="font-medium text-gray-800 dark:text-white">${index + 1}. ${result.title}</div>`;
+                        
+                        if (result.status === 'success') {
+                            if (result.episode_info) {
+                                output += `<div class="text-sm text-blue-600 dark:text-blue-400">Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}</div>`;
+                            }
+                            output += `<div class="text-sm ${result.content_extracted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}">Content extracted: ${result.content_extracted ? 'Yes' : 'No'}</div>`;
+                        } else {
+                            output += `<div class="text-sm text-red-600 dark:text-red-400">Error: ${result.error}</div>`;
+                        }
+                        
+                        output += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">${result.url}</div>`;
+                        output += `</div>`;
+                    });
+                } else {
+                    output += `<p class="text-yellow-600 dark:text-yellow-400">No results found. Try generating new rules.</p>`;
+                }
+                
+                output += `</div>`;
+                testOutput.innerHTML = output;
+                testResults.classList.remove('hidden');
+            } else {
+                testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Test failed: ${data.error}</p>`;
+                testResults.classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error testing patterns:', error);
+            testOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
+            testResults.classList.remove('hidden');
+        })
+        .finally(() => {
+            // Reset button state
+            testOnlyBtn.disabled = false;
+            testOnlyText.textContent = '🧪 Test Only';
+            testStatus.classList.add('hidden');
         });
     }
 
@@ -523,6 +780,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (testOutput) {
                         testOutput.innerHTML = '';
                     }
+                    
+                    // Check if patterns exist and update button states
+                    const hasPatterns = site.link_patterns && site.link_patterns !== '[]' && site.link_patterns !== 'null';
+                    updateButtonStates(hasPatterns);
                     
                     siteModal.classList.remove('hidden');
                 } else {
