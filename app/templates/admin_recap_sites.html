@@ -29,9 +29,9 @@
     </div>
 
     <!-- Add/Edit Site Modal -->
-    <div id="site-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div id="site-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50 overflow-y-auto">
+        <div class="flex items-start justify-center min-h-screen p-4 py-8">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full my-8">
                 <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                     <h3 id="modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">Add New Recap Site</h3>
                 </div>
@@ -90,13 +90,19 @@
                             Provide 2-3 sample URLs to help generate scraping rules
                         </p>
                         
-                        <!-- Test Button and Results -->
+                        <!-- Action Buttons -->
                         <div class="mt-3">
-                            <button type="button" id="test-patterns-btn" 
-                                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
-                                <span id="test-patterns-text">🧪 Test Patterns</span>
-                            </button>
-                            <div id="test-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center mt-2">
+                            <div class="flex space-x-3 mb-3">
+                                <button type="button" id="test-patterns-btn" 
+                                        class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
+                                    <span id="test-patterns-text">🧪 Test Patterns</span>
+                                </button>
+                                <button type="button" id="generate-rules-btn"
+                                        class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
+                                    🤖 Generate Rules with LLM
+                                </button>
+                            </div>
+                            <div id="test-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center mb-3">
                                 <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
                                 <span>Testing patterns...</span>
                             </div>
@@ -127,10 +133,6 @@
                         <button type="button" id="cancel-btn"
                                 class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-slate-600 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors">
                             Cancel
-                        </button>
-                        <button type="button" id="generate-rules-btn"
-                                class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium transition-colors">
-                            🤖 Generate Rules with LLM
                         </button>
                         <button type="submit"
                                 class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
@@ -166,7 +168,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const testResults = document.getElementById('test-results');
         const testOutput = document.getElementById('test-output');
         if (testResults) {
-            testResults.innerHTML = '';
             testResults.classList.add('hidden');
         }
         if (testOutput) {
@@ -439,28 +440,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Failed to generate rules: ' + (data.error || 'Unknown error'));
             }
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Test patterns response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Test patterns response data:', data);
             if (data.success) {
                 let output = `<div class="space-y-3">`;
                 output += `<p class="text-green-600 dark:text-green-400 font-semibold">✓ Test completed for ${data.site_name}!</p>`;
                 
-                data.results.forEach((result, index) => {
-                    output += `<div class="border border-gray-200 dark:border-gray-600 rounded p-3">`;
-                    output += `<div class="font-medium text-gray-800 dark:text-white">${index + 1}. ${result.title}</div>`;
-                    
-                    if (result.status === 'success') {
-                        if (result.episode_info) {
-                            output += `<div class="text-sm text-blue-600 dark:text-blue-400">Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}</div>`;
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach((result, index) => {
+                        output += `<div class="border border-gray-200 dark:border-gray-600 rounded p-3">`;
+                        output += `<div class="font-medium text-gray-800 dark:text-white">${index + 1}. ${result.title}</div>`;
+                        
+                        if (result.status === 'success') {
+                            if (result.episode_info) {
+                                output += `<div class="text-sm text-blue-600 dark:text-blue-400">Season: ${result.episode_info.season}, Episode: ${result.episode_info.episode}</div>`;
+                            }
+                            output += `<div class="text-sm ${result.content_extracted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}">Content extracted: ${result.content_extracted ? 'Yes' : 'No'}</div>`;
+                        } else {
+                            output += `<div class="text-sm text-red-600 dark:text-red-400">Error: ${result.error}</div>`;
                         }
-                        output += `<div class="text-sm ${result.content_extracted ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}">Content extracted: ${result.content_extracted ? 'Yes' : 'No'}</div>`;
-                    } else {
-                        output += `<div class="text-sm text-red-600 dark:text-red-400">Error: ${result.error}</div>`;
-                    }
-                    
-                    output += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">${result.url}</div>`;
-                    output += `</div>`;
-                });
+                        
+                        output += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1 break-all">${result.url}</div>`;
+                        output += `</div>`;
+                    });
+                } else {
+                    output += `<p class="text-yellow-600 dark:text-yellow-400">No results found. Check the sample URLs and patterns.</p>`;
+                }
                 
                 output += `</div>`;
                 testOutput.innerHTML = output;
@@ -509,7 +518,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const testResults = document.getElementById('test-results');
                     const testOutput = document.getElementById('test-output');
                     if (testResults) {
-                        testResults.innerHTML = '';
                         testResults.classList.add('hidden');
                     }
                     if (testOutput) {
