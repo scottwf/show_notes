@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Wikipedia Scraper - Admin{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="md:flex md:items-center md:justify-between">
+            <div class="flex-1 min-w-0">
+                <h2 class="text-2xl font-bold leading-7 text-gray-900 dark:text-white sm:text-3xl sm:truncate">
+                    Wikipedia Scraper
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Extract show information from Wikipedia including premise, cast, and episode summaries
+                </p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="mt-8">
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <!-- Search Form -->
+                    <div class="mb-6">
+                        <label for="show-title" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            TV Show Title
+                        </label>
+                        <div class="flex space-x-3">
+                            <input type="text" 
+                                   id="show-title" 
+                                   placeholder="Enter show title (e.g., 'Alien: Earth', 'Breaking Bad')"
+                                   class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                            <button type="button" 
+                                    id="scrape-btn"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
+                                <span id="scrape-text">🔍 Scrape Wikipedia</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Status -->
+                    <div id="status" class="hidden mb-6">
+                        <div class="flex items-center">
+                            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                            <span id="status-text" class="text-sm text-gray-600 dark:text-gray-400">Scraping Wikipedia...</span>
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <div id="results" class="hidden">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Scraping Results</h3>
+                        
+                        <!-- Basic Info -->
+                        <div id="basic-info" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Basic Information</h4>
+                            <div id="basic-info-content"></div>
+                        </div>
+
+                        <!-- Premise -->
+                        <div id="premise-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Premise</h4>
+                            <div id="premise-content" class="text-sm text-gray-700 dark:text-gray-300"></div>
+                        </div>
+
+                        <!-- Cast -->
+                        <div id="cast-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Cast & Characters</h4>
+                            <div id="cast-content"></div>
+                        </div>
+
+                        <!-- Episodes -->
+                        <div id="episodes-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Episodes</h4>
+                            <div id="episodes-content"></div>
+                        </div>
+
+                        <!-- Tables -->
+                        <div id="tables-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Data Tables</h4>
+                            <div id="tables-content"></div>
+                        </div>
+
+                        <!-- Raw Data -->
+                        <div class="mb-6">
+                            <details>
+                                <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                                    View Raw Data
+                                </summary>
+                                <pre id="raw-data" class="mt-2 text-xs bg-gray-100 dark:bg-gray-800 p-4 rounded overflow-auto max-h-96"></pre>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scrapeBtn = document.getElementById('scrape-btn');
+    const showTitleInput = document.getElementById('show-title');
+    const statusDiv = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const resultsDiv = document.getElementById('results');
+    
+    scrapeBtn.addEventListener('click', function() {
+        const showTitle = showTitleInput.value.trim();
+        if (!showTitle) {
+            alert('Please enter a show title');
+            return;
+        }
+        
+        scrapeWikipedia(showTitle);
+    });
+    
+    showTitleInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            scrapeBtn.click();
+        }
+    });
+    
+    function scrapeWikipedia(showTitle) {
+        // Show loading state
+        scrapeBtn.disabled = true;
+        scrapeBtn.innerHTML = '<span>⏳ Scraping...</span>';
+        statusDiv.classList.remove('hidden');
+        statusText.textContent = `Scraping Wikipedia for "${showTitle}"...`;
+        resultsDiv.classList.add('hidden');
+        
+        fetch('/admin/api/scrape-wikipedia', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                show_title: showTitle
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayResults(data.data);
+                statusText.textContent = `Successfully scraped Wikipedia for "${showTitle}"`;
+            } else {
+                throw new Error(data.error || 'Unknown error occurred');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusText.textContent = `Error: ${error.message}`;
+            statusText.className = 'text-sm text-red-600 dark:text-red-400';
+        })
+        .finally(() => {
+            scrapeBtn.disabled = false;
+            scrapeBtn.innerHTML = '<span>🔍 Scrape Wikipedia</span>';
+        });
+    }
+    
+    function displayResults(data) {
+        // Basic info
+        const basicInfoContent = document.getElementById('basic-info-content');
+        basicInfoContent.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                    <strong>Title:</strong> ${data.title || 'Not found'}
+                </div>
+                <div>
+                    <strong>Wikipedia URL:</strong> 
+                    <a href="${data.url || '#'}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">
+                        ${data.url || 'Not found'}
+                    </a>
+                </div>
+                <div>
+                    <strong>Method:</strong> ${data.method || 'Unknown'}
+                </div>
+                <div>
+                    <strong>Scraped:</strong> ${data.scraped_at || 'Unknown'}
+                </div>
+                <div>
+                    <strong>Premise Length:</strong> ${data.premise ? data.premise.length : 0} characters
+                </div>
+                <div>
+                    <strong>Episodes Found:</strong> ${data.episodes ? data.episodes.length : 0}
+                </div>
+            </div>
+        `;
+        
+        // Premise
+        const premiseContent = document.getElementById('premise-content');
+        premiseContent.textContent = data.premise || 'No premise found';
+        
+        // Cast
+        const castContent = document.getElementById('cast-content');
+        const cast = data.cast || {};
+        let castHtml = '';
+        
+        for (const [category, members] of Object.entries(cast)) {
+            if (members && members.length > 0) {
+                castHtml += `<div class="mb-3"><strong class="capitalize">${category.replace('_', ' ')}:</strong><ul class="ml-4 list-disc">`;
+                members.forEach(member => {
+                    castHtml += `<li>${member.actor || 'Unknown'} ${member.character ? `as ${member.character}` : ''}</li>`;
+                });
+                castHtml += '</ul></div>';
+            }
+        }
+        
+        if (!castHtml) {
+            castHtml = '<p class="text-sm text-gray-500 dark:text-gray-400">No cast information found</p>';
+        }
+        castContent.innerHTML = castHtml;
+        
+        // Episodes
+        const episodesContent = document.getElementById('episodes-content');
+        const episodes = data.episodes || [];
+        
+        if (episodes.length > 0) {
+            let episodesHtml = '<div class="space-y-2">';
+            episodes.forEach(episode => {
+                episodesHtml += `
+                    <div class="text-sm border-l-2 border-blue-500 pl-3">
+                        <strong>Episode ${episode.episode_number || '?'}:</strong> ${episode.title || 'Unknown'}
+                        ${episode.air_date ? `<br><span class="text-gray-500">${episode.air_date}</span>` : ''}
+                    </div>
+                `;
+            });
+            episodesHtml += '</div>';
+            episodesContent.innerHTML = episodesHtml;
+        } else {
+            episodesContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No episode information found</p>';
+        }
+        
+        // Tables
+        const tablesContent = document.getElementById('tables-content');
+        const tables = data.tables || [];
+        
+        if (tables.length > 0) {
+            let tablesHtml = '<div class="space-y-4">';
+            tables.forEach((table, index) => {
+                tablesHtml += `
+                    <div class="border rounded-lg p-3">
+                        <h5 class="font-medium mb-2">Table ${index + 1} (${table.shape ? `${table.shape[0]} rows × ${table.shape[1]} columns` : 'Unknown size'})</h5>
+                        <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            Columns: ${table.columns ? table.columns.join(', ') : 'Unknown'}
+                        </div>
+                        ${table.data && table.data.length > 0 ? 
+                            `<div class="text-xs bg-white dark:bg-gray-800 p-2 rounded border max-h-32 overflow-auto">
+                                ${JSON.stringify(table.data.slice(0, 3), null, 2)}${table.data.length > 3 ? '\n...' : ''}
+                            </div>` : 
+                            '<p class="text-sm text-gray-500">No data available</p>'
+                        }
+                    </div>
+                `;
+            });
+            tablesHtml += '</div>';
+            tablesContent.innerHTML = tablesHtml;
+        } else {
+            tablesContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No tables found</p>';
+        }
+        
+        // Raw data
+        document.getElementById('raw-data').textContent = JSON.stringify(data, null, 2);
+        
+        // Show results
+        resultsDiv.classList.remove('hidden');
+    }
+});
+</script>
+{% endblock %}

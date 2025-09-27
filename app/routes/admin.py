@@ -58,6 +58,7 @@ from .. import prompt_builder
 from .. import prompts # if prompts.py contains directly usable prompt strings
 import inspect
 from ..llm_services import get_llm_response
+from ..wikipedia_scraper import scrape_wikipedia_show
 
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -1316,6 +1317,13 @@ def recap_sites():
     """Recap sites management page"""
     return render_template('admin_recap_sites.html')
 
+@admin_bp.route('/wikipedia')
+@login_required
+@admin_required
+def wikipedia_scraper():
+    """Wikipedia scraper page"""
+    return render_template('admin_wikipedia.html')
+
 @admin_bp.route('/api/recap-sites', methods=['GET'])
 @login_required
 @admin_required
@@ -1996,6 +2004,39 @@ def test_site_scraping(site_id):
     except Exception as e:
         current_app.logger.error(f"Error testing site scraping: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@admin_bp.route('/api/scrape-wikipedia', methods=['POST'])
+@login_required
+@admin_required
+def scrape_wikipedia():
+    """Scrape Wikipedia for show information"""
+    try:
+        data = request.get_json()
+        show_title = data.get('show_title')
+        
+        if not show_title:
+            return jsonify({'success': False, 'error': 'Show title is required'}), 400
+        
+        current_app.logger.info(f"Scraping Wikipedia for: {show_title}")
+        
+        # Scrape Wikipedia
+        result = scrape_wikipedia_show(show_title)
+        
+        if 'error' in result:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'data': result
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error scraping Wikipedia for {show_title}: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/api/test-patterns', methods=['POST'])
 @login_required
