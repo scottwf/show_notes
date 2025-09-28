@@ -76,12 +76,8 @@ class WikipediaScraper:
                 if page.exists():
                     return page.fullurl
             
-            # Try search
-            search_results = self.wiki_api.search(show_title, results=10)
-            for result in search_results:
-                page = self.wiki_api.page(result)
-                if page.exists() and self._is_tv_series_page(page):
-                    return page.fullurl
+            # Try search using requests fallback
+            return self._search_with_requests(show_title)
             
             return None
             
