@@ -2038,6 +2038,47 @@ def scrape_wikipedia():
         current_app.logger.error(f"Error scraping Wikipedia for {show_title}: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@admin_bp.route('/api/wikipedia-data', methods=['GET'])
+@login_required
+@admin_required
+def get_wikipedia_data():
+    """Get stored Wikipedia data for all shows"""
+    try:
+        db = get_db_connection()
+        
+        # Get all stored Wikipedia data
+        results = db.execute('''
+            SELECT show_title, title, premise, cast_data, episodes_data, production_data, 
+                   wikipedia_url, scraped_at, method, created_at
+            FROM wikipedia_show_data 
+            ORDER BY created_at DESC
+        ''').fetchall()
+        
+        data = []
+        for row in results:
+            import json
+            data.append({
+                'show_title': row[0],
+                'title': row[1],
+                'premise': row[2],
+                'cast': json.loads(row[3]) if row[3] else {},
+                'episodes': json.loads(row[4]) if row[4] else [],
+                'production': json.loads(row[5]) if row[5] else {},
+                'wikipedia_url': row[6],
+                'scraped_at': row[7],
+                'method': row[8],
+                'created_at': row[9]
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Wikipedia data: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/api/test-patterns', methods=['POST'])
 @login_required

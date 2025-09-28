@@ -75,6 +75,12 @@
                             <div id="episodes-content"></div>
                         </div>
 
+                        <!-- Production Info -->
+                        <div id="production-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Production Information</h4>
+                            <div id="production-content"></div>
+                        </div>
+
                         <!-- Related Pages -->
                         <div id="related-pages-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <h4 class="font-medium text-gray-900 dark:text-white mb-2">Related Pages Discovered</h4>
@@ -91,6 +97,19 @@
                         <div id="tables-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <h4 class="font-medium text-gray-900 dark:text-white mb-2">Data Tables</h4>
                             <div id="tables-content"></div>
+                        </div>
+
+                        <!-- Stored Data -->
+                        <div id="stored-data-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-medium text-gray-900 dark:text-white">Stored Wikipedia Data</h4>
+                                <button id="load-stored-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    Load Stored Data
+                                </button>
+                            </div>
+                            <div id="stored-data-content">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Click "Load Stored Data" to see all previously scraped shows</p>
+                            </div>
                         </div>
 
                         <!-- Raw Data -->
@@ -116,6 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusDiv = document.getElementById('status');
     const statusText = document.getElementById('status-text');
     const resultsDiv = document.getElementById('results');
+    const loadStoredBtn = document.getElementById('load-stored-btn');
     
     scrapeBtn.addEventListener('click', function() {
         const showTitle = showTitleInput.value.trim();
@@ -125,6 +145,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         scrapeWikipedia(showTitle);
+    });
+    
+    loadStoredBtn.addEventListener('click', function() {
+        loadStoredData();
     });
     
     showTitleInput.addEventListener('keypress', function(e) {
@@ -180,8 +204,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <div>
                     <strong>Wikipedia URL:</strong> 
-                    <a href="${data.url || '#'}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">
-                        ${data.url || 'Not found'}
+                    <a href="${data.wikipedia_url || data.url || '#'}" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline">
+                        ${data.wikipedia_url || data.url || 'Not found'}
                     </a>
                 </div>
                 <div>
@@ -238,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>Episode ${episode.episode_number || '?'}:</strong> ${episode.title || 'Unknown'}
                         ${episode.air_date ? `<br><span class="text-gray-500">${episode.air_date}</span>` : ''}
                         ${episode.directed_by ? `<br><span class="text-gray-500">Directed by: ${episode.directed_by}</span>` : ''}
+                        ${episode.written_by ? `<br><span class="text-gray-500">Written by: ${episode.written_by}</span>` : ''}
                     </div>
                 `;
             });
@@ -246,6 +271,22 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             episodesContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No episode information found</p>';
         }
+        
+        // Production Info
+        const productionContent = document.getElementById('production-content');
+        const production = data.production || {};
+        let productionHtml = '';
+        
+        for (const [key, value] of Object.entries(production)) {
+            if (value && value.trim()) {
+                productionHtml += `<div class="mb-2"><strong class="capitalize">${key.replace('_', ' ')}:</strong> ${value}</div>`;
+            }
+        }
+        
+        if (!productionHtml) {
+            productionHtml = '<p class="text-sm text-gray-500 dark:text-gray-400">No production information found</p>';
+        }
+        productionContent.innerHTML = productionHtml;
 
         // Related Pages
         const relatedPagesContent = document.getElementById('related-pages-content');
@@ -349,6 +390,85 @@ document.addEventListener('DOMContentLoaded', function() {
             'show_related': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
         };
         return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    }
+    
+    function loadStoredData() {
+        const storedDataContent = document.getElementById('stored-data-content');
+        storedDataContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Loading stored data...</p>';
+        
+        fetch('/admin/api/wikipedia-data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayStoredData(data.data);
+                } else {
+                    storedDataContent.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error: ${data.error}</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading stored data:', error);
+                storedDataContent.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error loading stored data</p>`;
+            });
+    }
+    
+    function displayStoredData(shows) {
+        const storedDataContent = document.getElementById('stored-data-content');
+        
+        if (shows.length === 0) {
+            storedDataContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No stored data found</p>';
+            return;
+        }
+        
+        let html = `<div class="space-y-4">`;
+        
+        shows.forEach(show => {
+            const castCount = (show.cast.main_cast?.length || 0) + (show.cast.recurring_cast?.length || 0);
+            const episodeCount = show.episodes?.length || 0;
+            
+            html += `
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <h5 class="font-medium text-gray-900 dark:text-white">${show.title || show.show_title}</h5>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${show.created_at}</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                        <div>
+                            <strong>Cast:</strong> ${castCount} members
+                        </div>
+                        <div>
+                            <strong>Episodes:</strong> ${episodeCount}
+                        </div>
+                        <div>
+                            <strong>Method:</strong> ${show.method || 'Unknown'}
+                        </div>
+                        <div>
+                            <strong>Premise:</strong> ${show.premise ? 'Yes' : 'No'}
+                        </div>
+                    </div>
+                    
+                    ${show.premise ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${show.premise.substring(0, 150)}...</p>` : ''}
+                    
+                    <div class="flex gap-2">
+                        <button onclick="viewShowDetails('${show.show_title}')" class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                            View Details
+                        </button>
+                        <a href="${show.wikipedia_url || '#'}" target="_blank" class="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">
+                            Wikipedia
+                        </a>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        storedDataContent.innerHTML = html;
+    }
+    
+    function viewShowDetails(showTitle) {
+        // Load the show data and display it
+        showTitleInput.value = showTitle;
+        scrapeWikipedia(showTitle);
     }
 });
 </script>
