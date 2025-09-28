@@ -350,20 +350,21 @@ class WikipediaScraper:
         if not tables:
             tables = soup.find_all('table', class_='wikitable')
         
+        # Extract episodes from all tables that look like episode tables
         for table in tables:
-            episodes = self._extract_episodes_from_table(table)
-            if episodes:
-                break
+            table_episodes = self._extract_episodes_from_table(table)
+            if table_episodes:
+                episodes.extend(table_episodes)
         
-        # If no table found, try to find episodes section
+        # If no episodes found, try to find episodes section
         if not episodes:
             episodes_section = self._find_section(soup, ['Episodes', 'Episode list'])
             if episodes_section:
                 tables = episodes_section.find_all('table')
                 for table in tables:
-                    episodes = self._extract_episodes_from_table(table)
-                    if episodes:
-                        break
+                    table_episodes = self._extract_episodes_from_table(table)
+                    if table_episodes:
+                        episodes.extend(table_episodes)
                 
                 # Try list format as fallback
                 if not episodes:
@@ -384,13 +385,17 @@ class WikipediaScraper:
         headers = [th.get_text().strip() for th in header_row.find_all(['th', 'td'])]
         
         # Find column indices
-        episode_col = self._find_column_index(headers, ['episode', 'no', '#', 'no.'])
+        episode_col = self._find_column_index(headers, ['episode', 'no', '#', 'no.', 'no.overall', 'no. inseason'])
         title_col = self._find_column_index(headers, ['title', 'episode title'])
         director_col = self._find_column_index(headers, ['directed by', 'director'])
         writer_col = self._find_column_index(headers, ['written by', 'writer'])
         air_date_col = self._find_column_index(headers, ['air date', 'aired', 'date', 'original release date'])
         viewers_col = self._find_column_index(headers, ['viewers', 'u.s. viewers', 'rating'])
         description_col = self._find_column_index(headers, ['description', 'summary', 'plot'])
+        
+        # Skip if this doesn't look like an episode table
+        if not any(col is not None for col in [episode_col, title_col]):
+            return episodes
         
         # Extract episode data
         for row in rows[1:]:
@@ -400,8 +405,17 @@ class WikipediaScraper:
             
             episode = {}
             
+            # Extract episode number (try both overall and season-specific)
             if episode_col is not None and episode_col < len(cells):
-                episode['episode_number'] = cells[episode_col].get_text().strip()
+                episode_text = cells[episode_col].get_text().strip()
+                # Handle cases like "1" or "1 1" (overall season)
+                if episode_text and episode_text.isdigit():
+                    episode['episode_number'] = episode_text
+                elif ' ' in episode_text:
+                    parts = episode_text.split()
+                    if len(parts) >= 2 and parts[0].isdigit():
+                        episode['episode_number'] = parts[0]
+                        episode['season_episode'] = parts[1] if parts[1].isdigit() else parts[1]
             
             if title_col is not None and title_col < len(cells):
                 # Extract title from links if present
@@ -426,7 +440,8 @@ class WikipediaScraper:
             if description_col is not None and description_col < len(cells):
                 episode['description'] = cells[description_col].get_text().strip()
             
-            if episode:
+            # Only add if we have at least a title or episode number
+            if episode.get('title') or episode.get('episode_number'):
                 episodes.append(episode)
         
         return episodes
@@ -899,14 +914,18 @@ class WikipediaScraper:
         href_lower = href.lower()
         show_lower = show_title.lower()
         
-        # Episode pages
+        # Episode list pages (prioritize these)
+        if any(keyword in text_lower for keyword in ['list of', 'episodes']) and show_lower in text_lower:
+            return 'season'
+        
+        # Individual episode pages
         if any(keyword in text_lower for keyword in ['episode', 'pilot']) and show_lower in text_lower:
-            return 'episode'
+            if not any(keyword in text_lower for keyword in ['list of', 'episodes']):
+                return 'episode'
         
         # Season pages
         if any(keyword in text_lower for keyword in ['season', 'series']) and show_lower in text_lower:
-            if any(keyword in text_lower for keyword in ['list of', 'episodes']):
-                return 'season'
+            return 'season'
         
         # Character pages
         if show_lower in text_lower and any(keyword in text_lower for keyword in ['character', 'cast']):
@@ -982,14 +1001,27 @@ class WikipediaScraper:
             page_production = page_data.get('production', {})
             consolidated['all_production'].update(page_production)
         
-        # Remove duplicate episodes
+        # Remove duplicate episodes, prioritizing episodes with titles
         seen_episodes = set()
         unique_episodes = []
-        for episode in consolidated['all_episodes']:
+        
+        # Sort episodes to prioritize those with titles
+        sorted_episodes = sorted(consolidated['all_episodes'], 
+                               key=lambda x: (x.get('title', '') == 'Unknown', x.get('episode_number', '')))
+        
+        for episode in sorted_episodes:
             episode_key = f"{episode.get('episode_number', '')}-{episode.get('title', '')}"
             if episode_key not in seen_episodes:
                 seen_episodes.add(episode_key)
                 unique_episodes.append(episode)
+            else:
+                # If we already have this episode but this one has a better title, replace it
+                existing_index = next(i for i, ep in enumerate(unique_episodes) 
+                                    if f"{ep.get('episode_number', '')}-{ep.get('title', '')}" == episode_key)
+                if (episode.get('title', '') != 'Unknown' and 
+                    unique_episodes[existing_index].get('title', '') == 'Unknown'):
+                    unique_episodes[existing_index] = episode
+        
         consolidated['all_episodes'] = unique_episodes
         
         # Update episode count
