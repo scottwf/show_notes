@@ -332,10 +332,39 @@ class WikipediaScraper:
                 else:
                     cast_item['character'] = cells[character_col].get_text().strip()
             
-            if cast_item:
+            # Filter out non-cast entries
+            if self._is_valid_cast_entry(cast_item):
                 cast_data.append(cast_item)
         
         return cast_data
+    
+    def _is_valid_cast_entry(self, cast_item: Dict) -> bool:
+        """Check if a cast entry is valid (not a DVD title, season, etc.)"""
+        if not cast_item:
+            return False
+        
+        actor = cast_item.get('actor', '').strip()
+        character = cast_item.get('character', '').strip()
+        
+        # Skip if both are empty
+        if not actor and not character:
+            return False
+        
+        # Skip DVD/season titles
+        dvd_keywords = ['season', 'complete', 'series', 'collection', 'box set', 'dvd', 'blu-ray']
+        for keyword in dvd_keywords:
+            if keyword in actor.lower() or keyword in character.lower():
+                return False
+        
+        # Skip years and date ranges
+        if re.match(r'^\d{4}', actor) or re.match(r'^\d{4}', character):
+            return False
+        
+        # Skip if it looks like a title (starts with "The")
+        if actor.startswith('The ') and len(actor.split()) > 3:
+            return False
+        
+        return True
     
     def _extract_episodes(self, soup: BeautifulSoup) -> List[Dict]:
         """Extract episode information"""
@@ -525,8 +554,19 @@ class WikipediaScraper:
                     return current
             current = current.next_sibling
         
-        # If no direct sibling, return the heading itself for now
-        return heading
+        # If no direct sibling, look for the next heading and return everything between
+        next_heading = heading.find_next(['h2', 'h3', 'h4'])
+        if next_heading and heading.parent:
+            # Create a container div to hold all content between headings
+            container = BeautifulSoup('<div></div>', 'html.parser').div
+            current = heading.next_sibling
+            while current and current != next_heading:
+                if hasattr(current, 'name') and current.name not in ['span']:
+                    container.append(current.extract())
+                current = current.next_sibling
+            return container if container.contents else None
+        
+        return None
     
     def _find_column_index(self, headers: List[str], keywords: List[str]) -> Optional[int]:
         """Find the index of a column by keywords"""
@@ -1025,6 +1065,246 @@ class WikipediaScraper:
         consolidated['total_related_pages'] = len(related_pages)
         
         return consolidated
+    
+    def _extract_raw_content(self, soup: BeautifulSoup) -> str:
+        """Extract clean text content from Wikipedia page for LLM processing"""
+        # Remove navigation, infoboxes, and other non-content elements
+        for element in soup.find_all(['nav', 'table', 'div'], class_=['navbox', 'infobox', 'sidebar', 'metadata']):
+            element.decompose()
+        
+        # Remove edit links and other Wikipedia-specific elements
+        for element in soup.find_all(['span'], class_=['mw-editsection', 'reference']):
+            element.decompose()
+        
+        # Get main content area
+        content = soup.find('div', {'id': 'mw-content-text'}) or soup.find('div', {'class': 'mw-body-content'})
+        if not content:
+            content = soup
+        
+        # Extract text with some structure
+        text_parts = []
+        
+        # Add title
+        title = soup.find('h1', {'id': 'firstHeading'})
+        if title:
+            text_parts.append(f"Title: {title.get_text().strip()}")
+        
+        # Add main headings and content
+        for heading in content.find_all(['h2', 'h3', 'h4']):
+            heading_text = heading.get_text().strip()
+            if heading_text and not heading_text.startswith('['):  # Skip empty or reference headings
+                text_parts.append(f"\n{heading_text}")
+                
+                # Add content under this heading - look for the next heading
+                next_heading = heading.find_next(['h2', 'h3', 'h4'])
+                current = heading.next_sibling
+                content_text = []
+                
+                while current and current != next_heading:
+                    if hasattr(current, 'name'):
+                        if current.name in ['p', 'li', 'ul', 'ol', 'table']:
+                            para_text = current.get_text().strip()
+                            if para_text and len(para_text) > 10:  # Include shorter text too
+                                content_text.append(para_text)
+                    current = current.next_sibling
+                
+                if content_text:
+                    text_parts.append('\n'.join(content_text[:5]))  # Include more content
+        
+        return '\n'.join(text_parts)
+    
+    def _parse_with_llm(self, show_title: str, raw_content: str, page_url: str) -> Dict:
+        """Use LLM to parse and structure Wikipedia content"""
+        try:
+            from app.llm_services import get_llm_response
+            from app.database import get_db_connection
+            
+            # Create a comprehensive prompt for the LLM
+            prompt = f"""
+You are a TV show information extractor. Analyze this Wikipedia content and extract structured data.
+
+Show: "{show_title}"
+
+Wikipedia Content:
+{raw_content[:6000]}
+
+Extract information and return ONLY this JSON format (no other text):
+
+{{
+    "title": "Show Title",
+    "premise": "Brief plot summary",
+    "cast": {{
+        "main_cast": [
+            {{"actor": "Actor Name", "character": "Character Name"}}
+        ],
+        "recurring_cast": [
+            {{"actor": "Actor Name", "character": "Character Name"}}
+        ]
+    }},
+    "episodes": [
+        {{
+            "episode_number": "1",
+            "title": "Episode Title",
+            "air_date": "Date",
+            "directed_by": "Director",
+            "written_by": "Writer"
+        }}
+    ],
+    "production": {{
+        "created_by": "Creator",
+        "network": "Network",
+        "genre": "Genre",
+        "country": "Country",
+        "language": "Language"
+    }}
+}}
+
+Instructions:
+1. Look for cast lists in "Cast" or "Characters" sections
+2. Look for episode lists in "Episodes" sections or tables
+3. Extract premise from "Plot" or "Premise" sections
+4. Find production info in infoboxes or "Production" sections
+5. If no information found, use empty arrays []
+6. Return ONLY the JSON object
+"""
+            
+            # Get LLM response (this will automatically log to database)
+            response, error = get_llm_response(prompt, provider='ollama')
+            
+            if error or not response:
+                return {'error': f'Failed to get LLM response: {error or "Unknown error"}'}
+            
+            # Parse JSON response - extract JSON from Ollama response
+            import json
+            import re
+            
+            # Extract JSON from response (handle Ollama's thinking tags)
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response.strip()
+            
+            try:
+                result = json.loads(json_str)
+                
+                # Add metadata
+                result['wikipedia_url'] = page_url
+                result['scraped_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+                result['method'] = 'llm_parsing'
+                
+                # Ensure required fields exist
+                if 'cast' not in result:
+                    result['cast'] = {'main_cast': [], 'recurring_cast': []}
+                if 'episodes' not in result:
+                    result['episodes'] = []
+                if 'production' not in result:
+                    result['production'] = {}
+                
+                # Store the parsed data in the database
+                self._store_wikipedia_data(show_title, result)
+                
+                return result
+                
+            except json.JSONDecodeError as e:
+                return {'error': f'Failed to parse LLM response as JSON: {e}'}
+                
+        except Exception as e:
+            return {'error': f'Error in LLM parsing: {str(e)}'}
+    
+    def _store_wikipedia_data(self, show_title: str, data: Dict) -> None:
+        """Store parsed Wikipedia data in the database"""
+        try:
+            from app.database import get_db_connection
+            import json
+            
+            db = get_db_connection()
+            
+            # Store in a new table for Wikipedia data
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS wikipedia_show_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    show_title TEXT NOT NULL,
+                    title TEXT,
+                    premise TEXT,
+                    cast_data TEXT,  -- JSON string
+                    episodes_data TEXT,  -- JSON string
+                    production_data TEXT,  -- JSON string
+                    wikipedia_url TEXT,
+                    scraped_at TEXT,
+                    method TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Insert the data
+            db.execute('''
+                INSERT INTO wikipedia_show_data 
+                (show_title, title, premise, cast_data, episodes_data, production_data, 
+                 wikipedia_url, scraped_at, method)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                show_title,
+                data.get('title', ''),
+                data.get('premise', ''),
+                json.dumps(data.get('cast', {})),
+                json.dumps(data.get('episodes', [])),
+                json.dumps(data.get('production', {})),
+                data.get('wikipedia_url', ''),
+                data.get('scraped_at', ''),
+                data.get('method', 'llm_parsing')
+            ))
+            
+            db.commit()
+            
+        except Exception as e:
+            print(f"Error storing Wikipedia data: {e}")
+            # Don't fail the whole operation if database storage fails
+
+
+def scrape_wikipedia_show_with_llm(show_title: str, rate_limit_seconds: int = 2, discover_related: bool = True) -> Dict:
+    """
+    Scrape Wikipedia for a TV show using LLM for intelligent parsing and summarization
+    
+    Args:
+        show_title: Name of the TV show to search for
+        rate_limit_seconds: Delay between requests
+        discover_related: Whether to discover and scrape related pages (seasons, episodes)
+    
+    Returns:
+        Dictionary containing extracted and LLM-processed show information
+    """
+    scraper = WikipediaScraper(rate_limit_seconds)
+    
+    # Search for main Wikipedia page
+    page_url = scraper.search_wikipedia_page(show_title)
+    if not page_url:
+        return {'error': f'No Wikipedia page found for "{show_title}"'}
+    
+    # Get raw HTML content
+    try:
+        response = scraper.session.get(page_url, timeout=15)
+        if response.status_code != 200:
+            return {'error': f'Failed to load page: {response.status_code}'}
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Extract raw text content for LLM processing
+        raw_content = scraper._extract_raw_content(soup)
+        
+        # Use LLM to parse and structure the information
+        llm_result = scraper._parse_with_llm(show_title, raw_content, page_url)
+        
+        # Add related pages if requested
+        if discover_related and 'error' not in llm_result:
+            related_pages = scraper.discover_related_pages(page_url, show_title)
+            llm_result['related_pages'] = related_pages
+            llm_result['total_related_pages'] = len(related_pages)
+        
+        return llm_result
+        
+    except Exception as e:
+        return {'error': f'Error scraping Wikipedia: {str(e)}'}
 
 
 def scrape_wikipedia_show(show_title: str, rate_limit_seconds: int = 2, discover_related: bool = True) -> Dict:

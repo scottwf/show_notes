@@ -2019,8 +2019,9 @@ def scrape_wikipedia():
         
         current_app.logger.info(f"Scraping Wikipedia for: {show_title}")
         
-        # Scrape Wikipedia
-        result = scrape_wikipedia_show(show_title)
+        # Scrape Wikipedia using LLM
+        from ..wikipedia_scraper import scrape_wikipedia_show_with_llm
+        result = scrape_wikipedia_show_with_llm(show_title)
         
         if 'error' in result:
             return jsonify({
