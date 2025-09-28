@@ -174,7 +174,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 show_title: showTitle
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response. Please check if you are logged in.');
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 displayResults(data.data);
@@ -397,7 +404,14 @@ document.addEventListener('DOMContentLoaded', function() {
         storedDataContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Loading stored data...</p>';
         
         fetch('/admin/api/wikipedia-data')
-            .then(response => response.json())
+            .then(response => {
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response. Please check if you are logged in.');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     displayStoredData(data.data);
@@ -407,7 +421,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error loading stored data:', error);
-                storedDataContent.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error loading stored data</p>`;
+                storedDataContent.innerHTML = `<p class="text-sm text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
             });
     }
     
