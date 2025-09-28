@@ -75,6 +75,18 @@
                             <div id="episodes-content"></div>
                         </div>
 
+                        <!-- Related Pages -->
+                        <div id="related-pages-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Related Pages Discovered</h4>
+                            <div id="related-pages-content"></div>
+                        </div>
+
+                        <!-- Consolidated Data -->
+                        <div id="consolidated-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h4 class="font-medium text-gray-900 dark:text-white mb-2">Consolidated Data</h4>
+                            <div id="consolidated-content"></div>
+                        </div>
+
                         <!-- Tables -->
                         <div id="tables-section" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <h4 class="font-medium text-gray-900 dark:text-white mb-2">Data Tables</h4>
@@ -214,14 +226,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // Episodes
         const episodesContent = document.getElementById('episodes-content');
         const episodes = data.episodes || [];
+        const allEpisodes = data.all_episodes || episodes;
         
-        if (episodes.length > 0) {
-            let episodesHtml = '<div class="space-y-2">';
-            episodes.forEach(episode => {
+        if (allEpisodes.length > 0) {
+            let episodesHtml = `<div class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                Showing ${allEpisodes.length} episodes (${episodes.length} from main page)
+            </div><div class="space-y-2">`;
+            allEpisodes.forEach(episode => {
                 episodesHtml += `
                     <div class="text-sm border-l-2 border-blue-500 pl-3">
                         <strong>Episode ${episode.episode_number || '?'}:</strong> ${episode.title || 'Unknown'}
                         ${episode.air_date ? `<br><span class="text-gray-500">${episode.air_date}</span>` : ''}
+                        ${episode.directed_by ? `<br><span class="text-gray-500">Directed by: ${episode.directed_by}</span>` : ''}
                     </div>
                 `;
             });
@@ -230,6 +246,65 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             episodesContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No episode information found</p>';
         }
+
+        // Related Pages
+        const relatedPagesContent = document.getElementById('related-pages-content');
+        const relatedPages = data.related_pages || [];
+        
+        if (relatedPages.length > 0) {
+            let relatedHtml = '<div class="space-y-2">';
+            relatedPages.forEach(page => {
+                const status = page.data ? '✅' : (page.error ? '❌' : '⏳');
+                relatedHtml += `
+                    <div class="text-sm border rounded p-2">
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">${page.title}</span>
+                            <span class="text-xs px-2 py-1 rounded ${getTypeColor(page.type)}">${page.type}</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">
+                            ${status} <a href="${page.url}" target="_blank" class="text-blue-600 hover:underline">${page.url}</a>
+                        </div>
+                        ${page.error ? `<div class="text-xs text-red-500 mt-1">Error: ${page.error}</div>` : ''}
+                    </div>
+                `;
+            });
+            relatedHtml += '</div>';
+            relatedPagesContent.innerHTML = relatedHtml;
+        } else {
+            relatedPagesContent.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No related pages discovered</p>';
+        }
+
+        // Consolidated Data
+        const consolidatedContent = document.getElementById('consolidated-content');
+        const consolidatedData = {
+            totalEpisodes: data.total_episodes || 0,
+            totalRelatedPages: data.total_related_pages || 0,
+            seasonPages: data.season_pages || [],
+            episodePages: data.episode_pages || [],
+            characterPages: data.character_pages || []
+        };
+        
+        let consolidatedHtml = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div class="text-center p-3 bg-blue-100 dark:bg-blue-900 rounded">
+                    <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">${consolidatedData.totalEpisodes}</div>
+                    <div class="text-blue-800 dark:text-blue-200">Total Episodes</div>
+                </div>
+                <div class="text-center p-3 bg-green-100 dark:bg-green-900 rounded">
+                    <div class="text-2xl font-bold text-green-600 dark:text-green-400">${consolidatedData.totalRelatedPages}</div>
+                    <div class="text-green-800 dark:text-green-200">Related Pages</div>
+                </div>
+                <div class="text-center p-3 bg-purple-100 dark:bg-purple-900 rounded">
+                    <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">${consolidatedData.seasonPages.length}</div>
+                    <div class="text-purple-800 dark:text-purple-200">Season Pages</div>
+                </div>
+                <div class="text-center p-3 bg-orange-100 dark:bg-orange-900 rounded">
+                    <div class="text-2xl font-bold text-orange-600 dark:text-orange-400">${consolidatedData.episodePages.length}</div>
+                    <div class="text-orange-800 dark:text-orange-200">Episode Pages</div>
+                </div>
+            </div>
+        `;
+        consolidatedContent.innerHTML = consolidatedHtml;
         
         // Tables
         const tablesContent = document.getElementById('tables-content');
@@ -264,6 +339,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show results
         resultsDiv.classList.remove('hidden');
+    }
+    
+    function getTypeColor(type) {
+        const colors = {
+            'season': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+            'episode': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+            'character': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+            'show_related': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+        };
+        return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
 });
 </script>
