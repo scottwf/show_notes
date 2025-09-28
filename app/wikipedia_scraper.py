@@ -30,7 +30,12 @@ class WikipediaScraper:
         self.rate_limit_seconds = rate_limit_seconds
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'ShowNotes/1.0 (https://shownotes.chitekmedia.club) - Educational TV Show Information Scraper',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         })
         
         # Initialize Wikipedia API if available
@@ -151,15 +156,18 @@ class WikipediaScraper:
             if not page.exists():
                 return {'error': 'Page not found'}
             
-            # Extract sections using mwparserfromhell
-            wikitext = mwparserfromhell.parse(page.text)
-            sections = self._parse_wikitext_sections(wikitext)
+            # Use HTML parsing for better results
+            response = self.session.get(url, timeout=15)
+            if response.status_code != 200:
+                return {'error': f'Failed to load page: {response.status_code}'}
             
-            # Extract structured data
-            premise = self._extract_premise_from_sections(sections)
-            cast_info = self._extract_cast_from_sections(sections)
-            episodes = self._extract_episodes_from_sections(sections)
-            production_info = self._extract_production_from_sections(sections)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract structured data using HTML parsing
+            premise = self._extract_premise(soup)
+            cast_info = self._extract_cast(soup)
+            episodes = self._extract_episodes(soup)
+            production_info = self._extract_production_info(soup)
             
             # Extract tables using pandas
             tables = self._extract_tables_from_url(url)
@@ -173,7 +181,7 @@ class WikipediaScraper:
                 'production': production_info,
                 'tables': tables,
                 'scraped_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                'method': 'wikipedia_api'
+                'method': 'wikipedia_api_html'
             }
             
         except Exception as e:
@@ -256,44 +264,110 @@ class WikipediaScraper:
             'guest_cast': []
         }
         
-        # Find Cast section
-        cast_section = self._find_section(soup, ['Cast', 'Cast and characters', 'Characters'])
-        if not cast_section:
-            return cast_info
+        # Look for cast tables directly first
+        cast_tables = soup.find_all('table', class_='wikitable')
+        for table in cast_tables:
+            # Check if this looks like a cast table
+            headers = [th.get_text().strip().lower() for th in table.find_all(['th', 'td'])]
+            if any(keyword in ' '.join(headers) for keyword in ['actor', 'character', 'cast']):
+                cast_data = self._extract_cast_from_table(table)
+                if cast_data:
+                    cast_info['main_cast'].extend(cast_data)
+                    break
         
-        # Extract main cast
-        main_cast = self._extract_cast_subsection(cast_section, ['Main', 'Starring', 'Principal cast'])
-        if main_cast:
-            cast_info['main_cast'] = main_cast
-        
-        # Extract recurring cast
-        recurring_cast = self._extract_cast_subsection(cast_section, ['Recurring', 'Supporting'])
-        if recurring_cast:
-            cast_info['recurring_cast'] = recurring_cast
-        
-        # Extract guest cast
-        guest_cast = self._extract_cast_subsection(cast_section, ['Guest', 'Special guest'])
-        if guest_cast:
-            cast_info['guest_cast'] = guest_cast
+        # If no cast table found, try section-based extraction
+        if not cast_info['main_cast']:
+            cast_section = self._find_section(soup, ['Cast', 'Cast and characters', 'Characters'])
+            if cast_section:
+                # Extract main cast
+                main_cast = self._extract_cast_subsection(cast_section, ['Main', 'Starring', 'Principal cast'])
+                if main_cast:
+                    cast_info['main_cast'] = main_cast
+                
+                # Extract recurring cast
+                recurring_cast = self._extract_cast_subsection(cast_section, ['Recurring', 'Supporting'])
+                if recurring_cast:
+                    cast_info['recurring_cast'] = recurring_cast
+                
+                # Extract guest cast
+                guest_cast = self._extract_cast_subsection(cast_section, ['Guest', 'Special guest'])
+                if guest_cast:
+                    cast_info['guest_cast'] = guest_cast
         
         return cast_info
+    
+    def _extract_cast_from_table(self, table) -> List[Dict]:
+        """Extract cast information from a table"""
+        cast_data = []
+        rows = table.find_all('tr')
+        
+        if not rows:
+            return cast_data
+        
+        # Get headers
+        header_row = rows[0]
+        headers = [th.get_text().strip().lower() for th in header_row.find_all(['th', 'td'])]
+        
+        # Find column indices
+        actor_col = self._find_column_index(headers, ['actor', 'starring', 'performer'])
+        character_col = self._find_column_index(headers, ['character', 'role', 'as'])
+        
+        # Extract cast data
+        for row in rows[1:]:
+            cells = row.find_all(['td', 'th'])
+            if len(cells) < 2:
+                continue
+            
+            cast_item = {}
+            
+            if actor_col is not None and actor_col < len(cells):
+                # Extract actor name from links if present
+                actor_link = cells[actor_col].find('a')
+                if actor_link:
+                    cast_item['actor'] = actor_link.get_text().strip()
+                else:
+                    cast_item['actor'] = cells[actor_col].get_text().strip()
+            
+            if character_col is not None and character_col < len(cells):
+                # Extract character name from links if present
+                character_link = cells[character_col].find('a')
+                if character_link:
+                    cast_item['character'] = character_link.get_text().strip()
+                else:
+                    cast_item['character'] = cells[character_col].get_text().strip()
+            
+            if cast_item:
+                cast_data.append(cast_item)
+        
+        return cast_data
     
     def _extract_episodes(self, soup: BeautifulSoup) -> List[Dict]:
         """Extract episode information"""
         episodes = []
         
-        # Look for Episodes section
-        episodes_section = self._find_section(soup, ['Episodes', 'Episode list'])
-        if not episodes_section:
-            return episodes
+        # Look for episode tables directly
+        tables = soup.find_all('table', class_='wikiepisodetable')
+        if not tables:
+            tables = soup.find_all('table', class_='wikitable')
         
-        # Find episode table or list
-        episode_table = episodes_section.find('table', class_='wikitable')
-        if episode_table:
-            episodes = self._extract_episodes_from_table(episode_table)
-        else:
-            # Try to extract from list format
-            episodes = self._extract_episodes_from_list(episodes_section)
+        for table in tables:
+            episodes = self._extract_episodes_from_table(table)
+            if episodes:
+                break
+        
+        # If no table found, try to find episodes section
+        if not episodes:
+            episodes_section = self._find_section(soup, ['Episodes', 'Episode list'])
+            if episodes_section:
+                tables = episodes_section.find_all('table')
+                for table in tables:
+                    episodes = self._extract_episodes_from_table(table)
+                    if episodes:
+                        break
+                
+                # Try list format as fallback
+                if not episodes:
+                    episodes = self._extract_episodes_from_list(episodes_section)
         
         return episodes
     
@@ -310,9 +384,12 @@ class WikipediaScraper:
         headers = [th.get_text().strip() for th in header_row.find_all(['th', 'td'])]
         
         # Find column indices
-        episode_col = self._find_column_index(headers, ['episode', 'no', '#'])
+        episode_col = self._find_column_index(headers, ['episode', 'no', '#', 'no.'])
         title_col = self._find_column_index(headers, ['title', 'episode title'])
-        air_date_col = self._find_column_index(headers, ['air date', 'aired', 'date'])
+        director_col = self._find_column_index(headers, ['directed by', 'director'])
+        writer_col = self._find_column_index(headers, ['written by', 'writer'])
+        air_date_col = self._find_column_index(headers, ['air date', 'aired', 'date', 'original release date'])
+        viewers_col = self._find_column_index(headers, ['viewers', 'u.s. viewers', 'rating'])
         description_col = self._find_column_index(headers, ['description', 'summary', 'plot'])
         
         # Extract episode data
@@ -327,10 +404,24 @@ class WikipediaScraper:
                 episode['episode_number'] = cells[episode_col].get_text().strip()
             
             if title_col is not None and title_col < len(cells):
-                episode['title'] = cells[title_col].get_text().strip()
+                # Extract title from links if present
+                title_link = cells[title_col].find('a')
+                if title_link:
+                    episode['title'] = title_link.get_text().strip()
+                else:
+                    episode['title'] = cells[title_col].get_text().strip()
+            
+            if director_col is not None and director_col < len(cells):
+                episode['directed_by'] = cells[director_col].get_text().strip()
+            
+            if writer_col is not None and writer_col < len(cells):
+                episode['written_by'] = cells[writer_col].get_text().strip()
             
             if air_date_col is not None and air_date_col < len(cells):
                 episode['air_date'] = cells[air_date_col].get_text().strip()
+            
+            if viewers_col is not None and viewers_col < len(cells):
+                episode['viewers'] = cells[viewers_col].get_text().strip()
             
             if description_col is not None and description_col < len(cells):
                 episode['description'] = cells[description_col].get_text().strip()
@@ -387,23 +478,53 @@ class WikipediaScraper:
     
     def _find_section(self, soup: BeautifulSoup, section_names: List[str]) -> Optional:
         """Find a section by heading names"""
+        # First try to find by ID
+        for section_name in section_names:
+            section_id = section_name.lower().replace(' ', '_')
+            section_span = soup.find('span', {'id': section_id})
+            if section_span:
+                heading = section_span.find_parent(['h2', 'h3', 'h4'])
+                if heading:
+                    return self._extract_section_content(heading)
+        
+        # Fallback to text search
         headings = soup.find_all(['h2', 'h3', 'h4'])
         
         for heading in headings:
             heading_text = heading.get_text().strip().lower()
             for section_name in section_names:
                 if section_name.lower() in heading_text:
-                    # Find the content after this heading
-                    content = heading.find_next_sibling()
-                    if content:
-                        return content
-                    
-                    # Look for content in next elements
-                    current = heading.next_sibling
-                    while current:
-                        if hasattr(current, 'name') and current.name in ['div', 'p', 'ul', 'ol', 'table']:
-                            return current
-                        current = current.next_sibling
+                    return self._extract_section_content(heading)
+        
+        return None
+    
+    def _extract_section_content(self, heading) -> Optional:
+        """Extract content from a section heading"""
+        # Find the content after this heading
+        current = heading.next_sibling
+        while current:
+            if hasattr(current, 'name'):
+                if current.name in ['div', 'p', 'ul', 'ol', 'table']:
+                    return current
+                elif current.name in ['span'] and 'mw-editsection' in current.get('class', []):
+                    # Skip edit sections
+                    pass
+                else:
+                    # Found a content element
+                    return current
+            current = current.next_sibling
+        
+        # If no direct sibling, look for the next heading and return everything between
+        next_heading = heading.find_next(['h2', 'h3', 'h4'])
+        if next_heading and heading.parent:
+            # Return a container with all content between headings
+            container = heading.parent.new_tag('div')
+            current = heading.next_sibling
+            while current and current != next_heading:
+                if hasattr(current, 'name') and current.name not in ['span']:
+                    container.append(current.extract())
+                current = current.next_sibling
+            return container
         
         return None
     
@@ -552,7 +673,9 @@ class WikipediaScraper:
         
         for keyword in episode_keywords:
             if keyword in sections:
-                return self._parse_episodes_section_wikitext(sections[keyword])
+                episodes = self._parse_episodes_section_wikitext(sections[keyword])
+                if episodes:
+                    return episodes
         
         return []
     
@@ -621,7 +744,21 @@ class WikipediaScraper:
             'guest_cast': []
         }
         
-        # Simple parsing - look for lists and extract actor/character pairs
+        # Look for cast table patterns first
+        table_pattern = r'\{\|.*?\|-\s*\|\s*\[\[([^\]]+)\]\]\s*\|\s*\[\[([^\]]+)\]\]\s*\|'
+        table_matches = re.findall(table_pattern, cast_section, re.DOTALL | re.IGNORECASE)
+        
+        if table_matches:
+            for match in table_matches:
+                actor = self._clean_wikitext(match[0].strip())
+                character = self._clean_wikitext(match[1].strip())
+                cast_info['main_cast'].append({
+                    'actor': actor,
+                    'character': character
+                })
+            return cast_info
+        
+        # Fallback to simple parsing - look for lists and extract actor/character pairs
         lines = cast_section.split('\n')
         current_category = 'main_cast'
         
@@ -676,7 +813,24 @@ class WikipediaScraper:
         """Parse episodes section from wikitext"""
         episodes = []
         
-        # Look for episode patterns
+        # Look for episode table patterns first
+        table_pattern = r'\{\|.*?\|-\s*\|\s*(\d+)\s*\|\s*\[\[([^\]]+)\]\]\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|'
+        table_matches = re.findall(table_pattern, episodes_section, re.DOTALL | re.IGNORECASE)
+        
+        if table_matches:
+            for match in table_matches:
+                episode = {
+                    'episode_number': match[0].strip(),
+                    'title': self._clean_wikitext(match[1].strip()),
+                    'directed_by': self._clean_wikitext(match[2].strip()),
+                    'written_by': self._clean_wikitext(match[3].strip()),
+                    'air_date': self._clean_wikitext(match[4].strip()),
+                    'viewers': self._clean_wikitext(match[5].strip())
+                }
+                episodes.append(episode)
+            return episodes
+        
+        # Fallback to simple patterns
         episode_patterns = [
             r'Episode\s+(\d+)(?:[\.\-\s]+)?(.+?)(?:\s*\((.+?)\))?',
             r'(\d+)(?:[\.\-\s]+)?(.+?)(?:\s*\((.+?)\))?'
