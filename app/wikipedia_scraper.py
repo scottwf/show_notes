@@ -514,19 +514,8 @@ class WikipediaScraper:
                     return current
             current = current.next_sibling
         
-        # If no direct sibling, look for the next heading and return everything between
-        next_heading = heading.find_next(['h2', 'h3', 'h4'])
-        if next_heading and heading.parent:
-            # Return a container with all content between headings
-            container = heading.parent.new_tag('div')
-            current = heading.next_sibling
-            while current and current != next_heading:
-                if hasattr(current, 'name') and current.name not in ['span']:
-                    container.append(current.extract())
-                current = current.next_sibling
-            return container
-        
-        return None
+        # If no direct sibling, return the heading itself for now
+        return heading
     
     def _find_column_index(self, headers: List[str], keywords: List[str]) -> Optional[int]:
         """Find the index of a column by keywords"""
@@ -854,29 +843,208 @@ class WikipediaScraper:
                     break
         
         return episodes
+    
+    def discover_related_pages(self, main_url: str, show_title: str) -> List[Dict]:
+        """Discover related Wikipedia pages (seasons, episodes, characters)"""
+        related_pages = []
+        
+        try:
+            response = self.session.get(main_url, timeout=15)
+            if response.status_code != 200:
+                return related_pages
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find all internal Wikipedia links
+            links = soup.find_all('a', href=True)
+            
+            for link in links:
+                href = link.get('href', '')
+                link_text = link.get_text().strip()
+                
+                # Skip external links and non-Wikipedia links
+                if not href.startswith('/wiki/') or href.startswith('/wiki/File:') or href.startswith('/wiki/Category:'):
+                    continue
+                
+                # Convert to full URL
+                full_url = f"https://en.wikipedia.org{href}"
+                
+                # Check if this looks like a related page
+                page_type = self._classify_related_page(link_text, href, show_title)
+                if page_type:
+                    related_pages.append({
+                        'url': full_url,
+                        'title': link_text,
+                        'type': page_type,
+                        'href': href
+                    })
+            
+            # Remove duplicates and limit results
+            seen_urls = set()
+            unique_pages = []
+            for page in related_pages:
+                if page['url'] not in seen_urls and len(unique_pages) < 20:  # Limit to 20 related pages
+                    seen_urls.add(page['url'])
+                    unique_pages.append(page)
+            
+            return unique_pages
+            
+        except Exception as e:
+            print(f"Error discovering related pages: {e}")
+            return related_pages
+    
+    def _classify_related_page(self, link_text: str, href: str, show_title: str) -> Optional[str]:
+        """Classify a Wikipedia link as a related page type"""
+        text_lower = link_text.lower()
+        href_lower = href.lower()
+        show_lower = show_title.lower()
+        
+        # Episode pages
+        if any(keyword in text_lower for keyword in ['episode', 'pilot']) and show_lower in text_lower:
+            return 'episode'
+        
+        # Season pages
+        if any(keyword in text_lower for keyword in ['season', 'series']) and show_lower in text_lower:
+            if any(keyword in text_lower for keyword in ['list of', 'episodes']):
+                return 'season'
+        
+        # Character pages
+        if show_lower in text_lower and any(keyword in text_lower for keyword in ['character', 'cast']):
+            return 'character'
+        
+        # Show-specific pages
+        if show_lower in text_lower and any(keyword in text_lower for keyword in ['breaking bad', 'alien earth']):
+            if not any(keyword in text_lower for keyword in ['disambiguation', 'category', 'file']):
+                return 'show_related'
+        
+        return None
+    
+    def consolidate_show_data(self, main_data: Dict, related_pages: List[Dict]) -> Dict:
+        """Consolidate data from main page and all related pages"""
+        consolidated = main_data.copy()
+        
+        # Initialize consolidated data structures
+        consolidated['all_episodes'] = main_data.get('episodes', [])
+        consolidated['all_cast'] = main_data.get('cast', {})
+        consolidated['all_production'] = main_data.get('production', {})
+        consolidated['season_pages'] = []
+        consolidated['episode_pages'] = []
+        consolidated['character_pages'] = []
+        
+        # Process each related page
+        for page_info in related_pages:
+            if 'data' not in page_info or 'error' in page_info:
+                continue
+            
+            page_data = page_info['data']
+            page_type = page_info['type']
+            
+            if page_type == 'season':
+                # Extract episodes from season pages
+                season_episodes = page_data.get('episodes', [])
+                if season_episodes:
+                    consolidated['all_episodes'].extend(season_episodes)
+                    consolidated['season_pages'].append({
+                        'title': page_info['title'],
+                        'url': page_info['url'],
+                        'episodes': season_episodes
+                    })
+            
+            elif page_type == 'episode':
+                # Individual episode page
+                episode_data = {
+                    'title': page_data.get('title', page_info['title']),
+                    'url': page_info['url'],
+                    'premise': page_data.get('premise', ''),
+                    'cast': page_data.get('cast', {}),
+                    'production': page_data.get('production', {})
+                }
+                consolidated['episode_pages'].append(episode_data)
+            
+            elif page_type == 'character':
+                # Character page
+                character_data = {
+                    'title': page_data.get('title', page_info['title']),
+                    'url': page_info['url'],
+                    'premise': page_data.get('premise', ''),
+                    'cast': page_data.get('cast', {})
+                }
+                consolidated['character_pages'].append(character_data)
+            
+            # Merge cast information
+            page_cast = page_data.get('cast', {})
+            for category, members in page_cast.items():
+                if category not in consolidated['all_cast']:
+                    consolidated['all_cast'][category] = []
+                consolidated['all_cast'][category].extend(members)
+            
+            # Merge production information
+            page_production = page_data.get('production', {})
+            consolidated['all_production'].update(page_production)
+        
+        # Remove duplicate episodes
+        seen_episodes = set()
+        unique_episodes = []
+        for episode in consolidated['all_episodes']:
+            episode_key = f"{episode.get('episode_number', '')}-{episode.get('title', '')}"
+            if episode_key not in seen_episodes:
+                seen_episodes.add(episode_key)
+                unique_episodes.append(episode)
+        consolidated['all_episodes'] = unique_episodes
+        
+        # Update episode count
+        consolidated['total_episodes'] = len(consolidated['all_episodes'])
+        consolidated['total_related_pages'] = len(related_pages)
+        
+        return consolidated
 
 
-def scrape_wikipedia_show(show_title: str, rate_limit_seconds: int = 2) -> Dict:
+def scrape_wikipedia_show(show_title: str, rate_limit_seconds: int = 2, discover_related: bool = True) -> Dict:
     """
-    Main function to scrape Wikipedia for a TV show
+    Main function to scrape Wikipedia for a TV show with comprehensive data
     
     Args:
         show_title: Name of the TV show to search for
         rate_limit_seconds: Delay between requests
+        discover_related: Whether to discover and scrape related pages (seasons, episodes)
     
     Returns:
-        Dictionary containing extracted show information
+        Dictionary containing extracted show information from all related pages
     """
     scraper = WikipediaScraper(rate_limit_seconds)
     
-    # Search for Wikipedia page
+    # Search for main Wikipedia page
     page_url = scraper.search_wikipedia_page(show_title)
     if not page_url:
         return {'error': f'No Wikipedia page found for "{show_title}"'}
     
-    # Extract show information
+    # Extract main show information
     show_info = scraper.extract_show_info(page_url)
     show_info['wikipedia_url'] = page_url
+    show_info['related_pages'] = []
+    
+    if discover_related and 'error' not in show_info:
+        # Discover and scrape related pages
+        related_pages = scraper.discover_related_pages(page_url, show_title)
+        
+        # Scrape each related page
+        for page_info in related_pages:
+            try:
+                related_data = scraper.extract_show_info(page_info['url'])
+                if 'error' not in related_data:
+                    page_info['data'] = related_data
+                else:
+                    page_info['error'] = related_data['error']
+            except Exception as e:
+                page_info['error'] = str(e)
+            
+            # Rate limiting between requests
+            import time
+            time.sleep(rate_limit_seconds)
+        
+        # Consolidate all data
+        show_info = scraper.consolidate_show_data(show_info, related_pages)
+        show_info['related_pages'] = related_pages
     
     return show_info
 
