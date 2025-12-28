@@ -1529,13 +1529,11 @@ def report_issue(media_type, media_id):
                 notification_message = f"User reported: {', '.join(issue_types)}"
                 if comment:
                     notification_message += f" - {comment[:100]}"
-                if service_link:
-                    notification_message += f"\n\nReplace file: {service_link}"
 
                 db.execute('''
                     INSERT INTO user_notifications
-                    (user_id, show_id, notification_type, title, message, season_number, episode_number, issue_report_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (user_id, show_id, notification_type, title, message, season_number, episode_number, issue_report_id, service_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     admin['id'],
                     show_id,
@@ -1544,7 +1542,8 @@ def report_issue(media_type, media_id):
                     notification_message,
                     season_num,
                     episode_num,
-                    report_id
+                    report_id,
+                    service_link
                 ))
 
             db.commit()
@@ -1811,7 +1810,7 @@ def profile_notifications():
         SELECT
             n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
             n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
-            n.issue_report_id,
+            n.issue_report_id, n.service_url,
             s.tmdb_id as show_tmdb_id, s.title as show_title
         FROM user_notifications n
         LEFT JOIN sonarr_shows s ON n.show_id = s.id

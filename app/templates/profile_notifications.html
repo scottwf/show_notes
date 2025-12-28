@@ -47,7 +47,7 @@
                             </p>
 
                             <!-- Action Links -->
-                            <div class="flex gap-3 mt-2">
+                            <div class="flex gap-3 mt-2 items-center">
                                 {% if notif.show_tmdb_id %}
                                 <a href="{{ url_for('main.show_detail', tmdb_id=notif.show_tmdb_id) }}"
                                    class="text-sm text-sky-600 dark:text-sky-400 hover:underline">
@@ -58,6 +58,23 @@
                                 <a href="{{ url_for('main.episode_detail', tmdb_id=notif.show_tmdb_id, season_number=notif.season_number, episode_number=notif.episode_number) }}"
                                    class="text-sm text-sky-600 dark:text-sky-400 hover:underline">
                                     View Episode
+                                </a>
+                                {% endif %}
+                                {% if notif.service_url %}
+                                <a href="{{ notif.service_url }}" target="_blank" rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
+                                   title="Open in {% if 'sonarr' in notif.service_url.lower() %}Sonarr{% else %}Radarr{% endif %}">
+                                    {% if 'sonarr' in notif.service_url.lower() %}
+                                    <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr"
+                                        class="h-4 w-4 dark:hidden">
+                                    <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr"
+                                        class="h-4 w-4 hidden dark:inline">
+                                    {% else %}
+                                    <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr"
+                                        class="h-4 w-4 dark:hidden">
+                                    <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr"
+                                        class="h-4 w-4 hidden dark:inline">
+                                    {% endif %}
                                 </a>
                                 {% endif %}
                             </div>
