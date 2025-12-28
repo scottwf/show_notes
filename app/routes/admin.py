@@ -1297,11 +1297,61 @@ def issue_reports():
 @admin_required
 def resolve_issue_report(report_id):
     db = get_db()
+
+    # Get issue report details before resolving
+    report = db.execute(
+        'SELECT user_id, title, show_id, issue_type FROM issue_reports WHERE id = ?',
+        (report_id,)
+    ).fetchone()
+
+    if not report:
+        flash('Report not found.', 'error')
+        return redirect(url_for('admin.issue_reports'))
+
+    # Resolve the report
     notes = request.form.get('resolution_notes', '')
     db.execute(
         "UPDATE issue_reports SET status='resolved', resolved_by_admin_id=?, resolved_at=CURRENT_TIMESTAMP, resolution_notes=? WHERE id=?",
         (current_user.id, notes, report_id)
     )
     db.commit()
+
+    # Create notification for the user who reported
+    try:
+        import re
+
+        # Parse episode info from title
+        season_num = None
+        episode_num = None
+        if ' - S' in report['title']:
+            match = re.search(r'S(\d+)E(\d+)', report['title'])
+            if match:
+                season_num = int(match.group(1))
+                episode_num = int(match.group(2))
+
+        notification_title = f"Issue Resolved: {report['title']}"
+        notification_message = f"Your reported issue ({report['issue_type']}) has been resolved."
+        if notes:
+            notification_message += f" Resolution: {notes}"
+
+        db.execute('''
+            INSERT INTO user_notifications
+            (user_id, show_id, notification_type, title, message, season_number, episode_number)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            report['user_id'],
+            report['show_id'],
+            'issue_resolved',
+            notification_title,
+            notification_message,
+            season_num,
+            episode_num
+        ))
+
+        db.commit()
+        current_app.logger.info(f"Created resolution notification for user {report['user_id']}")
+    except Exception as e:
+        current_app.logger.error(f"Error creating resolution notification: {e}", exc_info=True)
+
     flash('Report resolved.', 'success')
     return redirect(url_for('admin.issue_reports'))

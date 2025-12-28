@@ -1468,6 +1468,50 @@ def report_issue(media_type, media_id):
             (session.get('user_id'), media_type, media_id, show_id, title, ','.join(issue_types), comment)
         )
         db.commit()
+
+        # Create notifications for all admins
+        try:
+            import re
+
+            # Get all admin users
+            admins = db.execute('SELECT id FROM users WHERE is_admin = 1').fetchall()
+
+            # Parse episode info from title (format: "Show - S01E02: Episode")
+            season_num = None
+            episode_num = None
+            if media_type == 'episode' and ' - S' in title:
+                match = re.search(r'S(\d+)E(\d+)', title)
+                if match:
+                    season_num = int(match.group(1))
+                    episode_num = int(match.group(2))
+
+            # Create notification for each admin
+            for admin in admins:
+                notification_title = f"New Issue Report: {title}"
+                notification_message = f"User reported: {', '.join(issue_types)}"
+                if comment:
+                    notification_message += f" - {comment[:100]}"
+
+                db.execute('''
+                    INSERT INTO user_notifications
+                    (user_id, show_id, notification_type, title, message, season_number, episode_number)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    admin['id'],
+                    show_id,
+                    'new_issue_report',
+                    notification_title,
+                    notification_message,
+                    season_num,
+                    episode_num
+                ))
+
+            db.commit()
+            current_app.logger.info(f"Created {len(admins)} admin notifications for issue report")
+        except Exception as e:
+            current_app.logger.error(f"Error creating admin notifications: {e}", exc_info=True)
+            # Don't fail the request if notifications fail
+
         flash('Issue reported. Thank you!', 'success')
         return redirect(url_for('main.home'))
 
