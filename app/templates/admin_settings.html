@@ -190,9 +190,21 @@
         to date automatically.</p>
       <div class="space-y-3">
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">URL</label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Local URL
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for API access)</span>
+          </label>
           <input type="text" id="sonarr_url" name="sonarr_url" value="{{ settings.sonarr_url }}"
+            placeholder="http://192.168.1.10:8989"
             class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_remote_url">Remote URL
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for clickable links)</span>
+          </label>
+          <input type="text" id="sonarr_remote_url" name="sonarr_remote_url" value="{{ settings.sonarr_remote_url or '' }}"
+            placeholder="https://admin.chitekmedia.club/sonarr"
+            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional: External URL for accessing Sonarr from anywhere (used in notifications)</p>
         </div>
         <div>
           <div class="flex items-center justify-between mb-1">
@@ -271,9 +283,21 @@
         library automatically.</p>
       <div class="space-y-3">
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">URL</label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Local URL
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for API access)</span>
+          </label>
           <input type="text" id="radarr_url" name="radarr_url" value="{{ settings.radarr_url }}"
+            placeholder="http://192.168.1.10:7878"
             class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_remote_url">Remote URL
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for clickable links)</span>
+          </label>
+          <input type="text" id="radarr_remote_url" name="radarr_remote_url" value="{{ settings.radarr_remote_url or '' }}"
+            placeholder="https://admin.chitekmedia.club/radarr"
+            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional: External URL for accessing Radarr from anywhere (used in notifications)</p>
         </div>
         <div>
           <div class="flex items-center justify-between mb-1">

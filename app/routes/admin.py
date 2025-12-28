@@ -639,8 +639,8 @@ def settings():
             pw_hash = generate_password_hash(password)
             db.execute('UPDATE users SET password_hash=? WHERE id=?', (pw_hash, user['id']))
         db.execute('''UPDATE settings SET
-            radarr_url=?, radarr_api_key=?,
-            sonarr_url=?, sonarr_api_key=?,
+            radarr_url=?, radarr_api_key=?, radarr_remote_url=?,
+            sonarr_url=?, sonarr_api_key=?, sonarr_remote_url=?,
             bazarr_url=?, bazarr_api_key=?,
             ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
@@ -648,8 +648,10 @@ def settings():
             thetvdb_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
+            request.form.get('radarr_remote_url'),
             request.form.get('sonarr_url'),
             request.form.get('sonarr_api_key'),
+            request.form.get('sonarr_remote_url'),
             request.form.get('bazarr_url'),
             request.form.get('bazarr_api_key'),
             request.form.get('ollama_url'),
@@ -688,6 +690,8 @@ def settings():
     merged_settings.setdefault('preferred_llm_provider', None)
     merged_settings.setdefault('ollama_model_name', None)
     merged_settings.setdefault('thetvdb_api_key', None)
+    merged_settings.setdefault('sonarr_remote_url', None)
+    merged_settings.setdefault('radarr_remote_url', None)
 
     for k, v in defaults.items():
         if not merged_settings.get(k): # This will only apply to plex_client_id, secret, redirect_uri if not set

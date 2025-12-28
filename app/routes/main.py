@@ -1495,7 +1495,8 @@ def report_issue(media_type, media_id):
                 ).fetchone()
 
                 if show_info:
-                    sonarr_url = database.get_setting('sonarr_url')
+                    # Use remote URL if available, otherwise fall back to local URL
+                    sonarr_url = database.get_setting('sonarr_remote_url') or database.get_setting('sonarr_url')
                     if sonarr_url:
                         # Create title slug for Sonarr URL
                         title_slug = show_info['title'].lower()
@@ -1511,7 +1512,8 @@ def report_issue(media_type, media_id):
                 ).fetchone()
 
                 if movie_info:
-                    radarr_url = database.get_setting('radarr_url')
+                    # Use remote URL if available, otherwise fall back to local URL
+                    radarr_url = database.get_setting('radarr_remote_url') or database.get_setting('radarr_url')
                     if radarr_url:
                         # Create title slug for Radarr URL
                         title_slug = movie_info['title'].lower()
