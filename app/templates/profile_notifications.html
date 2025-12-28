@@ -68,10 +68,17 @@
                             <p class="text-sm font-medium text-slate-700 dark:text-slate-300 timestamp"
                                 data-timestamp="{{ notif.created_at }}"></p>
                             {% if not notif.is_read %}
-                            <button onclick="markAsRead({{ notif.id }})"
-                                class="mt-2 text-xs text-sky-600 dark:text-sky-400 hover:underline">
-                                Mark as read
-                            </button>
+                                {% if notif.notification_type == 'new_issue_report' and notif.issue_report_id %}
+                                <button onclick="resolveIssue({{ notif.id }}, {{ notif.issue_report_id }})"
+                                    class="mt-2 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                    Resolve Issue
+                                </button>
+                                {% else %}
+                                <button onclick="markAsRead({{ notif.id }})"
+                                    class="mt-2 text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                                    Mark as read
+                                </button>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </div>
@@ -198,6 +205,39 @@
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to mark all notifications as read. Please try again.');
+        }
+    }
+
+    async function resolveIssue(notificationId, issueReportId) {
+        const notes = prompt('Resolution notes (optional):');
+
+        // User clicked cancel
+        if (notes === null) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/profile/notification/${notificationId}/resolve`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    resolution_notes: notes
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Reload the page to update the UI
+                window.location.reload();
+            } else {
+                alert('Failed to resolve issue: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to resolve issue. Please try again.');
         }
     }
 </script>

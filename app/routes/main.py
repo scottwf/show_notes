@@ -1463,10 +1463,11 @@ def report_issue(media_type, media_id):
         comment = request.form.get('comment', '')
         show_id = request.form.get('show_id')
         title = request.form.get('title', '')
-        db.execute(
+        cursor = db.execute(
             'INSERT INTO issue_reports (user_id, media_type, media_id, show_id, title, issue_type, comment) VALUES (?, ?, ?, ?, ?, ?, ?)',
             (session.get('user_id'), media_type, media_id, show_id, title, ','.join(issue_types), comment)
         )
+        report_id = cursor.lastrowid
         db.commit()
 
         # Create notifications for all admins
@@ -1533,8 +1534,8 @@ def report_issue(media_type, media_id):
 
                 db.execute('''
                     INSERT INTO user_notifications
-                    (user_id, show_id, notification_type, title, message, season_number, episode_number)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (user_id, show_id, notification_type, title, message, season_number, episode_number, issue_report_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     admin['id'],
                     show_id,
@@ -1542,7 +1543,8 @@ def report_issue(media_type, media_id):
                     notification_title,
                     notification_message,
                     season_num,
-                    episode_num
+                    episode_num,
+                    report_id
                 ))
 
             db.commit()
@@ -1809,6 +1811,7 @@ def profile_notifications():
         SELECT
             n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
             n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
+            n.issue_report_id,
             s.tmdb_id as show_tmdb_id, s.title as show_title
         FROM user_notifications n
         LEFT JOIN sonarr_shows s ON n.show_id = s.id
@@ -1964,5 +1967,97 @@ def mark_all_notifications_read():
         (user_id,)
     )
     db.commit()
+
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/profile/notification/<int:notification_id>/resolve', methods=['POST'])
+@login_required
+def resolve_notification_issue(notification_id):
+    """Resolve an issue from a notification and notify the original reporter"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify the notification belongs to this user and get issue_report_id
+    notification = db.execute(
+        'SELECT user_id, issue_report_id FROM user_notifications WHERE id = ?',
+        (notification_id,)
+    ).fetchone()
+
+    if not notification:
+        return jsonify({'success': False, 'error': 'Notification not found'}), 404
+
+    if notification['user_id'] != user_id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    if not notification['issue_report_id']:
+        return jsonify({'success': False, 'error': 'No associated issue report'}), 400
+
+    # Get issue report details
+    report = db.execute(
+        'SELECT user_id, title, show_id, issue_type FROM issue_reports WHERE id = ?',
+        (notification['issue_report_id'],)
+    ).fetchone()
+
+    if not report:
+        return jsonify({'success': False, 'error': 'Issue report not found'}), 404
+
+    # Get resolution notes from request
+    data = request.get_json() or {}
+    notes = data.get('resolution_notes', '')
+
+    # Resolve the issue report
+    db.execute(
+        "UPDATE issue_reports SET status='resolved', resolved_by_admin_id=?, resolved_at=CURRENT_TIMESTAMP, resolution_notes=? WHERE id=?",
+        (user_id, notes, notification['issue_report_id'])
+    )
+
+    # Mark the admin notification as read
+    db.execute(
+        'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (notification_id,)
+    )
+
+    db.commit()
+
+    # Create notification for the user who reported
+    try:
+        import re
+
+        # Parse episode info from title
+        season_num = None
+        episode_num = None
+        if ' - S' in report['title']:
+            match = re.search(r'S(\d+)E(\d+)', report['title'])
+            if match:
+                season_num = int(match.group(1))
+                episode_num = int(match.group(2))
+
+        notification_title = f"Issue Resolved: {report['title']}"
+        notification_message = f"Your reported issue ({report['issue_type']}) has been resolved."
+        if notes:
+            notification_message += f" Resolution: {notes}"
+
+        db.execute('''
+            INSERT INTO user_notifications
+            (user_id, show_id, notification_type, title, message, season_number, episode_number)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            report['user_id'],
+            report['show_id'],
+            'issue_resolved',
+            notification_title,
+            notification_message,
+            season_num,
+            episode_num
+        ))
+
+        db.commit()
+        current_app.logger.info(f"Created resolution notification for user {report['user_id']}")
+    except Exception as e:
+        current_app.logger.error(f"Error creating resolution notification: {e}", exc_info=True)
 
     return jsonify({'success': True})
