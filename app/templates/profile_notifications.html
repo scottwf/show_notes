@@ -42,7 +42,7 @@
                             <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
                                 {{ notif.title }}
                             </h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-line notification-message">
                                 {{ notif.message }}
                             </p>
 
@@ -137,6 +137,20 @@
             } catch (error) {
                 console.error('Error formatting timestamp:', error);
                 elem.textContent = 'Unknown';
+            }
+        });
+
+        // Linkify URLs in notification messages
+        const messages = document.querySelectorAll('.notification-message');
+        messages.forEach(function (elem) {
+            const text = elem.textContent;
+            // Simple URL regex to detect http/https URLs
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const linkedText = text.replace(urlRegex, function(url) {
+                return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="text-sky-600 dark:text-sky-400 hover:underline font-medium">' + url + '</a>';
+            });
+            if (linkedText !== text) {
+                elem.innerHTML = linkedText;
             }
         });
     });

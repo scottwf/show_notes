@@ -1485,12 +1485,49 @@ def report_issue(media_type, media_id):
                     season_num = int(match.group(1))
                     episode_num = int(match.group(2))
 
+            # Get Sonarr/Radarr link for admins to replace the file
+            service_link = None
+            if media_type == 'episode' and show_id:
+                # Get Sonarr series info
+                show_info = db.execute(
+                    'SELECT sonarr_id, title FROM sonarr_shows WHERE id = ?',
+                    (show_id,)
+                ).fetchone()
+
+                if show_info:
+                    sonarr_url = database.get_setting('sonarr_url')
+                    if sonarr_url:
+                        # Create title slug for Sonarr URL
+                        title_slug = show_info['title'].lower()
+                        title_slug = re.sub(r'[^\w\s-]', '', title_slug)
+                        title_slug = re.sub(r'[\s_]+', '-', title_slug)
+                        title_slug = title_slug.strip('-')
+                        service_link = f"{sonarr_url.rstrip('/')}/series/{title_slug}"
+            elif media_type == 'movie':
+                # Get Radarr movie info
+                movie_info = db.execute(
+                    'SELECT radarr_id, title FROM radarr_movies WHERE id = ?',
+                    (media_id,)
+                ).fetchone()
+
+                if movie_info:
+                    radarr_url = database.get_setting('radarr_url')
+                    if radarr_url:
+                        # Create title slug for Radarr URL
+                        title_slug = movie_info['title'].lower()
+                        title_slug = re.sub(r'[^\w\s-]', '', title_slug)
+                        title_slug = re.sub(r'[\s_]+', '-', title_slug)
+                        title_slug = title_slug.strip('-')
+                        service_link = f"{radarr_url.rstrip('/')}/movie/{title_slug}"
+
             # Create notification for each admin
             for admin in admins:
                 notification_title = f"New Issue Report: {title}"
                 notification_message = f"User reported: {', '.join(issue_types)}"
                 if comment:
                     notification_message += f" - {comment[:100]}"
+                if service_link:
+                    notification_message += f"\n\nReplace file: {service_link}"
 
                 db.execute('''
                     INSERT INTO user_notifications
