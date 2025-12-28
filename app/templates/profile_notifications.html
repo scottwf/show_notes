@@ -1,0 +1,191 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div>
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Notifications</h2>
+        {% if unread_notification_count > 0 %}
+        <button onclick="markAllAsRead()"
+            class="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white rounded-lg transition-colors">
+            Mark All as Read
+        </button>
+        {% endif %}
+    </div>
+
+    {% if notifications %}
+    <div class="space-y-3">
+        {% for notif in notifications %}
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 {% if not notif.is_read %}border-l-4 border-sky-500{% endif %} hover:shadow-md transition-shadow">
+            <div class="flex gap-4">
+                <!-- Show Poster -->
+                <div class="flex-shrink-0">
+                    {% if notif.show_tmdb_id %}
+                    <a href="{{ url_for('main.show_detail', tmdb_id=notif.show_tmdb_id) }}">
+                        <img src="{{ url_for('main.image_proxy', type='poster', id=notif.show_tmdb_id) }}"
+                            alt="{{ notif.show_title }}"
+                            class="w-16 h-24 object-cover rounded shadow-sm"
+                            onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    </a>
+                    {% else %}
+                    <div class="w-16 h-24 bg-slate-300 dark:bg-slate-600 rounded flex items-center justify-center">
+                        <svg class="w-8 h-8 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Notification Content -->
+                <div class="flex-grow min-w-0">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0 flex-grow">
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
+                                {{ notif.title }}
+                            </h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                {{ notif.message }}
+                            </p>
+
+                            <!-- Action Links -->
+                            <div class="flex gap-3 mt-2">
+                                {% if notif.show_tmdb_id %}
+                                <a href="{{ url_for('main.show_detail', tmdb_id=notif.show_tmdb_id) }}"
+                                   class="text-sm text-sky-600 dark:text-sky-400 hover:underline">
+                                    View Show
+                                </a>
+                                {% endif %}
+                                {% if notif.season_number and notif.episode_number and notif.show_tmdb_id %}
+                                <a href="{{ url_for('main.episode_detail', tmdb_id=notif.show_tmdb_id, season_number=notif.season_number, episode_number=notif.episode_number) }}"
+                                   class="text-sm text-sky-600 dark:text-sky-400 hover:underline">
+                                    View Episode
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Timestamp and Actions -->
+                        <div class="text-right flex-shrink-0">
+                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 timestamp"
+                                data-timestamp="{{ notif.created_at }}"></p>
+                            {% if not notif.is_read %}
+                            <button onclick="markAsRead({{ notif.id }})"
+                                class="mt-2 text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                                Mark as read
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if notifications|length >= 50 %}
+    <div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+        <p>Showing most recent 50 notifications</p>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-4" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+            </path>
+        </svg>
+        <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No notifications yet</h3>
+        <p class="text-slate-600 dark:text-slate-400">You'll be notified when new episodes are available for your favorited shows!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Format all timestamps to user's local timezone
+    document.addEventListener('DOMContentLoaded', function () {
+        const timestamps = document.querySelectorAll('.timestamp');
+
+        timestamps.forEach(function (elem) {
+            const isoString = elem.getAttribute('data-timestamp');
+            if (!isoString) return;
+
+            try {
+                const date = new Date(isoString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                // Format as relative time if recent
+                if (diffMins < 1) {
+                    elem.textContent = 'Just now';
+                } else if (diffMins < 60) {
+                    elem.textContent = diffMins + ' min' + (diffMins === 1 ? '' : 's') + ' ago';
+                } else if (diffHours < 24) {
+                    elem.textContent = diffHours + ' hour' + (diffHours === 1 ? '' : 's') + ' ago';
+                } else if (diffDays < 7) {
+                    elem.textContent = diffDays + ' day' + (diffDays === 1 ? '' : 's') + ' ago';
+                } else {
+                    // Format date as "Month Day, Year"
+                    elem.textContent = date.toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+                }
+            } catch (error) {
+                console.error('Error formatting timestamp:', error);
+                elem.textContent = 'Unknown';
+            }
+        });
+    });
+
+    async function markAsRead(notificationId) {
+        try {
+            const response = await fetch(`/api/profile/notification/${notificationId}/read`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Reload the page to update the UI
+                window.location.reload();
+            } else {
+                alert('Failed to mark notification as read: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to mark notification as read. Please try again.');
+        }
+    }
+
+    async function markAllAsRead() {
+        try {
+            const response = await fetch('/api/profile/notifications/read-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Reload the page to update the UI
+                window.location.reload();
+            } else {
+                alert('Failed to mark all notifications as read: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to mark all notifications as read. Please try again.');
+        }
+    }
+</script>
+
+{% endblock %}

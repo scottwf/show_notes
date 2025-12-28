@@ -393,26 +393,78 @@ def sonarr_webhook():
             try:
                 # Extract necessary info from the payload
                 series_id = payload.get('series', {}).get('id')
+                series_title = payload.get('series', {}).get('title', 'Unknown Show')
                 episode_ids = [ep.get('id') for ep in payload.get('episodes', [])]
+                episodes_info = payload.get('episodes', [])
 
                 if not series_id or not episode_ids:
                     current_app.logger.error("Webhook 'Download' event missing series_id or episode_ids.")
                 else:
                     from ..utils import update_sonarr_episode
                     import threading
-                    
+
                     # Capture the real application object to pass to the thread
                     app_instance = current_app._get_current_object()
-                    
+
                     def sync_in_background(app):
                         with app.app_context():
                             current_app.logger.info(f"Starting background targeted Sonarr sync for series {series_id}.")
                             try:
                                 update_sonarr_episode(series_id, episode_ids)
                                 current_app.logger.info(f"Targeted episode sync for series {series_id} completed.")
+
+                                # Create notifications for users who favorited this show
+                                try:
+                                    db = database.get_db()
+
+                                    # Find the show in our database
+                                    show = db.execute(
+                                        'SELECT id, tmdb_id, title FROM sonarr_shows WHERE sonarr_id = ?',
+                                        (series_id,)
+                                    ).fetchone()
+
+                                    if show:
+                                        # Find users who favorited this show
+                                        favorited_users = db.execute('''
+                                            SELECT user_id FROM user_favorites
+                                            WHERE show_id = ? AND is_dropped = 0
+                                        ''', (show['id'],)).fetchall()
+
+                                        # Create notification for each user
+                                        for user in favorited_users:
+                                            for episode in episodes_info:
+                                                season_num = episode.get('seasonNumber')
+                                                episode_num = episode.get('episodeNumber')
+                                                episode_title = episode.get('title', f'Episode {episode_num}')
+
+                                                notification_title = f"New Episode: {series_title}"
+                                                notification_message = f"S{season_num:02d}E{episode_num:02d}: {episode_title} is now available!"
+
+                                                db.execute('''
+                                                    INSERT INTO user_notifications
+                                                    (user_id, show_id, notification_type, title, message, season_number, episode_number)
+                                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                                ''', (
+                                                    user['user_id'],
+                                                    show['id'],
+                                                    'new_episode',
+                                                    notification_title,
+                                                    notification_message,
+                                                    season_num,
+                                                    episode_num
+                                                ))
+
+                                        db.commit()
+                                        current_app.logger.info(f"Created notifications for {len(favorited_users)} users about {len(episodes_info)} new episodes")
+                                    else:
+                                        current_app.logger.warning(f"Show with sonarr_id {series_id} not found in database")
+
+                                except Exception as e:
+                                    current_app.logger.error(f"Error creating notifications: {e}", exc_info=True)
+
                             except Exception as e:
                                 current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
-                    
+
                     sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
                     sync_thread.daemon = True
                     sync_thread.start()
@@ -1557,7 +1609,13 @@ def profile_history():
         'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
         (user_id,)
     ).fetchone()[0]
-    
+
+    # Get unread notification count
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0]
+
     return render_template('profile_history.html',
                          user=user,
                          current_plex_event=current_plex_event,
@@ -1565,6 +1623,7 @@ def profile_history():
                          total_episodes=total_episodes,
                          total_movies=total_movies,
                          favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
                          active_tab='history')
 
 
@@ -1632,13 +1691,84 @@ def profile_favorites():
         AND event_type IN ('media.stop', 'media.scrobble')
     """, (user['username'],)).fetchone()[0]
     
+    # Get unread notification count
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0]
+
     return render_template('profile_favorites.html',
                          user=user,
                          favorites=enriched_favorites,
                          total_episodes=total_episodes,
                          total_movies=total_movies,
                          favorite_count=len(enriched_favorites),
+                         unread_notification_count=unread_notification_count,
                          active_tab='favorites')
+
+
+@main_bp.route('/profile/notifications')
+@login_required
+def profile_notifications():
+    """Display user's notifications"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Get notifications (recent 50)
+    notifications = db.execute("""
+        SELECT
+            n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
+            n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
+            s.tmdb_id as show_tmdb_id, s.title as show_title
+        FROM user_notifications n
+        LEFT JOIN sonarr_shows s ON n.show_id = s.id
+        WHERE n.user_id = ?
+        ORDER BY n.created_at DESC
+        LIMIT 50
+    """, (user_id,)).fetchall()
+
+    # Get unread count
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0]
+
+    # Get watch statistics
+    total_episodes = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'episode'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+
+    total_movies = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'movie'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+
+    # Get favorite count
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0]
+
+    return render_template('profile_notifications.html',
+                         user=user,
+                         notifications=notifications,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='notifications')
 
 
 @main_bp.route('/api/profile/favorite/<int:show_id>', methods=['POST', 'DELETE'])
@@ -1696,8 +1826,60 @@ def check_favorite(show_id):
         'SELECT id FROM user_favorites WHERE user_id = ? AND show_id = ? AND is_dropped = 0',
         (user_id, show_id)
     ).fetchone()
-    
+
     return jsonify({
         'success': True,
         'is_favorite': favorite is not None
     })
+
+
+@main_bp.route('/api/profile/notification/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify the notification belongs to this user
+    notification = db.execute(
+        'SELECT user_id FROM user_notifications WHERE id = ?',
+        (notification_id,)
+    ).fetchone()
+
+    if not notification:
+        return jsonify({'success': False, 'error': 'Notification not found'}), 404
+
+    if notification['user_id'] != user_id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    # Mark as read
+    db.execute(
+        'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ?',
+        (notification_id,)
+    )
+    db.commit()
+
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/profile/notifications/read-all', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    """Mark all notifications as read for the current user"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Mark all unread notifications as read
+    db.execute(
+        'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    )
+    db.commit()
+
+    return jsonify({'success': True})
