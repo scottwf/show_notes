@@ -135,14 +135,14 @@ def _get_plex_event_details(plex_event_row, db):
         # Try TVDB ID lookup first
         if grandparent_rating_key:
             show_info = db.execute(
-                'SELECT tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE tvdb_id = ?', (grandparent_rating_key,)
+                'SELECT id, tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE tvdb_id = ?', (grandparent_rating_key,)
             ).fetchone()
         # Fallback: Try to find by show title if TVDB lookup fails
         if not show_info:
             show_title = item_details.get('show_title') or item_details.get('grandparent_title') or item_details.get('title')
             if show_title:
                 show_info = db.execute(
-                    'SELECT tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE LOWER(title) = ?', (show_title.lower(),)
+                    'SELECT id, tmdb_id, title, poster_url, year, overview FROM sonarr_shows WHERE LOWER(title) = ?', (show_title.lower(),)
                 ).fetchone()
                 if show_info:
                     current_app.logger.warning(f"_get_plex_event_details: Fallback to title lookup for show '{show_title}' (TVDB ID {grandparent_rating_key})")
@@ -150,6 +150,7 @@ def _get_plex_event_details(plex_event_row, db):
             item_details.update(dict(show_info))
             item_details['tmdb_id_for_poster'] = show_info['tmdb_id']
             item_details['link_tmdb_id'] = show_info['tmdb_id']
+            item_details['show_db_id'] = show_info['id']  # Add database ID for favorites
         else:
             current_app.logger.warning(f"_get_plex_event_details: Could not find show for TVDB ID {grandparent_rating_key} or title '{item_details.get('show_title') or item_details.get('grandparent_title') or item_details.get('title')}'")
 
