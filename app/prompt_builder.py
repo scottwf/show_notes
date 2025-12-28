@@ -123,7 +123,7 @@ description: Explain in 1 paragraph how this character impacts the show's plot o
     return base + "\n\n" + "\n\n".join(extras)
 
 def build_grounded_character_prompt(character: str, show: str, tmdb_id: int, season: int, episode: int) -> str:
-    """Build a character prompt with grounded episode data"""
+    """Build a character prompt with grounded episode data, returning standard Markdown format"""
     
     # Get show context with episode data
     show_context = episode_data_manager.get_show_context_for_prompt(tmdb_id, season, episode)
@@ -131,12 +131,11 @@ def build_grounded_character_prompt(character: str, show: str, tmdb_id: int, sea
     # Build the grounded prompt
     prompt = f"""You are an expert TV analyst. Create a comprehensive character summary for {character} from {show}.
 
-IMPORTANT: Use ONLY the provided episode data below. Do not make up or invent any details not present in the source material.
+IMPORTANT: Use ONLY the provided episode data below. Do not make up or invent any details not present in the source material. If a specific detail is not in the data, do not invent it.
 
 ## Show Context
 **Show:** {show_context.get('show_title', show)}
 **Summary:** {show_context.get('show_summary', 'No show summary available')}
-**Data Source:** {show_context.get('show_source', 'Unknown')}
 
 ## Episode Data (Up to Season {season}, Episode {episode})
 """
@@ -148,7 +147,7 @@ IMPORTANT: Use ONLY the provided episode data below. Do not make up or invent an
         for ep in episodes[:20]:  # Limit to first 20 episodes to avoid token limits
             prompt += f"- Season {ep['season']}, Episode {ep['episode']}: {ep['title']}\n"
             if ep['summary']:
-                prompt += f"  Summary: {ep['summary'][:200]}...\n"
+                prompt += f"  Summary: {ep['summary'][:400]}...\n" # Increased summary length for better context
     else:
         prompt += "\n**No episode data available for this cutoff.**\n"
     
@@ -162,36 +161,38 @@ IMPORTANT: Use ONLY the provided episode data below. Do not make up or invent an
     prompt += f"""
 
 ## Instructions
-Based on the episode data above, create a character summary for {character} that includes:
+Based on the episode data above, create a character summary for {character}.
+Return only the following markdown format. Do not include any explanations or preamble.
 
-1. **Personality & Traits** - Specific characteristics based on their actions and dialogue in the episodes
-2. **Motivations & Conflicts** - What drives this character and what challenges they face
-3. **Key Events** - Important moments involving this character (with season/episode references)
-4. **Relationships** - How they interact with other characters
-5. **Character Development** - How they change or grow throughout the episodes
+## Significant Relationships
+relationship_1: name: "Name" role: "Role" description: "Description based on provided episodes"
+relationship_2: name: "Name" role: "Role" description: "Description based on provided episodes"
 
-## Requirements
-- Use ONLY information from the provided episode data
-- Include specific season/episode references for events
-- If information is not available in the data, state "Not available in provided data"
-- Be specific and avoid generic descriptions
-- Focus on what actually happens in the episodes, not assumptions
+## Primary Motivations & Inner Conflicts
+description: 1 paragraph describing what drives the character based on the events in the provided episodes.
 
-Return the result in JSON format:
-{{
-  "personality_traits": ["trait1", "trait2", "trait3"],
-  "motivations_conflicts": "Detailed description of what drives this character",
-  "key_events": [
-    "Season X, Episode Y: Specific event description",
-    "Season X, Episode Y: Another specific event"
-  ],
-  "relationships": [
-    "Character Name: Description of relationship",
-    "Another Character: Description of relationship"
-  ],
-  "character_development": "How the character changes throughout the episodes",
-  "data_sources": ["{show_context.get('show_source', 'Unknown')}"]
-}}"""
+## Notable Quote
+quote: "A quote explicitly found in the provided summaries (if any), or construct a representative line based *strictly* on their behavior in the text."
+
+## Character Background & Role
+description: 1 paragraph describing their role and background as seen in the provided data.
+
+## Personality & Traits
+traits:
+  - "Trait exposed by action in data"
+  - "Another trait"
+  - "A third trait"
+
+## Key Events
+events:
+  - "Season X, Episode Y: Specific event from data"
+  - "Season X, Episode Y: Another specific event"
+
+## Importance to the Story
+description: Explain in 1 paragraph how this character impacts the plot based on the provided episodes.
+
+Note: If information for a section is not present in the source data, write "Not available in provided data" or skip the item.
+"""
     
     return prompt
 

@@ -15,8 +15,11 @@ ShowNotes now supports automatic library synchronization through webhooks from R
 
 ### Sonarr Webhook Events
 - **Download**: When episodes are downloaded
-- **Series**: When series are added/updated
+- **Series**: When series are added/updated (generic)
+- **SeriesAdd**: When a new series is added (Sonarr v3+)
+- **SeriesDelete**: When a series is deleted
 - **Episode**: When episodes are added/updated
+- **EpisodeFileDelete**: When episode files are deleted
 - **Rename**: When files are renamed
 - **Delete**: When files are deleted
 - **Health**: Health check events (optional, for periodic syncs)
@@ -24,7 +27,10 @@ ShowNotes now supports automatic library synchronization through webhooks from R
 
 ### Radarr Webhook Events
 - **Download**: When movies are downloaded
-- **Movie**: When movies are added/updated
+- **Movie**: When movies are added/updated (generic)
+- **MovieAdded**: When a new movie is added (Radarr v3+)
+- **MovieDelete**: When a movie is deleted
+- **MovieFileDelete**: When movie files are deleted
 - **Rename**: When files are renamed
 - **Delete**: When files are deleted
 - **Health**: Health check events (optional, for periodic syncs)
@@ -53,12 +59,14 @@ ShowNotes now supports automatic library synchronization through webhooks from R
    - **Method**: `POST` (important: change from default PUT to POST)
    - **Username**: (leave empty)
    - **Password**: (leave empty)
-   - **On Download**: ✓ (checked)
+   - **On Grab**: ✓ (optional, for tracking download requests)
+   - **On Download**: ✓ (checked - triggers episode sync)
+   - **On Series Add**: ✓ (checked - important for new shows!)
    - **On Series Delete**: ✓ (checked)
    - **On Episode File Delete**: ✓ (checked)
    - **On Episode File Delete For Upgrade**: ✓ (checked)
    - **On Rename**: ✓ (checked)
-   - **On Health**: ✓ (checked, optional)
+   - **On Health Issue**: ✓ (checked, optional)
 
 6. **Save Configuration**
    - Click **Save** to activate the webhook
@@ -84,12 +92,14 @@ ShowNotes now supports automatic library synchronization through webhooks from R
    - **Method**: `POST` (important: change from default PUT to POST)
    - **Username**: (leave empty)
    - **Password**: (leave empty)
-   - **On Download**: ✓ (checked)
+   - **On Grab**: ✓ (optional, for tracking download requests)
+   - **On Download**: ✓ (checked - triggers movie sync)
+   - **On Movie Added**: ✓ (checked - important for new movies!)
    - **On Movie Delete**: ✓ (checked)
    - **On Movie File Delete**: ✓ (checked)
    - **On Movie File Delete For Upgrade**: ✓ (checked)
    - **On Rename**: ✓ (checked)
-   - **On Health**: ✓ (checked, optional)
+   - **On Health Issue**: ✓ (checked, optional)
 
 6. **Save Configuration**
    - Click **Save** to activate the webhook

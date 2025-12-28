@@ -1,0 +1,163 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div>
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Recent Watch History</h2>
+
+    {% if watch_history %}
+    <div class="space-y-4">
+        {% for item in watch_history %}
+        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div class="flex gap-4">
+                <!-- Poster -->
+                <div class="flex-shrink-0">
+                    {% if item.cached_poster_url %}
+                    <a href="{{ item.detail_url or '#' }}">
+                        <img src="{{ item.cached_poster_url }}" alt="{{ item.title or item.show_title }}"
+                            class="w-16 h-24 object-cover rounded shadow-sm"
+                            onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    </a>
+                    {% else %}
+                    <div class="w-16 h-24 bg-slate-300 dark:bg-slate-600 rounded flex items-center justify-center">
+                        <svg class="w-8 h-8 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z">
+                            </path>
+                        </svg>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Details -->
+                <div class="flex-grow min-w-0">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0 flex-grow">
+                            {% if item.media_type == 'movie' %}
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
+                                {% if item.detail_url %}
+                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.title }}
+                                </a>
+                                {% else %}
+                                {{ item.title }}
+                                {% endif %}
+                            </h3>
+                            {% if item.year %}
+                            <p class="text-sm text-slate-600 dark:text-slate-400">({{ item.year }})</p>
+                            {% endif %}
+                            {% elif item.media_type == 'episode' %}
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
+                                {% if item.detail_url %}
+                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.show_title or item.title }}
+                                </a>
+                                {% else %}
+                                {{ item.show_title or item.title }}
+                                {% endif %}
+                            </h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">
+                                {% if item.episode_detail_url %}
+                                <a href="{{ item.episode_detail_url }}"
+                                    class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.season_episode }}: {{ item.title if item.show_title else '' }}
+                                </a>
+                                {% else %}
+                                {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{%
+                                endif %}
+                                {% endif %}
+                            </p>
+                            {% else %}
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">{{ item.title
+                                }}</h3>
+                            {% endif %}
+
+                            <!-- Progress bar if applicable -->
+                            {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
+                            {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
+                            {% if progress < 95 %} <div
+                                class="mt-2 w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
+                                <div class="bg-sky-600 h-1.5 rounded-full" style="width: {{ progress }}%"></div>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ progress }}% watched</p>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+
+                    <!-- Timestamp -->
+                    <div class="text-right flex-shrink-0">
+                        {% if item.event_timestamp %}
+                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300 timestamp"
+                            data-timestamp="{{ item.event_timestamp }}"></p>
+                        {% else %}
+                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Unknown</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if watch_history|length >= 50 %}
+<div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+    <p>Showing most recent 50 items</p>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center py-12">
+    <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-4" fill="none" stroke="currentColor"
+        viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No watch history yet</h3>
+    <p class="text-slate-600 dark:text-slate-400">Start watching something on Plex to see it here!</p>
+</div>
+{% endif %}
+</div>
+
+<script>
+    // Format all timestamps to user's local timezone
+    document.addEventListener('DOMContentLoaded', function () {
+        const timestamps = document.querySelectorAll('.timestamp');
+
+        timestamps.forEach(function (elem) {
+            const isoString = elem.getAttribute('data-timestamp');
+            if (!isoString) return;
+
+            try {
+                const date = new Date(isoString);
+
+                // Format date as "Month Day, Year"
+                const dateStr = date.toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+
+                // Format time as "HH:MM AM/PM"
+                const timeStr = date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
+                // Set the text content
+                elem.textContent = dateStr;
+
+                // Add time as a smaller text below if desired
+                const timeElem = document.createElement('p');
+                timeElem.className = 'text-xs text-slate-500 dark:text-slate-400';
+                timeElem.textContent = timeStr;
+                elem.parentNode.appendChild(timeElem);
+
+            } catch (error) {
+                console.error('Error formatting timestamp:', error);
+                elem.textContent = 'Unknown';
+            }
+        });
+    });
+</script>
+
+{% endblock %}

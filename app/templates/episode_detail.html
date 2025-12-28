@@ -7,7 +7,7 @@
 
     <!-- Hero Section with Background Image -->
     <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-no-repeat bg-cover bg-center"
-         style="background-image: url('{{ show.cached_fanart_url or url_for('static', filename='logos/placeholder_background.png') }}');">
+        style="background-image: url('{{ show.cached_fanart_url or url_for('static', filename='logos/placeholder_background.png') }}');">
     </div>
     <div class="absolute inset-0 h-[40vh] md:h-[50vh] bg-black/60 backdrop-blur-sm"></div> {# Overlay for readability #}
 
@@ -18,14 +18,16 @@
             <!-- Poster -->
             <div class="flex-shrink-0 w-48 sm:w-56 md:w-64 mx-auto md:mx-0 mb-6 md:mb-0">
                 <img src="{{ show.cached_poster_url if show.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
-                     alt="Poster for {{ show.title }}"
-                     class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
-                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    alt="Poster for {{ show.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
+                    onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
             </div>
 
             <!-- Episode Details -->
-            <div class="text-center md:text-left flex-grow bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg p-6 shadow-xl">
-                <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ episode.title }}</h1>
+            <div
+                class="text-center md:text-left flex-grow bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg p-6 shadow-xl">
+                <h1
+                    class="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">
+                    {{ episode.title }}</h1>
                 <p class="text-lg text-gray-600 dark:text-gray-300 mb-2">
                     Season {{ season_number }}, Episode {{ episode.episode_number }}
                 </p>
@@ -45,15 +47,25 @@
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Ratings</h3>
                     <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
                         {% if episode.ratings_tmdb_value and show.tmdb_id %}
-                        <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}/season/{{ season_number }}/episode/{{ episode.episode_number }}" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
-                            <img src="{{ url_for('static', filename='logos/tmdb_logo_square.svg') }}" alt="TMDB Logo" class="h-6 w-auto mr-2">
-                            <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ episode.ratings_tmdb_votes | default(0) }} votes">{{ episode.ratings_tmdb_value | round(1) }}/10</span>
+                        <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}/season/{{ season_number }}/episode/{{ episode.episode_number }}"
+                            target="_blank" rel="noopener noreferrer"
+                            class="flex items-center hover:opacity-80 transition-opacity">
+                            <img src="{{ url_for('static', filename='logos/tmdb_logo_square.svg') }}" alt="TMDB Logo"
+                                class="h-6 w-auto mr-2">
+                            <span class="text-md font-semibold text-gray-700 dark:text-gray-300"
+                                title="{{ episode.ratings_tmdb_votes | default(0) }} votes">{{
+                                episode.ratings_tmdb_value | round(1) }}/10</span>
                         </a>
                         {% endif %}
                         {% if episode.ratings_imdb_value %}
-                        <a href="https://www.imdb.com/title/{{ episode.imdb_id if episode.imdb_id else show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
-                            <img src="{{ url_for('static', filename='logos/imdb_logo.svg') }}" alt="IMDb Logo" class="h-5 w-auto mr-2">
-                            <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ episode.ratings_imdb_votes | default(0) }} votes">{{ episode.ratings_imdb_value | round(1) }}/10</span>
+                        <a href="https://www.imdb.com/title/{{ episode.imdb_id if episode.imdb_id else show.imdb_id }}/"
+                            target="_blank" rel="noopener noreferrer"
+                            class="flex items-center hover:opacity-80 transition-opacity">
+                            <img src="{{ url_for('static', filename='logos/imdb_logo.svg') }}" alt="IMDb Logo"
+                                class="h-5 w-auto mr-2">
+                            <span class="text-md font-semibold text-gray-700 dark:text-gray-300"
+                                title="{{ episode.ratings_imdb_votes | default(0) }} votes">{{
+                                episode.ratings_imdb_value | round(1) }}/10</span>
                         </a>
                         {% endif %}
                         {# Metacritic is generally not available for individual episodes, so omitting for now #}
@@ -66,51 +78,7 @@
             </div>
         </div>
 
-        <!-- Episode Recaps -->
-        {% if episode_recaps %}
-        <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-6 mb-6">
-            <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Episode Recaps</h2>
-            <p class="text-gray-600 dark:text-gray-400 mb-4">
-                Found {{ episode_recaps|length }} detailed recap{{ 's' if episode_recaps|length != 1 else '' }} from external sources:
-            </p>
-            <div class="space-y-3">
-                {% for recap in episode_recaps %}
-                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <h3 class="font-semibold text-gray-800 dark:text-white mb-2">
-                                {{ recap.source_provider or 'Unknown Source' }}
-                            </h3>
-                            {% if recap.source_url %}
-                            <a href="{{ recap.source_url }}" target="_blank" rel="noopener noreferrer" 
-                               class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm break-all">
-                                {{ recap.source_url }}
-                            </a>
-                            {% endif %}
-                            {% if recap.confidence_score %}
-                            <div class="mt-2">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                    {% if recap.confidence_score >= 0.8 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                    {% elif recap.confidence_score >= 0.6 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
-                                    {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                                    Confidence: {{ (recap.confidence_score * 100)|round(0)|int }}%
-                                </span>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 ml-4">
-                            {% if recap.created_at %}
-                                {{ recap.created_at.strftime('%b %d, %Y') }}
-                            {% else %}
-                                Unknown date
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
+
 
         <!-- Cast -->
         <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-6">
@@ -119,13 +87,15 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
                 {% for char in episode_characters %}
                 <a href="{{ url_for('main.character_detail', show_id=show.tmdb_id, season_number=season_number, episode_number=episode.episode_number, character_id=char.id) }}"
-                   class="block text-center group">
+                    class="block text-center group">
                     <div class="relative">
                         <img src="{{ char.actor_thumb if char.actor_thumb else url_for('static', filename='logos/placeholder_poster.png') }}"
-                             alt="{{ char.character_name }}"
-                             class="w-32 h-32 rounded-full object-cover mx-auto mb-2 border-2 border-transparent group-hover:border-sky-500 transition-all duration-200">
+                            alt="{{ char.character_name }}"
+                            class="w-32 h-32 rounded-full object-cover mx-auto mb-2 border-2 border-transparent group-hover:border-sky-500 transition-all duration-200">
                     </div>
-                    <p class="font-semibold text-md text-gray-800 dark:text-gray-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors duration-200 h-12 flex items-center justify-center">{{ char.character_name }}</p>
+                    <p
+                        class="font-semibold text-md text-gray-800 dark:text-gray-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors duration-200 h-12 flex items-center justify-center">
+                        {{ char.character_name }}</p>
                 </a>
                 {% endfor %}
             </div>

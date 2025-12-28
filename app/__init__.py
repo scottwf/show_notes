@@ -52,26 +52,17 @@ def create_app(test_config=None):
     log_file = os.path.join(log_dir, 'shownotes.log')
 
     # Rotating file handler: 5MB per file, 5 backup files
-    # file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
-    # formatter = logging.Formatter(
-    #     '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    # )
-    # file_handler.setFormatter(formatter)
-    # file_handler.setLevel(logging.INFO) # Set level for the handler
+    file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=5)
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO) # Set level for the handler
     
     # Add handler to Flask's logger and the root logger
-    # app.logger.addHandler(file_handler)
-    app.logger.setLevel(logging.INFO)    # Set up logging to file if desired
-    # LOGGING TO FILE DISABLED FOR DEBUGGING
-    # if not app.debug:
-    #     import logging
-    #     from logging.handlers import RotatingFileHandler
-    #     file_handler = RotatingFileHandler('logs/flask_app.log', maxBytes=10240, backupCount=10)
-    #     file_handler.setLevel(logging.INFO)
-    #     app.logger.addHandler(file_handler)
-    #     app.logger.setLevel(logging.INFO)
-    #     app.logger.info('ShowNotes startup')
-    print("DEBUG: Logging to file is DISABLED; logs will go to terminal.")
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    print(f"DEBUG: Logging enabled to file: {log_file}")
 
     print("DEBUG: Finished logging setup")
 

@@ -7,7 +7,7 @@
 
     <!-- Hero Section with Background Image -->
     <div class="absolute inset-0 h-[30vh] md:h-[40vh] bg-no-repeat bg-cover bg-center"
-         style="background-image: url('{{ show.cached_fanart_url or url_for('static', filename='logos/placeholder_background.png') }}'); {{ 'background-color: #1a202c;' if not show.cached_fanart_url }}">
+        style="background-image: url('{{ show.cached_fanart_url or url_for('static', filename='logos/placeholder_background.png') }}'); {{ 'background-color: #1a202c;' if not show.cached_fanart_url }}">
     </div>
     <div class="absolute inset-0 h-[30vh] md:h-[40vh] bg-black/50 backdrop-blur-sm"></div> {# Overlay for readability #}
 
@@ -18,34 +18,65 @@
             <!-- Poster -->
             <div class="flex-shrink-0 w-48 sm:w-56 md:w-64 mx-auto md:mx-0 mb-6 md:mb-0">
                 <img src="{{ show.cached_poster_url if show.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
-                     alt="Poster for {{ show.title }}"
-                     class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
-                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    alt="Poster for {{ show.title }}" class="rounded-lg shadow-2xl w-full aspect-[2/3] object-cover"
+                    onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
             </div>
 
             <!-- Details: Title, Year, Overview, Metadata -->
-            <div class="flex-grow bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+            <div
+                class="flex-grow bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                 <div class="text-center md:text-left">
-                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg">{{ show.title }}</h1>
-                    {% if show.year %}
-                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light drop-shadow-sm">({{ show.year }})</p>
+                    <h1
+                        class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 tracking-tight drop-shadow-lg inline-block">
+                        {{ show.title }}
+                    </h1>
+
+                    <!-- Favorite Button -->
+                    {% if session.user_id %}
+                    <button id="favorite-btn" data-show-id="{{ show.id }}" onclick="toggleFavorite()"
+                        class="ml-3 inline-block p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        title="Add to favorites">
+                        <svg id="favorite-icon-empty" class="w-7 h-7 text-slate-400 hover:text-yellow-500" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                            </path>
+                        </svg>
+                        <svg id="favorite-icon-filled" class="hidden w-7 h-7 text-yellow-500" fill="currentColor"
+                            viewBox="0 0 24 24">
+                            <path
+                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                            </path>
+                        </svg>
+                    </button>
                     {% endif %}
 
-                    <p class="text-gray-800 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6 font-medium">
+                    {% if show.year %}
+                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light drop-shadow-sm">({{
+                        show.year }})</p>
+                    {% endif %}
+
+                    <p
+                        class="text-gray-800 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6 font-medium">
                         {{ show.overview | default('No overview available.') }}
                     </p>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-gray-800 dark:text-gray-300 mb-6">
+                    <div
+                        class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm text-gray-800 dark:text-gray-300 mb-6">
                         <div>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">First Air Date:</span> {{ show.year }} {# More specific date could be added if available #}
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">First Air Date:</span> {{
+                            show.year }} {# More specific date could be added if available #}
                         </div>
                         <div>
-                            <span class="font-semibold text-gray-900 dark:text-gray-100">Status:</span> {{ show.status | title | default('N/A') }}
+                            <span class="font-semibold text-gray-900 dark:text-gray-100">Status:</span> {{ show.status |
+                            title | default('N/A') }}
                         </div>
                         {% if show.imdb_id %}
                         <div>
                             <span class="font-semibold text-gray-900 dark:text-gray-100">IMDb ID:</span>
-                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
                                 {{ show.imdb_id }}
                             </a>
                         </div>
@@ -53,7 +84,9 @@
                         {% if show.tvdb_id %}
                         <div>
                             <span class="font-semibold text-gray-900 dark:text-gray-100">TVDB ID:</span>
-                             <a href="https://thetvdb.com/?tab=series&id={{ show.tvdb_id }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                            <a href="https://thetvdb.com/?tab=series&id={{ show.tvdb_id }}" target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
                                 {{ show.tvdb_id }}
                             </a>
                         </div>
@@ -61,7 +94,9 @@
                         {% if show.tmdb_id %}
                         <div>
                             <span class="font-semibold text-gray-900 dark:text-gray-100">TMDB ID:</span>
-                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
+                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 hover:underline">
                                 {{ show.tmdb_id }}
                             </a>
                         </div>
@@ -73,25 +108,39 @@
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Ratings</h3>
                         <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
                             {% if show.ratings_tmdb_value and show.tmdb_id %}
-                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
-                                <img src="{{ url_for('static', filename='logos/tmdb_logo_square.svg') }}" alt="TMDB Logo" class="h-6 w-auto mr-2">
-                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ show.ratings_tmdb_votes | default(0) }} votes">{{ show.ratings_tmdb_value | round(1) }}/10</span>
+                            <a href="https://www.themoviedb.org/tv/{{ show.tmdb_id }}" target="_blank"
+                                rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/tmdb_logo_square.svg') }}"
+                                    alt="TMDB Logo" class="h-6 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300"
+                                    title="{{ show.ratings_tmdb_votes | default(0) }} votes">{{ show.ratings_tmdb_value
+                                    | round(1) }}/10</span>
                             </a>
                             {% endif %}
                             {% if show.ratings_imdb_value and show.imdb_id %}
-                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
-                                <img src="{{ url_for('static', filename='logos/imdb_logo.svg') }}" alt="IMDb Logo" class="h-5 w-auto mr-2">
-                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300" title="{{ show.ratings_imdb_votes | default(0) }} votes">{{ show.ratings_imdb_value | round(1) }}/10</span>
+                            <a href="https://www.imdb.com/title/{{ show.imdb_id }}/" target="_blank"
+                                rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/imdb_logo.svg') }}" alt="IMDb Logo"
+                                    class="h-5 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300"
+                                    title="{{ show.ratings_imdb_votes | default(0) }} votes">{{ show.ratings_imdb_value
+                                    | round(1) }}/10</span>
                             </a>
                             {% endif %}
                             {% if show.ratings_metacritic_value %}
-                            <a href="https://www.metacritic.com/tv/{{ show.metacritic_id if show.metacritic_id else (show.title | urlencode) }}/" target="_blank" rel="noopener noreferrer" class="flex items-center hover:opacity-80 transition-opacity">
-                                <img src="{{ url_for('static', filename='logos/metacritic_logo_placeholder.svg') }}" alt="Metacritic Logo" class="h-6 w-auto mr-2">
-                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300">{{ show.ratings_metacritic_value }}</span>
+                            <a href="https://www.metacritic.com/tv/{{ show.metacritic_id if show.metacritic_id else (show.title | urlencode) }}/"
+                                target="_blank" rel="noopener noreferrer"
+                                class="flex items-center hover:opacity-80 transition-opacity">
+                                <img src="{{ url_for('static', filename='logos/metacritic_logo_placeholder.svg') }}"
+                                    alt="Metacritic Logo" class="h-6 w-auto mr-2">
+                                <span class="text-md font-semibold text-gray-700 dark:text-gray-300">{{
+                                    show.ratings_metacritic_value }}</span>
                             </a>
                             {% endif %}
-                            {% if not show.ratings_tmdb_value and not show.ratings_imdb_value and not show.ratings_metacritic_value %}
-                            <span class="text-gray-500 dark:text-gray-400">No ratings available for this show yet.</span>
+                            {% if not show.ratings_tmdb_value and not show.ratings_imdb_value and not
+                            show.ratings_metacritic_value %}
+                            <span class="text-gray-500 dark:text-gray-400">No ratings available for this show
+                                yet.</span>
                             {% endif %}
                         </div>
                     </div>
@@ -102,26 +151,32 @@
 
         <!-- Next Up Card & Next Aired -->
         {% if next_up_episode %}
-        <div class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+        <div
+            class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
             <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Next Up</h2>
             <div class="flex flex-col md:flex-row gap-6">
                 <a href="{{ next_up_episode.episode_detail_url }}" class="flex-shrink-0">
-                    <img src="{{ next_up_episode.poster_url }}" alt="Show Poster" class="w-32 h-48 object-cover rounded-lg shadow-md">
+                    <img src="{{ next_up_episode.poster_url }}" alt="Show Poster"
+                        class="w-32 h-48 object-cover rounded-lg shadow-md">
                 </a>
                 <div class="flex-grow">
                     <h3 class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ next_up_episode.title }}</h3>
                     <p class="text-slate-600 dark:text-slate-400 mb-2">{{ next_up_episode.season_episode_str }}</p>
                     {% if next_up_episode.is_currently_watching and next_up_episode.progress_percent is not none %}
-                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-2">
-                            <div class="bg-sky-600 h-2.5 rounded-full" style="width: {{ next_up_episode.progress_percent }}%"></div>
-                        </div>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{ next_up_episode.formatted_timestamp }}</p>
+                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-2">
+                        <div class="bg-sky-600 h-2.5 rounded-full"
+                            style="width: {{ next_up_episode.progress_percent }}%"></div>
+                    </div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{
+                        next_up_episode.formatted_timestamp }}</p>
                     {% elif next_up_episode.is_next_unwatched %}
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Next unwatched episode.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Next unwatched episode.</p>
                     {% else %}
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{ next_up_episode.formatted_timestamp }}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Last watched: {{
+                        next_up_episode.formatted_timestamp }}</p>
                     {% endif %}
-                    <p class="mt-4 text-slate-700 dark:text-slate-300">{{ next_up_episode.overview | truncate(200) }}</p>
+                    <p class="mt-4 text-slate-700 dark:text-slate-300">{{ next_up_episode.overview | truncate(200) }}
+                    </p>
                 </div>
             </div>
         </div>
@@ -129,17 +184,20 @@
 
         <!-- Next Aired Episode -->
         {% if next_aired_episode_info %}
-        <div class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+        <div
+            class="mb-8 bg-white dark:bg-slate-800 shadow-lg rounded-lg p-6 border border-slate-200 dark:border-slate-700">
             <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Next Episode</h2>
             <div class="flex flex-col sm:flex-row gap-4">
                 <div class="flex-grow">
-                    <h3 class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ next_aired_episode_info.title }}</h3>
-                    <p class="text-slate-600 dark:text-slate-400 mb-2">{{ next_aired_episode_info.season_episode_str }}</p>
+                    <h3 class="text-xl font-semibold text-sky-600 dark:text-sky-400">{{ next_aired_episode_info.title }}
+                    </h3>
+                    <p class="text-slate-600 dark:text-slate-400 mb-2">{{ next_aired_episode_info.season_episode_str }}
+                    </p>
                     <p class="text-sm text-slate-500 dark:text-slate-400">
                         {% if next_aired_episode_info.air_date_utc %}
-                            Airs: {{ next_aired_episode_info.air_date_utc[:10] | replace('-', '/') }}
+                        Airs: {{ next_aired_episode_info.air_date_utc[:10] | replace('-', '/') }}
                         {% else %}
-                            Air date: TBD
+                        Air date: TBD
                         {% endif %}
                     </p>
                 </div>
@@ -147,165 +205,147 @@
         </div>
         {% endif %}
 
-        <!-- Episode Recap Scraping Section -->
-        <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 mb-6">
-            <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Episode Recaps</h2>
-            <p class="text-gray-600 dark:text-gray-400 mb-4">
-                Scrape detailed episode summaries from recap sites like Vulture and Showbiz Junkies to improve LLM-generated character and show summaries.
-            </p>
-            <div class="flex flex-wrap gap-3">
-                <button id="scrape-recaps-btn" 
-                        class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors">
-                    <span id="scrape-recaps-text">Scrape Episode Recaps</span>
-                </button>
-                <div id="scraping-status" class="hidden text-sm text-gray-600 dark:text-gray-400 flex items-center">
-                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                    <span>Scraping recaps...</span>
-                </div>
-            </div>
-            <div id="scraping-results" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <h3 class="font-semibold text-gray-800 dark:text-white mb-2">Scraping Results</h3>
-                <div id="scraping-output" class="text-sm text-gray-600 dark:text-gray-400"></div>
-            </div>
-        </div>
+
+
 
         <!-- Seasons and Episodes Section -->
-        <div class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
+        <div
+            class="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700">
             <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Seasons & Episodes</h2>
             {% if seasons_with_episodes %}
-                {% for season in seasons_with_episodes %}
-                    {% if season.season_number == 0 and not season.episodes %} {# Skip empty specials season #}
-                        
-                    {% endif %}
-                    <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if loop.first %}open{% endif %}>
-                        <summary class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
-                            Season {{ season.season_number }}
-                            <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
-                                ({{ season.episodes | length }} episode{{ 's' if (season.episodes | length) != 1 else '' }})
+            {% for season in seasons_with_episodes %}
+            {% if season.season_number == 0 and not season.episodes %} {# Skip empty specials season #}
+
+            {% endif %}
+            <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if
+                loop.first %}open{% endif %}>
+                <summary
+                    class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
+                    Season {{ season.season_number }}
+                    <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
+                        ({{ season.episodes | length }} episode{{ 's' if (season.episodes | length) != 1 else '' }})
+                    </span>
+                </summary>
+                <div class="p-3 bg-gray-50 dark:bg-gray-800/50">
+                    <ul class="space-y-3">
+                        {% for episode in season.episodes %}
+                        <li class="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-medium text-gray-800 dark:text-gray-100">
+                                        <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}"
+                                            class="hover:underline">
+                                            {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
+                                        </a>
+                                    </h4>
+                                    {% if episode.overview %}
+                                    <p
+                                        class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
+                                        {{ episode.overview }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                {% if episode.air_date_utc %}
+                                <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
+                                    {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% if episode.has_file %}
+                            <span
+                                class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
+                                Available
                             </span>
-                        </summary>
-                        <div class="p-3 bg-gray-50 dark:bg-gray-800/50">
-                            <ul class="space-y-3">
-                                {% for episode in season.episodes %}
-                                    <li class="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h4 class="font-medium text-gray-800 dark:text-gray-100">
-                                                    <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}" class="hover:underline">
-                                                        {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
-                                                    </a>
-                                                </h4>
-                                                {% if episode.overview %}
-                                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
-                                                    {{ episode.overview }}
-                                                </p>
-                                                {% endif %}
-                                            </div>
-                                            {% if episode.air_date_utc %}
-                                            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
-                                                {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                        {% if episode.has_file %}
-                                            <span class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-                                                Available
-                                            </span>
-                                        {% endif %}
-                                    </li>
-                                {% else %}
-                                    <li class="text-gray-500 dark:text-gray-400">No episodes listed for this season.</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    </details>
-                {% endfor %}
+                            {% endif %}
+                        </li>
+                        {% else %}
+                        <li class="text-gray-500 dark:text-gray-400">No episodes listed for this season.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </details>
+            {% endfor %}
             {% else %}
-                <p class="text-gray-500 dark:text-gray-400">No season or episode information available for this show yet.</p>
+            <p class="text-gray-500 dark:text-gray-400">No season or episode information available for this show yet.
+            </p>
             {% endif %}
         </div>
     </div>
 </div>
+</div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const scrapeBtn = document.getElementById('scrape-recaps-btn');
-    const scrapeText = document.getElementById('scrape-recaps-text');
-    const scrapingStatus = document.getElementById('scraping-status');
-    const scrapingResults = document.getElementById('scraping-results');
-    const scrapingOutput = document.getElementById('scraping-output');
-    
-    if (scrapeBtn) {
-        scrapeBtn.addEventListener('click', async function() {
-            // Show loading state
-            scrapeBtn.disabled = true;
-            scrapeText.textContent = 'Scraping...';
-            scrapingStatus.classList.remove('hidden');
-            scrapingResults.classList.add('hidden');
-            
-            try {
-                const response = await fetch('/admin/api/scrape-show-recaps', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        tmdb_id: {{ show.tmdb_id }},
-                        show_title: "{{ show.title }}",
-                        max_episodes: 20
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    let output = `<div class="space-y-2">`;
-                    output += `<p><strong>Show:</strong> ${data.show_title}</p>`;
-                    output += `<p><strong>Recaps found:</strong> ${data.recaps_found}</p>`;
-                    output += `<p><strong>Recaps stored:</strong> ${data.recaps_stored}</p>`;
-                    output += `<p><strong>Total episode summaries:</strong> ${data.total_episode_summaries}</p>`;
-                    
-                    if (data.recaps && data.recaps.length > 0) {
-                        output += `<div class="mt-3">`;
-                        output += `<p class="font-semibold">Recent recaps found:</p>`;
-                        output += `<ul class="list-disc list-inside space-y-1 mt-1">`;
-                        data.recaps.forEach(recap => {
-                            output += `<li>${recap.title} (S${recap.season}E${recap.episode}) from ${recap.source}</li>`;
-                        });
-                        output += `</ul></div>`;
-                    }
-                    
-                    output += `<div class="mt-3 p-2 bg-green-100 dark:bg-green-900 rounded text-green-800 dark:text-green-200">`;
-                    output += `<strong>Success!</strong> Episode recaps have been scraped and stored. LLM-generated summaries for this show will now be more accurate and detailed.`;
-                    output += `</div></div>`;
-                    
-                    scrapingOutput.innerHTML = output;
-                    scrapingResults.classList.remove('hidden');
-                } else {
-                    let errorOutput = `<div class="space-y-2">`;
-                    errorOutput += `<p class="text-red-600 dark:text-red-400"><strong>Error:</strong> ${data.error}</p>`;
-                    if (data.suggestion) {
-                        errorOutput += `<p class="text-blue-600 dark:text-blue-400"><strong>Suggestion:</strong> ${data.suggestion}</p>`;
-                    }
-                    errorOutput += `<div class="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 rounded text-yellow-800 dark:text-yellow-200">`;
-                    errorOutput += `<strong>Note:</strong> The scraping system has been updated with proper browser headers to avoid blocking. If scraping still fails, the site structure may have changed and the scraping rules may need updates.`;
-                    errorOutput += `</div></div>`;
-                    
-                    scrapingOutput.innerHTML = errorOutput;
-                    scrapingResults.classList.remove('hidden');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                scrapingOutput.innerHTML = `<p class="text-red-600 dark:text-red-400">Error: ${error.message}</p>`;
-                scrapingResults.classList.remove('hidden');
-            } finally {
-                // Reset button state
-                scrapeBtn.disabled = false;
-                scrapeText.textContent = 'Scrape Episode Recaps';
-                scrapingStatus.classList.add('hidden');
+    // Favorite toggle functionality
+    let isFavorite = false;
+
+    async function checkFavoriteStatus() {
+        const showId = document.getElementById('favorite-btn')?.getAttribute('data-show-id');
+        if (!showId) return;
+
+        try {
+            const response = await fetch(`/api/profile/favorite/${showId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                isFavorite = data.is_favorite;
+                updateFavoriteIcon(isFavorite);
+
+                // Update button title
+                const btn = document.getElementById('favorite-btn');
+                btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
             }
-        });
+        } catch (error) {
+            console.error('Error checking favorite status:', error);
+            // Default to not favorited on error
+            updateFavoriteIcon(false);
+        }
     }
-});
+
+    async function toggleFavorite() {
+        const btn = document.getElementById('favorite-btn');
+        const showId = btn.getAttribute('data-show-id');
+
+        try {
+            const method = isFavorite ? 'DELETE' : 'POST';
+            const response = await fetch(`/api/profile/favorite/${showId}`, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                isFavorite = !isFavorite;
+                updateFavoriteIcon(isFavorite);
+
+                // Update button title
+                btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+            } else {
+                alert('Failed to update favorite: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to update favorite. Please try again.');
+        }
+    }
+
+    function updateFavoriteIcon(favorited) {
+        const emptyIcon = document.getElementById('favorite-icon-empty');
+        const filledIcon = document.getElementById('favorite-icon-filled');
+
+        if (favorited) {
+            emptyIcon.classList.add('hidden');
+            filledIcon.classList.remove('hidden');
+        } else {
+            emptyIcon.classList.remove('hidden');
+            filledIcon.classList.add('hidden');
+        }
+    }
+
+    // Check favorite status on page load 
+    document.addEventListener('DOMContentLoaded', checkFavoriteStatus);
 </script>
+
 {% endblock %}

@@ -39,7 +39,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
 
-from ..prompt_builder import build_character_prompt
+from ..prompt_builder import build_character_prompt, build_grounded_character_prompt
 from ..llm_services import get_llm_response
 from ..utils import parse_llm_markdown_sections, parse_relationships_section, parse_traits_section, parse_events_section, parse_quote_section, parse_motivations_section, parse_importance_section
 
@@ -443,8 +443,11 @@ def sonarr_webhook():
         # Events that should trigger a library sync
         sync_events = [
             'Download',           # Episode downloaded
-            'Series',             # Series added/updated
+            'Series',             # Series added/updated (generic)
+            'SeriesAdd',          # Series added (Sonarr v3+)
+            'SeriesDelete',       # Series deleted
             'Episode',            # Episode added/updated
+            'EpisodeFileDelete',  # Episode file deleted
             'Rename',             # Files renamed
             'Delete',             # Files deleted
             'Health',             # Health check (good for periodic syncs)
@@ -464,16 +467,19 @@ def sonarr_webhook():
                     from ..utils import update_sonarr_episode
                     import threading
                     
-                    def sync_in_background():
-                        current_app.logger.info(f"Starting background targeted Sonarr sync for series {series_id}.")
-                        try:
-                            with current_app.app_context():
+                    # Capture the real application object to pass to the thread
+                    app_instance = current_app._get_current_object()
+                    
+                    def sync_in_background(app):
+                        with app.app_context():
+                            current_app.logger.info(f"Starting background targeted Sonarr sync for series {series_id}.")
+                            try:
                                 update_sonarr_episode(series_id, episode_ids)
                                 current_app.logger.info(f"Targeted episode sync for series {series_id} completed.")
-                        except Exception as e:
-                            current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
+                            except Exception as e:
+                                current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
                     
-                    sync_thread = threading.Thread(target=sync_in_background)
+                    sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
                     sync_thread.daemon = True
                     sync_thread.start()
                     current_app.logger.info(f"Initiated targeted background sync for series {series_id}, episodes {episode_ids}")
@@ -490,17 +496,21 @@ def sonarr_webhook():
             try:
                 # Trigger the sync in a background thread to avoid blocking the webhook response
                 import threading
-                def sync_in_background():
-                    current_app.logger.info("Starting background Sonarr library sync.")
-                    try:
-                        with current_app.app_context():
+                
+                # Capture the real application object to pass to the thread
+                app_instance = current_app._get_current_object()
+
+                def sync_in_background(app):
+                    with app.app_context():
+                        current_app.logger.info("Starting background Sonarr library sync.")
+                        try:
                             count = sync_sonarr_library()
                             current_app.logger.info(f"Sonarr webhook-triggered sync completed: {count} shows processed")
-                    except Exception as e:
-                        current_app.logger.error(f"Error in background Sonarr sync: {e}", exc_info=True)
+                        except Exception as e:
+                            current_app.logger.error(f"Error in background Sonarr sync: {e}", exc_info=True)
                 
                 # Start background sync
-                sync_thread = threading.Thread(target=sync_in_background)
+                sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
                 sync_thread.daemon = True
                 sync_thread.start()
                 
@@ -567,7 +577,10 @@ def radarr_webhook():
         # Events that should trigger a library sync
         sync_events = [
             'Download',           # Movie downloaded
-            'Movie',              # Movie added/updated
+            'Movie',              # Movie added/updated (generic)
+            'MovieAdded',         # Movie added (Radarr v3+)
+            'MovieDelete',        # Movie deleted
+            'MovieFileDelete',    # Movie file deleted
             'Rename',             # Files renamed
             'Delete',             # Files deleted
             'Health',             # Health check (good for periodic syncs)
@@ -583,17 +596,21 @@ def radarr_webhook():
             try:
                 # Trigger the sync in a background thread to avoid blocking the webhook response
                 import threading
-                def sync_in_background():
-                    current_app.logger.info("Starting background Radarr library sync.")
-                    try:
-                        with current_app.app_context():
+
+                # Capture the real application object to pass to the thread
+                app_instance = current_app._get_current_object()
+
+                def sync_in_background(app):
+                    with app.app_context():
+                        current_app.logger.info("Starting background Radarr library sync.")
+                        try:
                             result = sync_radarr_library()
                             current_app.logger.info(f"Radarr webhook-triggered sync completed: {result}")
-                    except Exception as e:
-                        current_app.logger.error(f"Error in background Radarr sync: {e}", exc_info=True)
+                        except Exception as e:
+                            current_app.logger.error(f"Error in background Radarr sync: {e}", exc_info=True)
                 
                 # Start background sync
-                sync_thread = threading.Thread(target=sync_in_background)
+                sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
                 sync_thread.daemon = True
                 sync_thread.start()
                 
@@ -1276,23 +1293,6 @@ def episode_detail(tmdb_id, season_number, episode_number):
     # Add runtime if available (example field name, adjust if different in your schema)
     # episode_dict['runtime_minutes'] = episode_dict.get('runtime', None)
 
-    # Fetch episode recaps
-    episode_recaps = []
-    if show_tmdb_id:
-        episode_recaps = db.execute(
-            'SELECT * FROM episode_summaries WHERE tmdb_id = ? AND season_number = ? AND episode_number = ? ORDER BY created_at DESC',
-            (show_tmdb_id, season_number, episode_number)
-        ).fetchall()
-        episode_recaps = [dict(row) for row in episode_recaps]
-        
-        # Convert created_at strings to datetime objects for template rendering
-        for recap in episode_recaps:
-            if recap.get('created_at'):
-                try:
-                    if isinstance(recap['created_at'], str):
-                        recap['created_at'] = datetime.datetime.fromisoformat(recap['created_at'].replace('Z', '+00:00'))
-                except (ValueError, AttributeError):
-                    recap['created_at'] = None
 
     # Debug episode_characters before rendering
     current_app.logger.info(f"[DEBUG] Episode {tmdb_id} S{season_number}E{episode_number} found {len(episode_characters)} characters:")
@@ -1303,8 +1303,7 @@ def episode_detail(tmdb_id, season_number, episode_number):
                            show=show_dict,
                            episode=episode_dict,
                            season_number=season_number,
-                           episode_characters=episode_characters,
-                           episode_recaps=episode_recaps)
+                           episode_characters=episode_characters)
 
 @main_bp.route('/image_proxy/<string:type>/<int:id>')
 @login_required
@@ -1538,21 +1537,14 @@ def character_detail(show_id, season_number, episode_number, character_id):
         llm_source = character.get('llm_source')
     else:
         # Call LLM and cache results
-        prompt_options = {
-            'include_relationships': True,
-            'include_motivations': True,
-            'include_quote': True,
-            'tone': 'tv_expert'
-        }
-        generated_prompt = build_character_prompt(
-            character=character_name,
+        # Use grounded prompt to prevent hallucinations
+        actor_info = f" (played by {character.get('actor_name')})" if character.get('actor_name') else ""
+        generated_prompt = build_grounded_character_prompt(
+            character=f"{character_name}{actor_info}",
             show=show_title,
+            tmdb_id=show_id,
             season=season_number,
-            episode=episode_number,
-            options=prompt_options,
-            show_context=show_context,
-            episode_context=episode_context,
-            character_context=character_context
+            episode=episode_number
         )
         llm_summary, llm_error = get_llm_response(generated_prompt)
         llm_sections = {}
@@ -1653,3 +1645,259 @@ def report_issue(media_type, media_id):
     show_id = request.args.get('show_id', '')
     title = request.args.get('title', '')
     return render_template('report_issue.html', media_type=media_type, media_id=media_id, show_id=show_id, title=title, issues=issues)
+
+# ============================================================================
+# USER PROFILE ROUTES
+# ============================================================================
+
+@main_bp.route('/profile')
+@main_bp.route('/profile/history')
+@login_required
+def profile_history():
+    """Display user's watch history"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('main.login'))
+    
+    db = database.get_db()
+    
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    # Get watch history (recent 50 unique items)
+    # Group by unique episode/movie to show only one entry per item
+    watch_history = db.execute("""
+        SELECT 
+            id, event_type, plex_username, media_type, title, show_title,
+            season_episode, view_offset_ms, duration_ms, event_timestamp,
+            tmdb_id, grandparent_rating_key,
+            MAX(event_timestamp) as latest_timestamp
+        FROM plex_activity_log
+        WHERE plex_username = ?
+        AND event_type IN ('media.stop', 'media.scrobble')
+        GROUP BY 
+            CASE 
+                WHEN media_type = 'episode' THEN show_title || '-' || season_episode
+                WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
+                ELSE title
+            END
+        ORDER BY latest_timestamp DESC
+        LIMIT 50
+    """, (user['username'],)).fetchall()
+    
+    # Enrich watch history with show/movie data
+    enriched_history = []
+    for item in watch_history:
+        item_dict = dict(item)
+        
+        # Try to get additional metadata
+        if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
+            movie = db.execute(
+                'SELECT title, year, poster_url FROM radarr_movies WHERE tmdb_id = ?',
+                (item_dict['tmdb_id'],)
+            ).fetchone()
+            if movie:
+                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
+                item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
+                item_dict['year'] = movie['year']
+        
+        elif item_dict['media_type'] == 'episode':
+            # Try to find the show by TVDB ID or title
+            show = None
+            if item_dict.get('grandparent_rating_key'):
+                show = db.execute(
+                    'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE tvdb_id = ?',
+                    (item_dict['grandparent_rating_key'],)
+                ).fetchone()
+            
+            if not show and item_dict.get('show_title'):
+                show = db.execute(
+                    'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
+                    (item_dict['show_title'].lower(),)
+                ).fetchone()
+            
+            if show:
+                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
+                item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+                
+                # Try to find episode detail link
+                if item_dict.get('season_episode'):
+                    match = re.match(r'S(\d+)E(\d+)', item_dict['season_episode'])
+                    if match:
+                        season_num = int(match.group(1))
+                        episode_num = int(match.group(2))
+                        item_dict['episode_detail_url'] = url_for('main.episode_detail',
+                                                                    tmdb_id=show['tmdb_id'],
+                                                                    season_number=season_num,
+                                                                    episode_number=episode_num)
+        
+        
+        # Keep raw timestamp for client-side timezone conversion
+        # JavaScript will handle displaying in user's local timezone
+        
+        enriched_history.append(item_dict)
+    
+    # Get watch statistics
+    total_episodes = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'episode'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+    
+    total_movies = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'movie'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+    
+    # Get favorite count
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0]
+    
+    return render_template('profile_history.html',
+                         user=user,
+                         watch_history=enriched_history,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         active_tab='history')
+
+
+@main_bp.route('/profile/favorites')
+@login_required
+def profile_favorites():
+    """Display user's favorite shows"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('main.login'))
+    
+    db = database.get_db()
+    
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    # Get favorited shows
+    favorites = db.execute("""
+        SELECT 
+            uf.id as favorite_id,
+            uf.added_at,
+            s.id as show_db_id,
+            s.tmdb_id,
+            s.title,
+            s.year,
+            s.status,
+            s.poster_url,
+            s.overview
+        FROM user_favorites uf
+        JOIN sonarr_shows s ON s.id = uf.show_id
+        WHERE uf.user_id = ? AND uf.is_dropped = 0
+        ORDER BY uf.added_at DESC
+    """, (user_id,)).fetchall()
+    
+    # Enrich favorites with next episode info
+    enriched_favorites = []
+    for fav in favorites:
+        fav_dict = dict(fav)
+        fav_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=fav_dict['tmdb_id'])
+        fav_dict['detail_url'] = url_for('main.show_detail', tmdb_id=fav_dict['tmdb_id'])
+        
+        # Format added date
+        if fav_dict.get('added_at'):
+            try:
+                dt = datetime.datetime.fromisoformat(str(fav_dict['added_at']).replace('Z', '+00:00'))
+                fav_dict['formatted_added_date'] = dt.strftime('%B %d, %Y')
+            except:
+                fav_dict['formatted_added_date'] = 'Unknown'
+        
+        enriched_favorites.append(fav_dict)
+    
+    # Get watch statistics
+    total_episodes = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'episode'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+    
+    total_movies = db.execute("""
+        SELECT COUNT(DISTINCT tmdb_id)
+        FROM plex_activity_log
+        WHERE plex_username = ? AND media_type = 'movie'
+        AND event_type IN ('media.stop', 'media.scrobble')
+    """, (user['username'],)).fetchone()[0]
+    
+    return render_template('profile_favorites.html',
+                         user=user,
+                         favorites=enriched_favorites,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=len(enriched_favorites),
+                         active_tab='favorites')
+
+
+@main_bp.route('/api/profile/favorite/<int:show_id>', methods=['POST', 'DELETE'])
+@login_required
+def toggle_favorite(show_id):
+    """Add or remove a show from favorites"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    db = database.get_db()
+    
+    # Verify show exists
+    show = db.execute('SELECT id FROM sonarr_shows WHERE id = ?', (show_id,)).fetchone()
+    if not show:
+        return jsonify({'success': False, 'error': 'Show not found'}), 404
+    
+    if request.method == 'POST':
+        # Add to favorites
+        try:
+            db.execute(
+                'INSERT OR IGNORE INTO user_favorites (user_id, show_id) VALUES (?, ?)',
+                (user_id, show_id)
+            )
+            db.commit()
+            return jsonify({'success': True, 'action': 'added'})
+        except Exception as e:
+            current_app.logger.error(f"Error adding favorite: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    elif request.method == 'DELETE':
+        # Remove from favorites
+        try:
+            db.execute(
+                'DELETE FROM user_favorites WHERE user_id = ? AND show_id = ?',
+                (user_id, show_id)
+            )
+            db.commit()
+            return jsonify({'success': True, 'action': 'removed'})
+        except Exception as e:
+            current_app.logger.error(f"Error removing favorite: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+@main_bp.route('/api/profile/favorite/<int:show_id>', methods=['GET'])
+@login_required
+def check_favorite(show_id):
+    """Check if a show is favorited"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+    
+    db = database.get_db()
+    
+    favorite = db.execute(
+        'SELECT id FROM user_favorites WHERE user_id = ? AND show_id = ? AND is_dropped = 0',
+        (user_id, show_id)
+    ).fetchone()
+    
+    return jsonify({
+        'success': True,
+        'is_favorite': favorite is not None
+    })
