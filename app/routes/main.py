@@ -175,80 +175,17 @@ def _get_plex_event_details(plex_event_row, db):
 @main_bp.route('/')
 def home():
     """
-    Renders the user's homepage.
+    Redirects to the user's profile page (watch history with now playing).
 
-    The homepage displays a personalized view of the user's Plex activity. It
-    shows the currently playing/paused item and a grid of previously watched
-    movies and shows. The data is fetched from the `plex_activity_log` table
-    and enriched with metadata from the local database.
-
-    Returns:
-        A rendered HTML template for the homepage, populated with the user's
-        Plex activity data.
+    The profile page now serves as the default landing page, displaying
+    currently playing media and watch history.
     """
-    db = database.get_db()
-    s_username = session.get('username')
-    current_plex_event = None
-    previous_items_list = []
+    # If user is logged in, redirect to profile
+    if session.get('user_id'):
+        return redirect(url_for('main.profile_history'))
 
-    if s_username:
-        # 1. Fetch Current Item (actively playing, paused, or resumed)
-        current_event_row = db.execute(
-            """
-            SELECT * FROM plex_activity_log
-            WHERE plex_username = ?
-              AND event_type IN ('media.play', 'media.resume', 'media.pause')
-            ORDER BY event_timestamp DESC, id DESC
-            LIMIT 1
-            """, (s_username,)
-        ).fetchone()
-
-        if current_event_row:
-            current_plex_event = _get_plex_event_details(current_event_row, db)
-            current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
-
-
-        # 2. Fetch Previous Items (recently stopped or scrobbled)
-        recent_stopped_scrobbled_events = db.execute(
-            """
-            SELECT * FROM plex_activity_log
-            WHERE plex_username = ?
-              AND event_type IN ('media.stop', 'media.scrobble')
-            ORDER BY event_timestamp DESC, id DESC
-            LIMIT 25
-            """, (s_username,)
-        ).fetchall()
-
-        processed_tmdb_ids = set()
-        if current_plex_event and current_plex_event.get('link_tmdb_id'):
-            processed_tmdb_ids.add(current_plex_event['link_tmdb_id'])
-
-        MAX_PREVIOUS_ITEMS = 6
-
-        for event_row in recent_stopped_scrobbled_events:
-            if len(previous_items_list) >= MAX_PREVIOUS_ITEMS:
-                break
-
-            detailed_item = _get_plex_event_details(event_row, db)
-
-            if detailed_item and detailed_item.get('link_tmdb_id'):
-                item_primary_tmdb_id = detailed_item['link_tmdb_id'] # Show's or Movie's TMDB ID
-                if item_primary_tmdb_id not in processed_tmdb_ids:
-                    if detailed_item.get('tmdb_id_for_poster'): # Ensure we have a poster ID
-                        previous_items_list.append(detailed_item)
-                        processed_tmdb_ids.add(item_primary_tmdb_id)
-                    else:
-                        current_app.logger.debug(f"Previous item for {s_username} skipped (no tmdb_id_for_poster): {detailed_item.get('title')}")
-                # else: item already processed or is current item
-            # else:
-                # current_app.logger.debug(f"Previous item for {s_username} skipped (no link_tmdb_id or incomplete details): {event_row.get('title')}")
-
-
-    return render_template('home.html',
-                           current_plex_event=current_plex_event,
-                           previous_items_list=previous_items_list,
-                           username=s_username,
-                           is_admin=session.get('is_admin', False))
+    # If not logged in, redirect to login
+    return redirect(url_for('main.login'))
 
 # ============================================================================
 # WEBHOOK ENDPOINTS
@@ -1497,21 +1434,39 @@ def report_issue(media_type, media_id):
 @main_bp.route('/profile/history')
 @login_required
 def profile_history():
-    """Display user's watch history"""
+    """Display user's watch history and currently playing media"""
     user_id = session.get('user_id')
     if not user_id:
         flash('Please log in to view your profile.', 'warning')
         return redirect(url_for('main.login'))
-    
+
     db = database.get_db()
-    
+
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    
+
+    # Get currently playing/paused item
+    current_plex_event = None
+    s_username = user['username']
+
+    current_event_row = db.execute(
+        """
+        SELECT * FROM plex_activity_log
+        WHERE plex_username = ?
+          AND event_type IN ('media.play', 'media.resume', 'media.pause')
+        ORDER BY event_timestamp DESC, id DESC
+        LIMIT 1
+        """, (s_username,)
+    ).fetchone()
+
+    if current_event_row:
+        current_plex_event = _get_plex_event_details(current_event_row, db)
+        current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
+
     # Get watch history (recent 50 unique items)
     # Group by unique episode/movie to show only one entry per item
     watch_history = db.execute("""
-        SELECT 
+        SELECT
             id, event_type, plex_username, media_type, title, show_title,
             season_episode, view_offset_ms, duration_ms, event_timestamp,
             tmdb_id, grandparent_rating_key,
@@ -1519,8 +1474,8 @@ def profile_history():
         FROM plex_activity_log
         WHERE plex_username = ?
         AND event_type IN ('media.stop', 'media.scrobble')
-        GROUP BY 
-            CASE 
+        GROUP BY
+            CASE
                 WHEN media_type = 'episode' THEN show_title || '-' || season_episode
                 WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
                 ELSE title
@@ -1604,6 +1559,7 @@ def profile_history():
     
     return render_template('profile_history.html',
                          user=user,
+                         current_plex_event=current_plex_event,
                          watch_history=enriched_history,
                          total_episodes=total_episodes,
                          total_movies=total_movies,
