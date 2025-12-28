@@ -39,10 +39,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
 
-from ..prompt_builder import build_character_prompt, build_grounded_character_prompt
-from ..llm_services import get_llm_response
-from ..utils import parse_llm_markdown_sections, parse_relationships_section, parse_traits_section, parse_events_section, parse_quote_section, parse_motivations_section, parse_importance_section
-
 main_bp = Blueprint('main', __name__)
 
 last_plex_event = None
@@ -1408,205 +1404,55 @@ def image_proxy(type, id):
         placeholder_path = f'logos/placeholder_{type}.png' if os.path.exists(os.path.join(current_app.static_folder, f'logos/placeholder_{type}.png')) else 'logos/placeholder_poster.png'
         return current_app.send_static_file(placeholder_path)
 
-@main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:character_id>', methods=['GET', 'POST'])
+@main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:character_id>')
 def character_detail(show_id, season_number, episode_number, character_id):
+    """
+    Display character detail page showing actor information and other appearances.
+    """
     db = database.get_db()
 
-    # --- Enhanced Debugging ---
-    current_app.logger.info(f"[DEBUG] Received request for show_id: {show_id}, season: {season_number}, episode: {episode_number}, character_id: {character_id}")
-    
-    # Check if the character exists by ID
-    char_exists = db.execute('SELECT * FROM episode_characters WHERE id = ?', (character_id,)).fetchone()
-    if char_exists:
-        current_app.logger.info(f"[DEBUG] Found character by ID: {dict(char_exists)}")
-    else:
-        current_app.logger.info(f"[DEBUG] No character found with ID: {character_id}")
-    
-    # Check what characters exist for this show/season/episode
-    chars_for_episode = db.execute('''
-        SELECT id, character_name, actor_name, show_tmdb_id, season_number, episode_number 
-        FROM episode_characters 
-        WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
-    ''', (show_id, season_number, episode_number)).fetchall()
-    current_app.logger.info(f"[DEBUG] Characters for this episode: {[dict(row) for row in chars_for_episode]}")
-    
-    # Check all characters for this show
-    chars_for_show = db.execute('''
-        SELECT id, character_name, actor_name, show_tmdb_id, season_number, episode_number 
-        FROM episode_characters 
-        WHERE show_tmdb_id = ?
-    ''', (show_id,)).fetchall()
-    current_app.logger.info(f"[DEBUG] All characters for show {show_id}: {[dict(row) for row in chars_for_show]}")
-    # --- End Enhanced Debugging ---
-
-    # Find the character by their primary key ID from the episode_characters table
-    char_row = db.execute('''
+    # Get character information
+    character = db.execute('''
         SELECT ec.*
         FROM episode_characters ec
         WHERE ec.id = ?
         LIMIT 1
     ''', (character_id,)).fetchone()
-    
-    if not char_row:
-        flash('Character not found within this show.', 'danger')
+
+    if not character:
+        flash('Character not found.', 'danger')
         return redirect(url_for('main.episode_detail', tmdb_id=show_id, season_number=season_number, episode_number=episode_number))
 
-    character = dict(char_row)
-    
-    # Get show details for context
-    show_title = "Unknown Show"
-    show_context = {}
-    episode_context = {}
-    character_context = {}
-    
     # Get show information
-    show_row = db.execute('SELECT title, overview, year FROM sonarr_shows WHERE tmdb_id = ?', (show_id,)).fetchone()
-    if show_row:
-        show_title = show_row['title']
-        show_context = {
-            'overview': show_row['overview'],
-            'year': show_row['year']
-        }
-    
-    # Get episode information
-    episode_row = db.execute('''
-        SELECT se.title, se.overview 
-        FROM sonarr_episodes se 
-        JOIN sonarr_shows ss ON se.sonarr_show_id = ss.id 
-        WHERE ss.tmdb_id = ? AND se.episode_number = ?
-        AND EXISTS (
-            SELECT 1 FROM sonarr_seasons seas 
-            WHERE seas.id = se.season_id AND seas.season_number = ?
-        )
-        LIMIT 1
-    ''', (show_id, episode_number, season_number)).fetchone()
-    
-    if episode_row:
-        episode_context = {
-            'title': episode_row['title'],
-            'overview': episode_row['overview']
-        }
-    
-    # Build character context with actor info and other characters from this episode
-    if character.get('actor_name'):
-        character_context['actor_name'] = character['actor_name']
-        
-    # Get other characters from this episode for context
-    other_characters_rows = db.execute('''
-        SELECT character_name 
-        FROM episode_characters 
-        WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? 
-        AND id != ? AND character_name IS NOT NULL
-        LIMIT 10
-    ''', (character['show_tmdb_id'], season_number, episode_number, character_id)).fetchall()
-    
-    if other_characters_rows:
-        character_context['other_characters'] = [row['character_name'] for row in other_characters_rows]
-    character_name = character.get('character_name')
+    show = db.execute('SELECT title, overview, year FROM sonarr_shows WHERE tmdb_id = ?', (show_id,)).fetchone()
+    show_title = show['title'] if show else "Unknown Show"
 
-    if not character_name:
-        character_name = "Unknown Character"
-        current_app.logger.warning(f"Character name not found for character_id {character_id} in show {show_title}. Defaulting to 'Unknown Character'.")
+    # Get all episodes this character appears in for this show
+    character_episodes = db.execute('''
+        SELECT DISTINCT ec.season_number, ec.episode_number, se.title, se.air_date
+        FROM episode_characters ec
+        LEFT JOIN sonarr_episodes se ON ec.episode_number = se.episode_number
+        LEFT JOIN sonarr_seasons ss ON se.season_id = ss.id AND ec.season_number = ss.season_number
+        LEFT JOIN sonarr_shows sshow ON ss.sonarr_show_id = sshow.id
+        WHERE ec.show_tmdb_id = ?
+        AND ec.character_name = ?
+        AND sshow.tmdb_id = ?
+        ORDER BY ec.season_number, ec.episode_number
+    ''', (show_id, character['character_name'], show_id)).fetchall()
 
-    
-    llm_fields = [
-        'llm_background', 'llm_relationships', 'llm_motivations', 'llm_quote', 'llm_traits', 'llm_events', 'llm_importance',
-        'llm_raw_response', 'llm_last_updated', 'llm_source'
-    ]
-    
-    # Check for force refresh parameter
-    force_refresh = request.args.get('refresh') == 'true'
-    
-    has_llm_data = any(character.get(f) for f in llm_fields) and not force_refresh
-    llm_sections = {}
-    llm_last_updated = None
-    llm_source = None
-    llm_error = None
-    if has_llm_data:
-        # Use cached data
-        llm_sections = {
-            'Character Background & Role': character.get('llm_background'),
-            'Significant Relationships': character.get('llm_relationships'),
-            'Primary Motivations & Inner Conflicts': character.get('llm_motivations'),
-            'Notable Quote': character.get('llm_quote'),
-            'Personality & Traits': character.get('llm_traits'),
-            'Key Events': character.get('llm_events'),
-            'Importance to the Story': character.get('llm_importance'),
-        }
-        llm_last_updated = character.get('llm_last_updated')
-        llm_source = character.get('llm_source')
-    else:
-        # Call LLM and cache results
-        # Use grounded prompt to prevent hallucinations
-        actor_info = f" (played by {character.get('actor_name')})" if character.get('actor_name') else ""
-        generated_prompt = build_grounded_character_prompt(
-            character=f"{character_name}{actor_info}",
-            show=show_title,
-            tmdb_id=show_id,
-            season=season_number,
-            episode=episode_number
-        )
-        llm_summary, llm_error = get_llm_response(generated_prompt)
-        llm_sections = {}
-        if llm_summary:
-            # Parse markdown into sections
-            match = re.search(r"(## .*)", llm_summary, re.DOTALL)
-            if match:
-                llm_summary = match.group(1)
-            llm_sections = parse_llm_markdown_sections(llm_summary)
-            # Store in DB
-            now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-            model_source = 'Unknown'
-            from ..database import get_setting
-            provider = get_setting('preferred_llm_provider')
-            model = get_setting('ollama_model_name') if provider == 'ollama' else get_setting('openai_model_name')
-            if provider and model:
-                model_source = f"{provider.capitalize()} {model}"
-            db.execute(
-                '''UPDATE episode_characters SET
-                    llm_background = ?,
-                    llm_relationships = ?,
-                    llm_motivations = ?,
-                    llm_quote = ?,
-                    llm_traits = ?,
-                    llm_events = ?,
-                    llm_importance = ?,
-                    llm_raw_response = ?,
-                    llm_last_updated = ?,
-                    llm_source = ?
-                  WHERE id = ?''',
-                (
-                    llm_sections.get('Character Background & Role'),
-                    llm_sections.get('Significant Relationships'),
-                    llm_sections.get('Primary Motivations & Inner Conflicts'),
-                    llm_sections.get('Notable Quote'),
-                    llm_sections.get('Personality & Traits'),
-                    llm_sections.get('Key Events'),
-                    llm_sections.get('Importance to the Story'),
-                    llm_summary,
-                    now,
-                    model_source,
-                    character_id
-                )
-            )
-            db.commit()
-            llm_last_updated = now
-            llm_source = model_source
-
-    llm_cards = {}
-    if llm_sections.get('Significant Relationships'):
-        llm_cards['relationships'] = parse_relationships_section(llm_sections['Significant Relationships'])
-    if llm_sections.get('Personality & Traits'):
-        llm_cards['traits'] = parse_traits_section(llm_sections['Personality & Traits'])
-    if llm_sections.get('Key Events'):
-        llm_cards['events'] = parse_events_section(llm_sections['Key Events'])
-    if llm_sections.get('Notable Quote'):
-        llm_cards['quote'] = parse_quote_section(llm_sections['Notable Quote'])
-    if llm_sections.get('Primary Motivations & Inner Conflicts'):
-        llm_cards['motivations'] = parse_motivations_section(llm_sections['Primary Motivations & Inner Conflicts'])
-    if llm_sections.get('Importance to the Story'):
-        llm_cards['importance'] = parse_importance_section(llm_sections['Importance to the Story'])
-    llm_sections_html = {k: md.markdown(v) for k, v in llm_sections.items() if v}
+    # Get other shows this actor appears in (same actor name)
+    other_shows = []
+    if character['actor_name']:
+        other_shows = db.execute('''
+            SELECT DISTINCT ss.tmdb_id, ss.title, ec.character_name, COUNT(DISTINCT ec.episode_number) as episode_count
+            FROM episode_characters ec
+            JOIN sonarr_shows ss ON ec.show_tmdb_id = ss.tmdb_id
+            WHERE ec.actor_name = ?
+            AND ss.tmdb_id != ?
+            GROUP BY ss.tmdb_id, ss.title, ec.character_name
+            ORDER BY episode_count DESC
+            LIMIT 10
+        ''', (character['actor_name'], show_id)).fetchall()
 
     return render_template('character_detail.html',
                            show_id=show_id,
@@ -1614,12 +1460,9 @@ def character_detail(show_id, season_number, episode_number, character_id):
                            episode_number=episode_number,
                            character_id=character_id,
                            character=character,
-                           llm_cards=llm_cards,
-                           llm_sections_html=llm_sections_html,
-                           llm_last_updated=llm_last_updated,
-                           llm_source=llm_source,
-                           llm_error=llm_error)
-
+                           show_title=show_title,
+                           character_episodes=character_episodes,
+                           other_shows=other_shows)
 
 @main_bp.route('/report_issue/<string:media_type>/<int:media_id>', methods=['GET', 'POST'])
 @login_required

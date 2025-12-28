@@ -72,8 +72,6 @@ flask image process-queue --limit 10 --delay 2
 
 - `app/database.py`: Database connection management, initialization, and schema versioning
 - `app/utils.py`: Core service integration functions (Sonarr, Radarr, Bazarr, Tautulli, Pushover), connection testing, data synchronization, and image handling
-- `app/llm_services.py`: Unified LLM abstraction layer supporting both OpenAI and Ollama with automatic usage logging
-- `app/prompt_builder.py`: Structured prompt templates for character summaries, quotes, and relationships
 - `app/episode_data_services.py`: Episode-specific data management
 - `app/cli.py`: Flask CLI commands (image processing queue)
 
@@ -99,9 +97,8 @@ The app integrates with multiple external services:
 2. **Radarr**: Movie library, metadata, webhooks
 3. **Plex**: User authentication (OAuth), viewing history via webhooks
 4. **Tautulli**: Watch history synchronization
-5. **Bazarr**: Subtitle import for LLM context and search
-6. **Ollama/OpenAI**: Character summaries and in-character chat via LLM
-7. **Pushover**: Admin notifications for issue reports
+5. **Bazarr**: Subtitle import for search
+6. **Pushover**: Admin notifications for issue reports
 
 ### Webhook System
 
@@ -128,13 +125,6 @@ Webhooks trigger background sync operations to keep the local database current w
 - Image URLs from external services are proxied and cached via the `image_cache_queue` system
 - Never construct direct external image URLs in templates; use the caching proxy
 
-### LLM Usage
-
-- Always use `llm_services.get_llm_response()` for LLM calls
-- Provider selection (OpenAI vs Ollama) is controlled via settings, no hardcoding
-- All LLM calls are automatically logged to `api_usage` table with token counts and cost estimates
-- Prompts should be built using `prompt_builder.py` functions for consistency
-- Character summaries and chat features use LLM-generated content with spoiler-aware prompting
 
 ### Error Handling and Logging
 
@@ -177,12 +167,6 @@ When modifying the database schema:
 4. Add admin UI controls in `app/templates/admin_settings.html`
 5. Update `app/routes/admin.py` for test and sync endpoints
 
-### Adding a new LLM-powered feature
-
-1. Create prompt template in `prompt_builder.py`
-2. Use `llm_services.get_llm_response()` to get LLM output
-3. Cache results in database to minimize API costs
-4. Log usage automatically (handled by `llm_services.py`)
 
 ### Testing service connections
 
@@ -205,6 +189,7 @@ All service connections can be tested via the admin panel at `/admin/settings`. 
 
 ## Recent Changes
 
+- **LLM Features Removed**: Character summary and chat features using LLMs (Ollama/OpenAI) have been completely removed. Character detail pages now focus on actor information and cross-show appearances
 - **User Profile Features**: Migration 024 added user favorites and watch history tables
-- **Removed Components**: Recap scrapers (`recap_scrapers.py`), Wikipedia scraper (`wikipedia_scraper.py`), and multiple admin prompt management pages have been removed
+- **Removed Components**: Recap scrapers (`recap_scrapers.py`), Wikipedia scraper (`wikipedia_scraper.py`), LLM-powered character summaries, and multiple admin prompt management pages have been removed
 - **Streamlined Admin**: Admin panel has been simplified, removing redundant API usage logs and prompt viewing pages

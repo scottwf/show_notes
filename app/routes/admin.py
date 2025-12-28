@@ -54,12 +54,6 @@ from ..utils import (
     test_tautulli_connection, test_tautulli_connection_with_params
 )
 from ..parse_subtitles import process_all_subtitles
-from .. import prompt_builder
-from .. import prompts # if prompts.py contains directly usable prompt strings
-import inspect
-from ..llm_services import get_llm_response
-
-
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -788,83 +782,6 @@ def clear_character_cache():
 
 
 
-
-@admin_bp.route('/api/test-grounded-llm', methods=['POST'])
-@login_required
-@admin_required
-def test_grounded_llm():
-    """
-    API endpoint to test LLM with grounded episode data.
-    """
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON payload'}), 400
-
-    prompt_type = data.get('prompt_type', '')
-    tmdb_id = data.get('tmdb_id')
-    season = data.get('season')
-    episode = data.get('episode')
-    character_name = data.get('character_name', '')
-    show_title = data.get('show_title', '')
-
-    if not prompt_type or not tmdb_id or not season or not episode:
-        return jsonify({'error': 'Prompt type, TMDB ID, season, and episode are required'}), 400
-
-    try:
-        # Import LLM functions
-        from app.llm_services import get_llm_response
-        from app.prompt_builder import build_grounded_character_prompt, build_grounded_show_prompt
-        
-        # Build grounded prompt based on type
-        if prompt_type == 'character' and character_name:
-            prompt = build_grounded_character_prompt(character_name, show_title, tmdb_id, season, episode)
-        elif prompt_type == 'show':
-            prompt = build_grounded_show_prompt(show_title, tmdb_id, season, episode)
-        else:
-            return jsonify({'error': 'Invalid prompt type or missing character name'}), 400
-        
-        # Log the test attempt
-        current_app.logger.info(f"Grounded LLM test - Type: {prompt_type}, TMDB: {tmdb_id}, S{season}E{episode}")
-        
-        # Get LLM response
-        response_text, error_message = get_llm_response(prompt)
-        
-        if error_message:
-            current_app.logger.error(f"LLM test failed: {error_message}")
-            return jsonify({'error': f'LLM request failed: {error_message}'}), 500
-        
-        if not response_text:
-            current_app.logger.error("LLM returned empty response")
-            return jsonify({'error': 'LLM returned empty response'}), 500
-        
-        # Get LLM info from the most recent API usage record
-        db = get_db()
-        llm_info_row = db.execute("""
-            SELECT provider, model, cost, response_time 
-            FROM api_usage 
-            ORDER BY timestamp DESC 
-            LIMIT 1
-        """).fetchone()
-        
-        llm_info = {
-            'provider': llm_info_row['provider'] if llm_info_row else 'Unknown',
-            'model': llm_info_row['model'] if llm_info_row else 'Unknown',
-            'cost': llm_info_row['cost'] if llm_info_row else 0.0,
-            'time': llm_info_row['response_time'] if llm_info_row else 0
-        }
-        
-        current_app.logger.info(f"Grounded LLM test successful - Provider: {llm_info['provider']}, Model: {llm_info['model']}")
-        
-        return jsonify({
-            'success': True,
-            'response': response_text,
-            'llm_info': llm_info,
-            'prompt_used': prompt[:500] + '...' if len(prompt) > 500 else prompt
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in grounded LLM test: {e}", exc_info=True)
-        return jsonify({'error': 'Failed to run grounded LLM test'}), 500
 
 
 
