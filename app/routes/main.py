@@ -1553,7 +1553,7 @@ def character_detail(show_id, season_number, episode_number, character_id):
         FROM episode_characters ec
         LEFT JOIN sonarr_episodes se ON ec.episode_number = se.episode_number
         LEFT JOIN sonarr_seasons ss ON se.season_id = ss.id AND ec.season_number = ss.season_number
-        LEFT JOIN sonarr_shows sshow ON ss.sonarr_show_id = sshow.id
+        LEFT JOIN sonarr_shows sshow ON ss.show_id = sshow.id
         WHERE ec.show_tmdb_id = ?
         AND ec.character_name = ?
         AND sshow.tmdb_id = ?
