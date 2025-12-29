@@ -742,22 +742,51 @@ def settings():
 @admin_required
 def sync_sonarr():
     """
-    Triggers a Sonarr library synchronization task.
+    Triggers a Sonarr library synchronization task in the background.
 
     This is a POST-only endpoint that initiates the `sync_sonarr_library`
-    utility function. It flashes messages to the user indicating the start,
-    success, or failure of the sync task and then redirects back to the tasks page.
+    utility function in a background thread. It immediately returns to avoid
+    timeout issues, and the sync continues in the background.
 
     Returns:
         A redirect to the 'admin.tasks' page.
     """
-    flash("Sonarr library sync started...", "info")
-    try:
-        count = sync_sonarr_library()
-        flash(f"Sonarr library sync completed successfully. {count} shows processed.", "success")
-    except Exception as e:
-        flash(f"Error during Sonarr sync: {str(e)}", "danger") # Changed to danger for errors
-        current_app.logger.error(f"Sonarr sync error: {e}", exc_info=True)
+    from ..utils import sync_sonarr_library
+    import threading
+
+    flash("Sonarr library sync started in background. Check Event Logs for progress.", "info")
+
+    # Capture the application object to pass to the thread
+    app_instance = current_app._get_current_object()
+
+    def sync_in_background(app):
+        with app.app_context():
+            try:
+                from app.system_logger import syslog, SystemLogger
+                current_app.logger.info("Manual Sonarr sync started from admin panel")
+                syslog.info(SystemLogger.SYNC, "Manual Sonarr sync initiated from admin panel")
+
+                count = sync_sonarr_library()
+
+                current_app.logger.info(f"Manual Sonarr sync completed: {count} shows processed")
+                syslog.success(SystemLogger.SYNC, f"Manual Sonarr sync completed: {count} shows", {
+                    'show_count': count,
+                    'source': 'admin_panel'
+                })
+            except Exception as e:
+                current_app.logger.error(f"Manual Sonarr sync error: {e}", exc_info=True)
+                syslog.error(SystemLogger.SYNC, "Manual Sonarr sync failed", {
+                    'error': str(e),
+                    'source': 'admin_panel'
+                })
+
+    # Start background sync
+    sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
+    sync_thread.daemon = True
+    sync_thread.start()
+
+    current_app.logger.info("Sonarr library sync initiated in background thread")
+
     return redirect(url_for('admin.tasks'))
 
 # ============================================================================
@@ -1075,22 +1104,50 @@ def api_characters_for_show():
 @admin_required
 def sync_radarr():
     """
-    Triggers a Radarr library synchronization task.
+    Triggers a Radarr library synchronization task in the background.
 
-    A POST-only endpoint that calls the `sync_radarr_library` utility function.
-    It flashes status messages to the user and redirects to the tasks page upon
-    completion or failure.
+    A POST-only endpoint that calls the `sync_radarr_library` utility function
+    in a background thread. It immediately returns to avoid timeout issues.
 
     Returns:
         A redirect to the 'admin.tasks' page.
     """
-    flash("Radarr library sync started...", "info")
-    try:
-        count = sync_radarr_library()
-        flash(f"Radarr library sync completed successfully. {count} movies processed.", "success")
-    except Exception as e:
-        flash(f"Error during Radarr sync: {str(e)}", "danger") # Changed to danger for errors
-        current_app.logger.error(f"Radarr sync error: {e}", exc_info=True)
+    from ..utils import sync_radarr_library
+    import threading
+
+    flash("Radarr library sync started in background. Check Event Logs for progress.", "info")
+
+    # Capture the application object to pass to the thread
+    app_instance = current_app._get_current_object()
+
+    def sync_in_background(app):
+        with app.app_context():
+            try:
+                from app.system_logger import syslog, SystemLogger
+                current_app.logger.info("Manual Radarr sync started from admin panel")
+                syslog.info(SystemLogger.SYNC, "Manual Radarr sync initiated from admin panel")
+
+                count = sync_radarr_library()
+
+                current_app.logger.info(f"Manual Radarr sync completed: {count} movies processed")
+                syslog.success(SystemLogger.SYNC, f"Manual Radarr sync completed: {count} movies", {
+                    'movie_count': count,
+                    'source': 'admin_panel'
+                })
+            except Exception as e:
+                current_app.logger.error(f"Manual Radarr sync error: {e}", exc_info=True)
+                syslog.error(SystemLogger.SYNC, "Manual Radarr sync failed", {
+                    'error': str(e),
+                    'source': 'admin_panel'
+                })
+
+    # Start background sync
+    sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
+    sync_thread.daemon = True
+    sync_thread.start()
+
+    current_app.logger.info("Radarr library sync initiated in background thread")
+
     return redirect(url_for('admin.tasks'))
 
 @admin_bp.route('/gen_plex_secret', methods=['POST'])
