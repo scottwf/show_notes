@@ -1359,3 +1359,90 @@ def resolve_issue_report(report_id):
 
     flash('Report resolved.', 'success')
     return redirect(url_for('admin.issue_reports'))
+
+
+@admin_bp.route('/event-logs')
+@login_required
+@admin_required
+def event_logs():
+    """Display system event logs page"""
+    return render_template('admin_event_logs.html', title='System Event Logs')
+
+
+@admin_bp.route('/api/event-logs', methods=['GET'])
+@login_required
+@admin_required
+def api_event_logs():
+    """API endpoint to fetch event logs with filtering and pagination"""
+    from app.system_logger import SystemLogger
+
+    try:
+        # Get query parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        level = request.args.get('level', None)
+        component = request.args.get('component', None)
+        search = request.args.get('search', None)
+
+        # Calculate offset
+        offset = (page - 1) * per_page
+
+        # Get logs
+        logs = SystemLogger.get_logs(
+            limit=per_page,
+            offset=offset,
+            level=level,
+            component=component,
+            search=search
+        )
+
+        # Get total count
+        total_count = SystemLogger.get_log_count(
+            level=level,
+            component=component,
+            search=search
+        )
+
+        return jsonify({
+            'success': True,
+            'logs': logs,
+            'total': total_count,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total_count + per_page - 1) // per_page
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching event logs: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@admin_bp.route('/api/event-logs/<int:log_id>', methods=['GET'])
+@login_required
+@admin_required
+def api_event_log_detail(log_id):
+    """API endpoint to get full details of a specific log entry"""
+    try:
+        db = get_db()
+        log = db.execute('SELECT * FROM system_logs WHERE id = ?', (log_id,)).fetchone()
+
+        if not log:
+            return jsonify({
+                'success': False,
+                'error': 'Log entry not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'log': dict(log)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching log detail: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

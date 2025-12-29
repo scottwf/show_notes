@@ -346,16 +346,25 @@ def sonarr_webhook():
     Returns:
         A JSON response indicating success or an error.
     """
+    from app.system_logger import syslog, SystemLogger
+
     current_app.logger.info("Sonarr webhook received.")
     try:
         if request.is_json:
             payload = request.get_json()
         else:
             payload = json.loads(request.form.get('payload', '{}'))
-        
+
         current_app.logger.info(f"Sonarr webhook received: {json.dumps(payload, indent=2)}")
-        
+
         event_type = payload.get('eventType')
+        series_title = payload.get('series', {}).get('title', 'Unknown')
+
+        # Log webhook receipt
+        syslog.info(SystemLogger.WEBHOOK, f"Sonarr webhook received: {event_type}", {
+            'event_type': event_type,
+            'series': series_title
+        })
         
         # Record webhook activity in database
         try:
@@ -408,10 +417,41 @@ def sonarr_webhook():
 
                     def sync_in_background(app):
                         with app.app_context():
+                            from app.system_logger import syslog, SystemLogger
+
                             current_app.logger.info(f"Starting background targeted Sonarr sync for series {series_id}.")
+                            syslog.info(SystemLogger.SYNC, f"Starting targeted sync: {series_title}", {
+                                'series_id': series_id,
+                                'episode_count': len(episode_ids)
+                            })
+
                             try:
                                 update_sonarr_episode(series_id, episode_ids)
                                 current_app.logger.info(f"Targeted episode sync for series {series_id} completed.")
+                                syslog.success(SystemLogger.SYNC, f"Episode sync complete: {series_title}")
+
+                                # TVMaze enrichment for the show
+                                try:
+                                    from app.tvmaze_enrichment import tvmaze_enrichment_service
+                                    db_temp = database.get_db()
+
+                                    show_row = db_temp.execute(
+                                        'SELECT * FROM sonarr_shows WHERE sonarr_id = ?',
+                                        (series_id,)
+                                    ).fetchone()
+
+                                    if show_row and tvmaze_enrichment_service.should_enrich_show(dict(show_row)):
+                                        syslog.info(SystemLogger.ENRICHMENT, f"Starting TVMaze enrichment: {series_title}")
+                                        success = tvmaze_enrichment_service.enrich_show(dict(show_row))
+                                        if success:
+                                            syslog.success(SystemLogger.ENRICHMENT, f"TVMaze enrichment complete: {series_title}")
+                                        else:
+                                            syslog.warning(SystemLogger.ENRICHMENT, f"TVMaze enrichment failed: {series_title}")
+                                except Exception as e_enrich:
+                                    syslog.error(SystemLogger.ENRICHMENT, f"TVMaze enrichment error: {series_title}", {
+                                        'error': str(e_enrich)
+                                    })
+                                    current_app.logger.error(f"TVMaze enrichment failed: {e_enrich}")
 
                                 # Create notifications for users who favorited this show
                                 try:
@@ -456,11 +496,19 @@ def sonarr_webhook():
 
                                         db.commit()
                                         current_app.logger.info(f"Created notifications for {len(favorited_users)} users about {len(episodes_info)} new episodes")
+                                        syslog.success(SystemLogger.NOTIFICATION, f"Created {len(favorited_users)} notifications for {series_title}", {
+                                            'user_count': len(favorited_users),
+                                            'episode_count': len(episodes_info)
+                                        })
                                     else:
                                         current_app.logger.warning(f"Show with sonarr_id {series_id} not found in database")
+                                        syslog.warning(SystemLogger.SYNC, f"Show not found in database: sonarr_id {series_id}")
 
                                 except Exception as e:
                                     current_app.logger.error(f"Error creating notifications: {e}", exc_info=True)
+                                    syslog.error(SystemLogger.NOTIFICATION, f"Failed to create notifications for {series_title}", {
+                                        'error': str(e)
+                                    })
 
                             except Exception as e:
                                 current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
@@ -488,12 +536,24 @@ def sonarr_webhook():
 
                 def sync_in_background(app):
                     with app.app_context():
+                        from app.system_logger import syslog, SystemLogger
+
                         current_app.logger.info("Starting background Sonarr library sync.")
+                        syslog.info(SystemLogger.SYNC, f"Starting full library sync (event: {event_type})")
+
                         try:
                             count = sync_sonarr_library()
                             current_app.logger.info(f"Sonarr webhook-triggered sync completed: {count} shows processed")
+                            syslog.success(SystemLogger.SYNC, f"Full library sync complete: {count} shows processed", {
+                                'show_count': count,
+                                'event_type': event_type
+                            })
                         except Exception as e:
                             current_app.logger.error(f"Error in background Sonarr sync: {e}", exc_info=True)
+                            syslog.error(SystemLogger.SYNC, "Full library sync failed", {
+                                'error': str(e),
+                                'event_type': event_type
+                            })
                 
                 # Start background sync
                 sync_thread = threading.Thread(target=sync_in_background, args=(app_instance,))
