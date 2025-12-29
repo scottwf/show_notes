@@ -52,9 +52,9 @@
                     <div class="text-sm text-gray-600 dark:text-gray-300">
                         {{ ep.title if ep.title else 'Episode ' + ep.episode_number|string }}
                     </div>
-                    {% if ep.air_date %}
+                    {% if ep.air_date_utc %}
                     <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {{ ep.air_date }}
+                        {{ ep.air_date_utc | format_datetime('%B %d, %Y') }}
                     </div>
                     {% endif %}
                 </a>

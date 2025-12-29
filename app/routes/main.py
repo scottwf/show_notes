@@ -1549,7 +1549,7 @@ def character_detail(show_id, season_number, episode_number, character_id):
 
     # Get all episodes this character appears in for this show
     character_episodes = db.execute('''
-        SELECT DISTINCT ec.season_number, ec.episode_number, se.title, se.air_date
+        SELECT DISTINCT ec.season_number, ec.episode_number, se.title, se.air_date_utc
         FROM episode_characters ec
         LEFT JOIN sonarr_episodes se ON ec.episode_number = se.episode_number
         LEFT JOIN sonarr_seasons ss ON se.season_id = ss.id AND ec.season_number = ss.season_number
