@@ -1228,8 +1228,8 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
                 dt_obj = pytz.UTC.localize(dt_obj)
             else:
                 # Convert to UTC first if it's in a different timezone
-                # Check using tzname instead of direct comparison
-                if dt_obj.tzinfo.zone != 'UTC':
+                # Check if already UTC using direct comparison (safest method)
+                if dt_obj.tzinfo is not pytz.UTC:
                     dt_obj = dt_obj.astimezone(pytz.UTC)
             
             # Convert to configured timezone
