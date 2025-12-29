@@ -15,7 +15,7 @@
     {% if notifications %}
     <div class="space-y-3">
         {% for notif in notifications %}
-        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 {% if not notif.is_read %}border-l-4 border-sky-500{% endif %} hover:shadow-md transition-shadow">
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 {% if not notif.is_read %}border-l-4 border-sky-500{% endif %} hover:shadow-md transition-shadow">
             <div class="flex gap-4">
                 <!-- Show Poster -->
                 <div class="flex-shrink-0">

@@ -14,7 +14,7 @@
             Currently Active
           {% endif %}
         </h2>
-        <div class="bg-slate-50 dark:bg-slate-700/50 shadow-lg rounded-lg p-4 flex flex-col sm:flex-row items-start gap-4 relative">
+        <div class="bg-slate-50 dark:bg-slate-800 shadow-lg rounded-lg p-4 flex flex-col sm:flex-row items-start gap-4 relative">
           <!-- Favorite Button (top-right corner) -->
           {% if current_plex_event.item_type_for_url == 'show' and current_plex_event.link_tmdb_id %}
           <button id="now-playing-favorite-btn" data-show-id="{{ current_plex_event.show_db_id }}" onclick="toggleNowPlayingFavorite()"
@@ -92,7 +92,7 @@
     {% if watch_history %}
     <div class="space-y-4">
         {% for item in watch_history %}
-        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 hover:shadow-md transition-shadow">
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
             <div class="flex gap-4">
                 <!-- Poster -->
                 <div class="flex-shrink-0">
