@@ -1443,6 +1443,21 @@ def sync_tautulli_watch_history():
     inserted = 0
     for item in history_items:
         try:
+            # Get show's TMDB ID from database using grandparent_rating_key (TVDB ID)
+            show_tmdb_id = None
+            grandparent_key = item.get('grandparent_rating_key')
+            if grandparent_key and item.get('media_type') == 'episode':
+                try:
+                    tvdb_id = int(grandparent_key)
+                    show_record = db_conn.execute(
+                        'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
+                        (tvdb_id,)
+                    ).fetchone()
+                    if show_record:
+                        show_tmdb_id = show_record['tmdb_id']
+                except (ValueError, TypeError):
+                    pass
+
             db_conn.execute(
                 """INSERT INTO plex_activity_log (
                        event_type, plex_username, player_title, player_uuid, session_key,
@@ -1461,12 +1476,12 @@ def sync_tautulli_watch_history():
                     item.get('grandparent_rating_key'),
                     item.get('media_type'),
                     item.get('title'),
-                    item.get('grandparent_title'),
+                    item.get('grandparent_title'),  # This is the show title from Tautulli
                     item.get('parent_media_index') and item.get('media_index') and f"S{int(item.get('parent_media_index')):02d}E{int(item.get('media_index')):02d}",
                     None,
                     None,
                     item.get('date'),
-                    None,
+                    show_tmdb_id,
                     json.dumps(item)
                 )
             )
