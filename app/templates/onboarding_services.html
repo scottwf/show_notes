@@ -18,8 +18,14 @@
         <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Radarr</legend>
         <div class="space-y-3">
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr URL</label>
-            <input type="text" id="radarr_url" name="radarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_url if env_settings else '' }}">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Radarr Local URL</label>
+            <input type="text" id="radarr_url" name="radarr_url" placeholder="http://192.168.1.100:7878" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_url if env_settings else '' }}">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Local network URL for API access</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_remote_url">Radarr Remote URL (Optional)</label>
+            <input type="text" id="radarr_remote_url" name="radarr_remote_url" placeholder="https://radarr.yourdomain.com" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.radarr_remote_url if env_settings else '' }}">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">External URL for user links (via Cloudflare/reverse proxy)</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_api_key">Radarr API Key</label>
@@ -39,8 +45,14 @@
         <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Sonarr (Optional)</legend>
         <div class="space-y-3">
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr URL</label>
-            <input type="text" id="sonarr_url" name="sonarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_url if env_settings else '' }}">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Sonarr Local URL</label>
+            <input type="text" id="sonarr_url" name="sonarr_url" placeholder="http://192.168.1.100:8989" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_url if env_settings else '' }}">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Local network URL for API access</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_remote_url">Sonarr Remote URL (Optional)</label>
+            <input type="text" id="sonarr_remote_url" name="sonarr_remote_url" placeholder="https://sonarr.yourdomain.com" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.sonarr_remote_url if env_settings else '' }}">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">External URL for user links (via Cloudflare/reverse proxy)</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_api_key">Sonarr API Key</label>
@@ -61,7 +73,7 @@
         <div class="space-y-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">Bazarr URL</label>
-            <input type="text" id="bazarr_url" name="bazarr_url" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_url if env_settings else '' }}">
+            <input type="text" id="bazarr_url" name="bazarr_url" placeholder="http://192.168.1.100:6767" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.bazarr_url if env_settings else '' }}">
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_api_key">Bazarr API Key</label>
@@ -72,6 +84,28 @@
               <button type="button" data-service="bazarr" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
             </div>
             <span id="bazarr_status" class="ml-2 text-xs"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Tautulli -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Tautulli (Optional)</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="tautulli_url">Tautulli URL</label>
+            <input type="text" id="tautulli_url" name="tautulli_url" placeholder="http://192.168.1.100:8181" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.tautulli_url if env_settings else '' }}">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">For importing watch history from Plex</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="tautulli_api_key">Tautulli API Key</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input type="text" id="tautulli_api_key" name="tautulli_api_key" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500" value="{{ env_settings.tautulli_api_key if env_settings else '' }}">
+            </div>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end mt-2">
+              <button type="button" data-service="tautulli" class="test-btn w-full sm:w-auto flex justify-center bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded-md shadow-sm text-sm font-medium whitespace-nowrap">Test</button>
+            </div>
+            <span id="tautulli_status" class="ml-2 text-xs"></span>
           </div>
         </div>
       </fieldset>

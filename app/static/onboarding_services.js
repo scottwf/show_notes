@@ -1,5 +1,5 @@
 // JavaScript for onboarding_services.html
-// Handles test buttons for Radarr, Sonarr, Bazarr, Ollama, and Pushover during onboarding.
+// Handles test buttons for Radarr, Sonarr, Bazarr, Tautulli, Ollama, and Pushover during onboarding.
 
 document.addEventListener('DOMContentLoaded', function() {
   const testBtns = document.querySelectorAll('.test-btn');
@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (service === 'bazarr') {
           url = document.getElementById('bazarr_url').value;
           key = document.getElementById('bazarr_api_key').value;
+        } else if (service === 'tautulli') {
+          url = document.getElementById('tautulli_url').value;
+          key = document.getElementById('tautulli_api_key').value;
         } else if (service === 'ollama') {
           url = document.getElementById('ollama_url').value;
         } else if (service === 'pushover') {

@@ -850,16 +850,17 @@ def onboarding():
             )
             # Create settings
             db.execute(
-                '''INSERT INTO settings (radarr_url, radarr_api_key, sonarr_url, sonarr_api_key, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, tautulli_url, tautulli_api_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', # Added two placeholders
+                '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url, sonarr_url, sonarr_api_key, sonarr_remote_url, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, tautulli_url, tautulli_api_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
-                    request.form['radarr_url'], request.form['radarr_api_key'],
-                    request.form['sonarr_url'], request.form['sonarr_api_key'],
-                    request.form['bazarr_url'], request.form['bazarr_api_key'],
-                    request.form['ollama_url'], request.form.get('pushover_key'),
-                    request.form.get('pushover_token'), request.form['plex_client_id'],
-                    request.form.get('tautulli_url', ''), # Added Tautulli URL
-                    request.form.get('tautulli_api_key', '') # Added Tautulli API Key
+                    request.form.get('radarr_url', ''), request.form.get('radarr_api_key', ''),
+                    request.form.get('radarr_remote_url', ''),
+                    request.form.get('sonarr_url', ''), request.form.get('sonarr_api_key', ''),
+                    request.form.get('sonarr_remote_url', ''),
+                    request.form.get('bazarr_url', ''), request.form.get('bazarr_api_key', ''),
+                    request.form.get('ollama_url', ''), request.form.get('pushover_key', ''),
+                    request.form.get('pushover_token', ''), request.form.get('plex_client_id', ''),
+                    request.form.get('tautulli_url', ''), request.form.get('tautulli_api_key', '')
                 )
             )
             db.commit()
