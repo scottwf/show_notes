@@ -115,68 +115,65 @@
 
                 <!-- Details -->
                 <div class="flex-grow min-w-0">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="min-w-0 flex-grow">
-                            {% if item.media_type == 'movie' %}
-                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
-                                {% if item.detail_url %}
-                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
-                                    {{ item.title }}
-                                </a>
-                                {% else %}
-                                {{ item.title }}
-                                {% endif %}
-                            </h3>
-                            {% if item.year %}
-                            <p class="text-sm text-slate-600 dark:text-slate-400">({{ item.year }})</p>
-                            {% endif %}
-                            {% elif item.media_type == 'episode' %}
-                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
-                                {% if item.detail_url %}
-                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
-                                    {{ item.show_title or item.title }}
-                                </a>
-                                {% else %}
-                                {{ item.show_title or item.title }}
-                                {% endif %}
-                            </h3>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">
-                                {% if item.episode_detail_url %}
-                                <a href="{{ item.episode_detail_url }}"
-                                    class="hover:text-sky-600 dark:hover:text-sky-400">
-                                    {{ item.season_episode }}: {{ item.title if item.show_title else '' }}
-                                </a>
-                                {% else %}
-                                {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{%
-                                endif %}
-                                {% endif %}
-                            </p>
-                            {% else %}
-                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">{{ item.title
-                                }}</h3>
-                            {% endif %}
-
-                            <!-- Progress bar if applicable -->
-                            {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
-                            {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
-                            {% if progress < 95 %} <div
-                                class="mt-2 w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
-                                <div class="bg-sky-600 h-1.5 rounded-full" style="width: {{ progress }}%"></div>
-                        </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ progress }}% watched</p>
+                    {% if item.media_type == 'movie' %}
+                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">
+                        {% if item.detail_url %}
+                        <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                            {{ item.title }}
+                        </a>
+                        {% else %}
+                        {{ item.title }}
                         {% endif %}
+                    </h3>
+                    {% if item.year %}
+                    <p class="text-sm text-slate-600 dark:text-slate-400">({{ item.year }})</p>
+                    {% endif %}
+                    {% elif item.media_type == 'episode' %}
+                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">
+                        {% if item.detail_url %}
+                        <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                            {{ item.show_title or item.title }}
+                        </a>
+                        {% else %}
+                        {{ item.show_title or item.title }}
                         {% endif %}
-                    </div>
+                    </h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 break-words">
+                        {% if item.episode_detail_url %}
+                        <a href="{{ item.episode_detail_url }}"
+                            class="hover:text-sky-600 dark:hover:text-sky-400">
+                            {{ item.season_episode }}: {{ item.title if item.show_title else '' }}
+                        </a>
+                        {% else %}
+                        {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{%
+                        endif %}
+                        {% endif %}
+                    </p>
+                    {% else %}
+                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">{{ item.title
+                        }}</h3>
+                    {% endif %}
 
                     <!-- Timestamp -->
-                    <div class="text-right flex-shrink-0">
+                    <div class="mt-2">
                         {% if item.event_timestamp %}
-                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300 timestamp"
+                        <p class="text-sm text-slate-600 dark:text-slate-400 timestamp"
                             data-timestamp="{{ item.event_timestamp }}"></p>
                         {% else %}
-                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Unknown</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">Unknown</p>
                         {% endif %}
                     </div>
+
+                    <!-- Progress bar if applicable -->
+                    {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
+                    {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
+                    {% if progress < 95 %}
+                    <div class="mt-2 w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
+                        <div class="bg-sky-600 h-1.5 rounded-full" style="width: {{ progress }}%"></div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ progress }}% watched</p>
+                    {% endif %}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -214,28 +211,14 @@
             try {
                 const date = new Date(isoString);
 
-                // Format date as "Month Day, Year"
-                const dateStr = date.toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                });
+                // Format as YYYY-MM-DD HH:MM
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
 
-                // Format time as "HH:MM AM/PM"
-                const timeStr = date.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-
-                // Set the text content
-                elem.textContent = dateStr;
-
-                // Add time as a smaller text below if desired
-                const timeElem = document.createElement('p');
-                timeElem.className = 'text-xs text-slate-500 dark:text-slate-400';
-                timeElem.textContent = timeStr;
-                elem.parentNode.appendChild(timeElem);
+                elem.textContent = `${year}-${month}-${day} ${hours}:${minutes}`;
 
             } catch (error) {
                 console.error('Error formatting timestamp:', error);
