@@ -620,6 +620,12 @@ def sync_sonarr_library():
     shows_synced_count = 0
     episodes_synced_count = 0
 
+    try:
+        from app.system_logger import syslog, SystemLogger
+        syslog.info(SystemLogger.SYNC, "Starting Sonarr library sync")
+    except:
+        pass
+
     # App context for API calls and initial DB setup
     with current_app.app_context():
         db = database.get_db()
@@ -745,24 +751,52 @@ def sync_sonarr_library():
                 try:
                     from app.tvmaze_enrichment import tvmaze_enrichment_service
 
-                    # Build show dict for enrichment check
-                    show_dict_for_check = dict(show_row) if show_row else {
-                        'id': show_db_id,
-                        'tvdb_id': show_values.get('tvdb_id'),
-                        'title': show_values.get('title'),
-                        'tvmaze_enriched_at': None
-                    }
+                    # Fetch the show row for enrichment check (need to check tvmaze_enriched_at)
+                    show_row = db.execute('SELECT * FROM sonarr_shows WHERE id = ?', (show_db_id,)).fetchone()
+
+                    if show_row:
+                        show_dict_for_check = dict(show_row)
+                    else:
+                        # Fallback if row not found (shouldn't happen)
+                        show_dict_for_check = {
+                            'id': show_db_id,
+                            'tvdb_id': show_values.get('tvdb_id'),
+                            'title': show_values.get('title'),
+                            'tvmaze_enriched_at': None
+                        }
 
                     if tvmaze_enrichment_service.should_enrich_show(show_dict_for_check):
                         current_app.logger.info(f"TVMaze enrichment needed for '{show_data.get('title')}'")
                         try:
-                            tvmaze_enrichment_service.enrich_show(show_dict_for_check)
+                            from app.system_logger import syslog, SystemLogger
+                            syslog.info(SystemLogger.ENRICHMENT, f"Starting TVMaze enrichment: {show_data.get('title')}")
+
+                            success = tvmaze_enrichment_service.enrich_show(show_dict_for_check)
+
+                            if success:
+                                syslog.success(SystemLogger.ENRICHMENT, f"TVMaze enrichment complete: {show_data.get('title')}")
+                            else:
+                                syslog.warning(SystemLogger.ENRICHMENT, f"TVMaze enrichment failed: {show_data.get('title')}")
                         except Exception as e_enrich:
                             current_app.logger.error(f"TVMaze enrichment failed: {e_enrich}")
+                            try:
+                                from app.system_logger import syslog, SystemLogger
+                                syslog.error(SystemLogger.ENRICHMENT, f"TVMaze enrichment error: {show_data.get('title')}", {
+                                    'error': str(e_enrich)
+                                })
+                            except:
+                                pass
                 except ImportError:
                     current_app.logger.warning("TVMaze enrichment service not available")
                 except Exception as e:
                     current_app.logger.error(f"TVMaze enrichment error: {e}")
+                    try:
+                        from app.system_logger import syslog, SystemLogger
+                        syslog.error(SystemLogger.ENRICHMENT, f"TVMaze enrichment setup error: {show_data.get('title')}", {
+                            'error': str(e)
+                        })
+                    except:
+                        pass
 
                 # Sync Seasons and Episodes for this show
                 # Sonarr's /api/v3/series endpoint includes season details
@@ -989,6 +1023,16 @@ def sync_sonarr_library():
                 current_app.logger.error(f"sync_sonarr_library: Unexpected error while syncing show Sonarr ID {current_sonarr_id}: {e}", exc_info=True)
 
         current_app.logger.info(f"Sonarr library sync finished. Synced {shows_synced_count} shows and {episodes_synced_count} episodes.")
+
+        try:
+            from app.system_logger import syslog, SystemLogger
+            syslog.success(SystemLogger.SYNC, f"Sonarr library sync complete", {
+                'shows_synced': shows_synced_count,
+                'episodes_synced': episodes_synced_count
+            })
+        except:
+            pass
+
         return shows_synced_count
 
 def update_sonarr_episode(series_id, episode_ids):
