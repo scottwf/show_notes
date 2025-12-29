@@ -885,6 +885,20 @@ def movie_detail(tmdb_id):
         movie_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
     return render_template('movie_detail.html', movie=movie_dict)
 
+def _calculate_year_display(show_dict: dict) -> str:
+    """Calculate year display string (2016-2019 or 2016-Present)"""
+    premiered = show_dict.get('premiered')
+    end_date = show_dict.get('end_date')
+
+    if premiered:
+        start_year = premiered[:4]
+        if end_date:
+            end_year = end_date[:4]
+            return f"{start_year}-{end_year}" if start_year != end_year else start_year
+        return f"{start_year}-Present"
+
+    return str(show_dict['year']) if show_dict.get('year') else "Unknown"
+
 @main_bp.route('/show/<int:tmdb_id>')
 @login_required
 def show_detail(tmdb_id):
@@ -915,6 +929,28 @@ def show_detail(tmdb_id):
         current_app.logger.warning(f"Show with TMDB ID {tmdb_id} not found in sonarr_shows.")
         abort(404)
     show_dict = dict(show_row)
+    show_dict['year_display'] = _calculate_year_display(show_dict)
+
+    # Parse genres from JSON
+    genres_list = []
+    if show_dict.get('genres'):
+        try:
+            genres_list = json.loads(show_dict['genres'])
+        except json.JSONDecodeError:
+            pass
+    show_dict['genres_list'] = genres_list
+
+    # Fetch cast information
+    cast_members = []
+    if show_dict.get('tvmaze_id'):
+        cast_rows = db.execute("""
+            SELECT * FROM show_cast
+            WHERE show_tvmaze_id = ?
+            ORDER BY cast_order ASC
+            LIMIT 20
+        """, (show_dict['tvmaze_id'],)).fetchall()
+        cast_members = [dict(row) for row in cast_rows]
+
     if show_dict.get('tmdb_id'):
         show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show_dict['tmdb_id'])
         show_dict['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=show_dict['tmdb_id'])
@@ -1043,7 +1079,8 @@ def show_detail(tmdb_id):
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
-                           next_up_episode=next_up_episode
+                           next_up_episode=next_up_episode,
+                           cast_members=cast_members
                            )
 
 def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes, user_prefs=None):
@@ -1393,6 +1430,39 @@ def image_proxy(type, id):
         # If fetching fails, serve the placeholder
         placeholder_path = f'logos/placeholder_{type}.png' if os.path.exists(os.path.join(current_app.static_folder, f'logos/placeholder_{type}.png')) else 'logos/placeholder_poster.png'
         return current_app.send_static_file(placeholder_path)
+
+@main_bp.route('/image_proxy/cast/<int:person_id>')
+@login_required
+def cast_image_proxy(person_id):
+    """Proxy and cache cast member photos from TVMaze"""
+    cache_folder = os.path.join(current_app.static_folder, 'cast')
+    safe_filename = f"{str(person_id)}.jpg"
+    cached_image_path = os.path.join(cache_folder, safe_filename)
+    os.makedirs(cache_folder, exist_ok=True)
+
+    if os.path.exists(cached_image_path):
+        return current_app.send_static_file(f'cast/{safe_filename}')
+
+    db = database.get_db()
+    cast_record = db.execute("""
+        SELECT person_image_url FROM show_cast
+        WHERE person_id = ? LIMIT 1
+    """, (person_id,)).fetchone()
+
+    if not cast_record or not cast_record['person_image_url']:
+        return current_app.send_static_file('logos/placeholder_poster.png')
+
+    try:
+        with requests.Session() as s:
+            resp = s.get(cast_record['person_image_url'], stream=True, timeout=10)
+            resp.raise_for_status()
+        with open(cached_image_path, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return current_app.send_static_file(f'cast/{safe_filename}')
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch cast photo {person_id}: {e}")
+        return current_app.send_static_file('logos/placeholder_poster.png')
 
 @main_bp.route('/character/<int:show_id>/<int:season_number>/<int:episode_number>/<int:character_id>')
 def character_detail(show_id, season_number, episode_number, character_id):

@@ -740,6 +740,29 @@ def sync_sonarr_library():
                 else:
                     current_app.logger.warning(f"Skipping image trigger for show '{show_data.get('title')}' due to missing TMDB ID.")
 
+                # TVMaze enrichment (non-blocking)
+                try:
+                    from app.tvmaze_enrichment import tvmaze_enrichment_service
+
+                    # Build show dict for enrichment check
+                    show_dict_for_check = dict(show_row) if show_row else {
+                        'id': show_db_id,
+                        'tvdb_id': show_values.get('tvdb_id'),
+                        'title': show_values.get('title'),
+                        'tvmaze_enriched_at': None
+                    }
+
+                    if tvmaze_enrichment_service.should_enrich_show(show_dict_for_check):
+                        current_app.logger.info(f"TVMaze enrichment needed for '{show_data.get('title')}'")
+                        try:
+                            tvmaze_enrichment_service.enrich_show(show_dict_for_check)
+                        except Exception as e_enrich:
+                            current_app.logger.error(f"TVMaze enrichment failed: {e_enrich}")
+                except ImportError:
+                    current_app.logger.warning("TVMaze enrichment service not available")
+                except Exception as e:
+                    current_app.logger.error(f"TVMaze enrichment error: {e}")
+
                 # Sync Seasons and Episodes for this show
                 # Sonarr's /api/v3/series endpoint includes season details
                 sonarr_show_id = show_data.get("id")

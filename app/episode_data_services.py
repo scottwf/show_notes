@@ -105,6 +105,28 @@ class TVMazeService(EpisodeDataService):
         # Filter by season
         return [ep for ep in data if ep.get('season') == season]
 
+    def lookup_show_by_tvdb_id(self, tvdb_id: int) -> Optional[Dict]:
+        """Look up show on TVMaze using TVDB ID"""
+        url = f"{self.base_url}/lookup/shows"
+        params = {"thetvdb": tvdb_id}
+        data = self._make_request(url, params)
+        if data:
+            logger.info(f"TVMaze lookup: TVDB {tvdb_id} -> TVMaze ID {data.get('id')}")
+        return data
+
+    def get_show_details(self, tvmaze_id: int) -> Optional[Dict]:
+        """Get full show details from TVMaze by ID"""
+        url = f"{self.base_url}/shows/{tvmaze_id}"
+        return self._make_request(url)
+
+    def get_show_cast(self, tvmaze_id: int) -> List[Dict]:
+        """Get cast information for a show"""
+        url = f"{self.base_url}/shows/{tvmaze_id}/cast"
+        data = self._make_request(url)
+        if data:
+            logger.info(f"Fetched {len(data)} cast members for TVMaze ID {tvmaze_id}")
+        return data if data else []
+
 class TMDBService(EpisodeDataService):
     """Service to fetch episode data from TMDB API"""
     
