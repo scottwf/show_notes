@@ -1178,6 +1178,7 @@ import datetime
 def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
     """
     Jinja2 filter to format a datetime object into a more readable string.
+    Converts UTC timestamps to the configured timezone from settings.
 
     Args:
         value (datetime.datetime): The datetime object to format.
@@ -1187,6 +1188,8 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
     Returns:
         str: The formatted datetime string.
     """
+    import pytz
+    
     if value is None:
         return ""
 
@@ -1208,6 +1211,30 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
         return value # Return original if not a string or datetime object
 
     if dt_obj:
+        # Get timezone from settings
+        try:
+            db = database.get_db()
+            settings = db.execute('SELECT timezone FROM settings LIMIT 1').fetchone()
+            tz_name = settings['timezone'] if settings and settings['timezone'] else 'UTC'
+        except Exception:
+            tz_name = 'UTC'
+        
+        # Convert to configured timezone
+        try:
+            # Ensure the datetime is timezone-aware (assume UTC if naive)
+            if dt_obj.tzinfo is None:
+                dt_obj = pytz.UTC.localize(dt_obj)
+            elif dt_obj.tzinfo != pytz.UTC:
+                # Convert to UTC first if it's in a different timezone
+                dt_obj = dt_obj.astimezone(pytz.UTC)
+            
+            # Convert to configured timezone
+            target_tz = pytz.timezone(tz_name)
+            dt_obj = dt_obj.astimezone(target_tz)
+        except Exception as e:
+            current_app.logger.warning(f"format_datetime_simple: Error converting timezone: {e}")
+            # Fall back to original datetime if conversion fails
+        
         return dt_obj.strftime(format_str)
     return value # Should not be reached if logic is correct, but as a fallback
 

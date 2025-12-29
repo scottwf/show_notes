@@ -645,7 +645,7 @@ def settings():
             ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
-            thetvdb_api_key=? WHERE id=?''', (
+            thetvdb_api_key=?, timezone=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('sonarr_url'),
@@ -663,6 +663,7 @@ def settings():
             request.form.get('tautulli_url'),
             request.form.get('tautulli_api_key'),
             request.form.get('thetvdb_api_key'),
+            request.form.get('timezone', 'UTC'),
             settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
         ))
         db.commit()
@@ -688,6 +689,7 @@ def settings():
     merged_settings.setdefault('preferred_llm_provider', None)
     merged_settings.setdefault('ollama_model_name', None)
     merged_settings.setdefault('thetvdb_api_key', None)
+    merged_settings.setdefault('timezone', 'UTC')
 
     for k, v in defaults.items():
         if not merged_settings.get(k): # This will only apply to plex_client_id, secret, redirect_uri if not set
