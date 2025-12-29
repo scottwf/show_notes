@@ -615,6 +615,12 @@ def sync_sonarr_library():
                 if sonarr_base_url and raw_fanart_url and raw_fanart_url.startswith('/'):
                     final_fanart_url = f"{sonarr_base_url}{raw_fanart_url}"
 
+                # Extract ratings from Sonarr API response
+                ratings_data = show_data.get("ratings", {})
+                imdb_rating = ratings_data.get("imdb", {}) if ratings_data else {}
+                tmdb_rating = ratings_data.get("tmdb", {}) if ratings_data else {}
+                metacritic_rating = ratings_data.get("metacritic", {}) if ratings_data else {}
+
                 show_values = {
                     "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
@@ -630,6 +636,12 @@ def sync_sonarr_library():
                     "poster_url": final_poster_url,
                     "fanart_url": final_fanart_url,
                     "path_on_disk": show_data.get("path"),
+                    "ratings_imdb_value": imdb_rating.get("value"),
+                    "ratings_imdb_votes": imdb_rating.get("votes"),
+                    "ratings_tmdb_value": tmdb_rating.get("value"),
+                    "ratings_tmdb_votes": tmdb_rating.get("votes"),
+                    "ratings_metacritic_value": metacritic_rating.get("value"),
+                    "metacritic_id": show_data.get("metacriticId"),
                 }
 
                 # Filter out None values to avoid inserting NULL for non-nullable or for cleaner updates
@@ -760,6 +772,11 @@ def sync_sonarr_library():
                     # Sync Episodes for this season (using the already fetched all_episodes_data)
                     current_season_episodes = [ep for ep in all_episodes_data if ep.get("seasonNumber") == season_number and ep.get("seriesId") == sonarr_show_id]
                     for episode_data in current_season_episodes:
+                        # Extract ratings from episode data
+                        ep_ratings_data = episode_data.get("ratings", {})
+                        ep_imdb_rating = ep_ratings_data.get("imdb", {}) if ep_ratings_data else {}
+                        ep_tmdb_rating = ep_ratings_data.get("tmdb", {}) if ep_ratings_data else {}
+
                         episode_values = {
                             "season_id": season_db_id,
                             "sonarr_show_id": sonarr_show_id,  # Sonarr's seriesId
@@ -769,6 +786,11 @@ def sync_sonarr_library():
                             "overview": episode_data.get("overview"),
                             "air_date_utc": episode_data.get("airDateUtc"),
                             "has_file": bool(episode_data.get("hasFile", False)),
+                            "imdb_id": episode_data.get("imdbId"),
+                            "ratings_imdb_value": ep_imdb_rating.get("value"),
+                            "ratings_imdb_votes": ep_imdb_rating.get("votes"),
+                            "ratings_tmdb_value": ep_tmdb_rating.get("value"),
+                            "ratings_tmdb_votes": ep_tmdb_rating.get("votes"),
                         }
                         episode_values_filtered = {k: v for k, v in episode_values.items() if v is not None}
 

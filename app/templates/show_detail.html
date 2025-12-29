@@ -25,8 +25,8 @@
             <!-- Details: Title, Year, Overview, Metadata -->
             <div
                 class="flex-grow bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 border border-slate-200 dark:border-slate-700">
-                <div class="text-center md:text-left">
-                    <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-3 mb-4">
                         <h1
                             class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight tracking-tight drop-shadow-lg">
                             {{ show.title }}
@@ -54,7 +54,7 @@
                     </div>
 
                     {% if show.year %}
-                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light drop-shadow-sm">({{
+                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light">({{
                         show.year }})</p>
                     {% endif %}
 
