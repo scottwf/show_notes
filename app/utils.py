@@ -1396,27 +1396,27 @@ def format_milliseconds(value):
 
 # --- Tautulli Stubs ---
 
-def sync_tautulli_watch_history():
+def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=None):
     """
-    Synchronizes recent watch history from Tautulli to the local database.
+    Synchronizes watch history from Tautulli to the local database.
 
-    This function connects to the Tautulli API to fetch recent watch history
-    and logs relevant events (scrobbles, plays, etc.) into the `plex_activity_log`
-    table. It's designed to enrich the application's understanding of user
-    viewing habits.
+    This function connects to the Tautulli API to fetch watch history with pagination
+    support for bulk imports. It includes duplicate detection to avoid re-inserting
+    existing records.
 
-    It fetches a configurable number of records and avoids duplicating entries
-    by checking for existing records based on session key and timestamp.
+    Args:
+        full_import (bool): If True, fetches all history. If False, only fetch since last sync.
+        batch_size (int): Number of records to fetch per API call (default: 1000).
+        max_records (int): Maximum total records to import (None = unlimited).
 
     Returns:
         int: The number of new watch history events successfully inserted into the database.
-    
+
     Raises:
         Exception: Propagates exceptions if Tautulli is not configured or if there's
                    an API communication error.
     """
     db_conn = database.get_db()
-    cursor = db_conn.cursor()
 
     with current_app.app_context():
         tautulli_url = database.get_setting('tautulli_url')
@@ -1426,72 +1426,138 @@ def sync_tautulli_watch_history():
         current_app.logger.warning("Tautulli URL or API key not configured. Skipping sync.")
         return 0
 
-    params = {
-        'apikey': api_key,
-        'cmd': 'get_history',
-        'length': 100
-    }
-    try:
-        resp = requests.get(f"{tautulli_url.rstrip('/')}/api/v2", params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        history_items = data.get('response', {}).get('data', {}).get('data', [])
-    except Exception as e:
-        current_app.logger.error(f"Error fetching Tautulli history: {e}")
-        return 0
-
     inserted = 0
-    for item in history_items:
+    duplicates = 0
+    errors = 0
+    start_offset = 0
+    total_fetched = 0
+
+    current_app.logger.info(f"Starting Tautulli sync (full_import={full_import}, batch_size={batch_size})")
+
+    while True:
+        # Check if we've hit max_records limit
+        if max_records and total_fetched >= max_records:
+            current_app.logger.info(f"Reached max_records limit of {max_records}")
+            break
+
+        # Fetch batch
+        params = {
+            'apikey': api_key,
+            'cmd': 'get_history',
+            'length': batch_size,
+            'start': start_offset,
+            'order_column': 'date',
+            'order_dir': 'desc'
+        }
+
         try:
-            # Get show's TMDB ID from database using grandparent_rating_key (TVDB ID)
-            show_tmdb_id = None
-            grandparent_key = item.get('grandparent_rating_key')
-            if grandparent_key and item.get('media_type') == 'episode':
-                try:
-                    tvdb_id = int(grandparent_key)
-                    show_record = db_conn.execute(
-                        'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
-                        (tvdb_id,)
-                    ).fetchone()
-                    if show_record:
-                        show_tmdb_id = show_record['tmdb_id']
-                except (ValueError, TypeError):
-                    pass
+            resp = requests.get(f"{tautulli_url.rstrip('/')}/api/v2", params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
 
-            db_conn.execute(
-                """INSERT INTO plex_activity_log (
-                       event_type, plex_username, player_title, player_uuid, session_key,
-                       rating_key, parent_rating_key, grandparent_rating_key, media_type,
-                       title, show_title, season_episode, view_offset_ms, duration_ms, event_timestamp,
-                       tmdb_id, raw_payload)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    item.get('event'),
-                    item.get('friendly_name'),
-                    None,
-                    None,
-                    item.get('session_id'),
-                    item.get('rating_key'),
-                    item.get('parent_rating_key'),
-                    item.get('grandparent_rating_key'),
-                    item.get('media_type'),
-                    item.get('title'),
-                    item.get('grandparent_title'),  # This is the show title from Tautulli
-                    item.get('parent_media_index') and item.get('media_index') and f"S{int(item.get('parent_media_index')):02d}E{int(item.get('media_index')):02d}",
-                    None,
-                    None,
-                    item.get('date'),
-                    show_tmdb_id,
-                    json.dumps(item)
-                )
-            )
-            inserted += 1
+            response_data = data.get('response', {}).get('data', {})
+            history_items = response_data.get('data', [])
+            total_count = response_data.get('recordsFiltered', 0)
+
+            if not history_items:
+                current_app.logger.info("No more history items to fetch")
+                break
+
+            total_fetched += len(history_items)
+            current_app.logger.info(f"Fetched batch: {len(history_items)} items (offset {start_offset}/{total_count})")
+
         except Exception as e:
-            current_app.logger.warning(f"Failed to insert Tautulli history item: {e}")
-            continue
+            current_app.logger.error(f"Error fetching Tautulli history at offset {start_offset}: {e}")
+            break
 
+        # Process batch
+        for item in history_items:
+            try:
+                # Check for duplicate using session_id and timestamp
+                session_id = item.get('session_id')
+                event_timestamp = item.get('date')
+
+                if session_id and event_timestamp:
+                    existing = db_conn.execute(
+                        'SELECT id FROM plex_activity_log WHERE session_key = ? AND event_timestamp = ?',
+                        (session_id, event_timestamp)
+                    ).fetchone()
+
+                    if existing:
+                        duplicates += 1
+                        continue
+
+                # Get show's TMDB ID from database using grandparent_rating_key (TVDB ID)
+                show_tmdb_id = None
+                grandparent_key = item.get('grandparent_rating_key')
+                if grandparent_key and item.get('media_type') == 'episode':
+                    try:
+                        tvdb_id = int(grandparent_key)
+                        show_record = db_conn.execute(
+                            'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
+                            (tvdb_id,)
+                        ).fetchone()
+                        if show_record:
+                            show_tmdb_id = show_record['tmdb_id']
+                    except (ValueError, TypeError):
+                        pass
+
+                db_conn.execute(
+                    """INSERT INTO plex_activity_log (
+                           event_type, plex_username, player_title, player_uuid, session_key,
+                           rating_key, parent_rating_key, grandparent_rating_key, media_type,
+                           title, show_title, season_episode, view_offset_ms, duration_ms, event_timestamp,
+                           tmdb_id, raw_payload)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        item.get('event'),
+                        item.get('friendly_name'),
+                        item.get('player'),
+                        None,
+                        item.get('session_id'),
+                        item.get('rating_key'),
+                        item.get('parent_rating_key'),
+                        item.get('grandparent_rating_key'),
+                        item.get('media_type'),
+                        item.get('title'),
+                        item.get('grandparent_title'),  # This is the show title from Tautulli
+                        item.get('parent_media_index') and item.get('media_index') and f"S{int(item.get('parent_media_index')):02d}E{int(item.get('media_index')):02d}",
+                        item.get('view_offset'),
+                        item.get('duration'),
+                        item.get('date'),
+                        show_tmdb_id,
+                        json.dumps(item)
+                    )
+                )
+                inserted += 1
+
+            except Exception as e:
+                current_app.logger.warning(f"Failed to insert Tautulli history item: {e}")
+                errors += 1
+                continue
+
+        # Commit this batch
+        db_conn.commit()
+
+        # Check if we've fetched everything
+        if total_fetched >= total_count:
+            current_app.logger.info("Fetched all available history")
+            break
+
+        # If not full import, only do one batch
+        if not full_import:
+            break
+
+        # Move to next batch
+        start_offset += batch_size
+
+    # Update last sync timestamp
+    db_conn.execute('UPDATE settings SET tautulli_last_sync = CURRENT_TIMESTAMP WHERE id = 1')
     db_conn.commit()
-    current_app.logger.info(f"Tautulli sync complete. {inserted} events added.")
+
+    current_app.logger.info(
+        f"Tautulli sync complete. Inserted: {inserted}, Duplicates: {duplicates}, Errors: {errors}, Total fetched: {total_fetched}"
+    )
     return inserted
 
 def test_tautulli_connection():

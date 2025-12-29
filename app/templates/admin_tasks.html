@@ -63,19 +63,50 @@
         <div class="flex items-center mb-4">
             <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli Logo" class="block dark:hidden h-8 w-auto mr-3">
             <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli Logo" class="hidden dark:block h-8 w-auto mr-3">
-            <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200">Tautulli Sync</h2>
+            <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200">Tautulli Watch History</h2>
         </div>
         <p class="text-gray-600 dark:text-gray-400 mb-6">
-            Manually trigger a synchronization of watch history from Tautulli.
+            Import watch history from Tautulli. The incremental sync fetches recent events, while the full import retrieves all historical data. Plex webhooks provide real-time updates automatically.
         </p>
-        <form action="{{ url_for('admin.sync_tautulli') }}" method="POST">
-            <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581" />
-                </svg>
-                Sync Tautulli Watch History
-            </button>
-        </form>
+
+        <div class="space-y-3">
+            <!-- Incremental Sync -->
+            <form action="{{ url_for('admin.sync_tautulli') }}" method="POST">
+                <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m-15.357-2a8.001 8.001 0 0015.357 2M9 15h4.581" />
+                    </svg>
+                    Incremental Sync (Recent Events)
+                </button>
+            </form>
+
+            <!-- Full Import -->
+            <form action="{{ url_for('admin.sync_tautulli', full='true') }}" method="POST">
+                <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Full Import (All History)
+                </button>
+            </form>
+
+            <!-- Wipe and Import (Fresh Start) -->
+            <form action="{{ url_for('admin.tautulli_wipe_and_import') }}" method="POST"
+                  onsubmit="return confirm('⚠️ This will DELETE all existing watch history and import fresh data from Tautulli. This cannot be undone. Continue?');">
+                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Wipe & Fresh Import (Reset)
+                </button>
+            </form>
+        </div>
+
+        <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <p class="text-sm text-blue-800 dark:text-blue-300">
+                <strong>💡 Tip:</strong> Use "Wipe & Fresh Import" for initial onboarding to import years of watch history. After that, Plex webhooks and periodic incremental syncs keep data current.
+            </p>
+        </div>
     </div>
 
     <!-- Subtitle Processing Card -->

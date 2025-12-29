@@ -1283,19 +1283,96 @@ def sync_tautulli():
     """
     Triggers a Tautulli watch history synchronization task.
 
-    A POST-only endpoint that calls the `sync_tautulli_watch_history` utility.
-    Flashes status messages and redirects to the tasks page.
+    Supports both incremental (default) and full import modes.
+    Query parameter ?full=true triggers a full import.
 
     Returns:
         A redirect to the 'admin.tasks' page.
     """
-    flash("Tautulli watch history sync started...", "info")
-    try:
-        count = sync_tautulli_watch_history()
-        flash(f"Tautulli sync completed. {count} events processed.", "success")
-    except Exception as e:
-        flash(f"Error during Tautulli sync: {str(e)}", "danger") # Changed to danger for errors
-        current_app.logger.error(f"Tautulli sync error: {e}", exc_info=True)
+    full_import = request.args.get('full', 'false').lower() == 'true'
+
+    if full_import:
+        flash("Tautulli FULL import started in background. This may take several minutes. Check Event Logs for progress.", "info")
+    else:
+        flash("Tautulli incremental sync started...", "info")
+
+    import threading
+    app_instance = current_app._get_current_object()
+
+    def sync_in_background(app, full):
+        with app.app_context():
+            try:
+                from app.system_logger import syslog, SystemLogger
+                mode = "full import" if full else "incremental sync"
+                syslog.info(SystemLogger.SYNC, f"Manual Tautulli {mode} initiated from admin panel")
+
+                count = sync_tautulli_watch_history(full_import=full)
+
+                syslog.success(SystemLogger.SYNC, f"Tautulli {mode} completed: {count} new events", {
+                    'event_count': count,
+                    'mode': mode
+                })
+            except Exception as e:
+                syslog.error(SystemLogger.SYNC, f"Tautulli {mode} failed", {
+                    'error': str(e),
+                    'mode': mode
+                })
+
+    sync_thread = threading.Thread(target=sync_in_background, args=(app_instance, full_import))
+    sync_thread.daemon = True
+    sync_thread.start()
+
+    return redirect(url_for('admin.tasks'))
+
+@admin_bp.route('/tautulli-wipe-and-import', methods=['POST'])
+@login_required
+@admin_required
+def tautulli_wipe_and_import():
+    """
+    Wipes all existing Plex activity log data and performs a fresh full import
+    from Tautulli. Use this for onboarding or to reset watch history.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
+    flash("Wiping watch history and starting fresh Tautulli import in background. Check Event Logs for progress.", "warning")
+
+    import threading
+    app_instance = current_app._get_current_object()
+
+    def wipe_and_import(app):
+        with app.app_context():
+            try:
+                from app.system_logger import syslog, SystemLogger
+                db = database.get_db()
+
+                # Get count before wiping
+                old_count = db.execute('SELECT COUNT(*) as count FROM plex_activity_log').fetchone()['count']
+
+                syslog.info(SystemLogger.SYNC, f"Wiping {old_count} existing watch history records")
+
+                # Wipe all existing data
+                db.execute('DELETE FROM plex_activity_log')
+                db.commit()
+
+                syslog.success(SystemLogger.SYNC, "Watch history wiped, starting fresh import")
+
+                # Do full import
+                count = sync_tautulli_watch_history(full_import=True)
+
+                syslog.success(SystemLogger.SYNC, f"Fresh Tautulli import completed: {count} events imported", {
+                    'old_count': old_count,
+                    'new_count': count
+                })
+            except Exception as e:
+                syslog.error(SystemLogger.SYNC, "Tautulli wipe and import failed", {
+                    'error': str(e)
+                })
+
+    import_thread = threading.Thread(target=wipe_and_import, args=(app_instance,))
+    import_thread.daemon = True
+    import_thread.start()
+
     return redirect(url_for('admin.tasks'))
 
 @admin_bp.route('/parse-subtitles', methods=['POST'])
