@@ -1464,6 +1464,25 @@ def profile_history():
         current_plex_event = _get_plex_event_details(current_event_row, db)
         current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
 
+    # Count total active sessions across all users
+    # Get the latest event for each session_key and count those that are in active state
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT 
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*) 
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0]
+
     # Get watch history (recent 50 unique items)
     # Group by unique episode/movie to show only one entry per item
     watch_history = db.execute("""
@@ -1565,6 +1584,7 @@ def profile_history():
                          total_episodes=total_episodes,
                          total_movies=total_movies,
                          favorite_count=favorite_count,
+                         now_playing_count=now_playing_count,
                          active_tab='history')
 
 
@@ -1632,12 +1652,31 @@ def profile_favorites():
         AND event_type IN ('media.stop', 'media.scrobble')
     """, (user['username'],)).fetchone()[0]
     
+    # Count total active sessions across all users
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT 
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*) 
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0]
+    
     return render_template('profile_favorites.html',
                          user=user,
                          favorites=enriched_favorites,
                          total_episodes=total_episodes,
                          total_movies=total_movies,
                          favorite_count=len(enriched_favorites),
+                         now_playing_count=now_playing_count,
                          active_tab='favorites')
 
 
