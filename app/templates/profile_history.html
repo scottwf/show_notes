@@ -157,8 +157,12 @@
                     <!-- Timestamp -->
                     <div class="mt-2">
                         {% if item.event_timestamp %}
-                        <p class="text-sm text-slate-600 dark:text-slate-400 timestamp"
-                            data-timestamp="{{ item.event_timestamp }}"></p>
+                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {{ item.event_timestamp | format_datetime('%B %d, %Y') }}
+                        </p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            {{ item.event_timestamp | format_datetime('%-I:%M %p') }}
+                        </p>
                         {% else %}
                         <p class="text-sm text-slate-600 dark:text-slate-400">Unknown</p>
                         {% endif %}
@@ -200,33 +204,6 @@
 </div>
 
 <script>
-    // Format all timestamps to user's local timezone
-    document.addEventListener('DOMContentLoaded', function () {
-        const timestamps = document.querySelectorAll('.timestamp');
-
-        timestamps.forEach(function (elem) {
-            const isoString = elem.getAttribute('data-timestamp');
-            if (!isoString) return;
-
-            try {
-                const date = new Date(isoString);
-
-                // Format as YYYY-MM-DD HH:MM
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-
-                elem.textContent = `${year}-${month}-${day} ${hours}:${minutes}`;
-
-            } catch (error) {
-                console.error('Error formatting timestamp:', error);
-                elem.textContent = 'Unknown';
-            }
-        });
-    });
-
     // Now Playing Favorite toggle functionality
     let isNowPlayingFavorite = false;
 

@@ -433,6 +433,76 @@
     </div>
   </details>
 
+  <!-- Application Settings -->
+  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+    <summary class="flex items-center gap-x-3 cursor-pointer">
+      <span class="inline-block w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
+        <svg class="w-8 h-8 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </span>
+      <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Application Settings</span>
+    </summary>
+    <div class="mt-4">
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Configure general application preferences.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="timezone">
+            Timezone
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400"
+              title="Select your local timezone for displaying watch history timestamps">(?)</span>
+          </label>
+          <select id="timezone" name="timezone"
+            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="UTC" {% if settings.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+            <optgroup label="North America">
+              <option value="America/St_Johns" {% if settings.timezone == 'America/St_Johns' %}selected{% endif %}>Newfoundland Time (NST/NDT)</option>
+              <option value="America/Halifax" {% if settings.timezone == 'America/Halifax' %}selected{% endif %}>Atlantic Time (AST/ADT)</option>
+              <option value="America/New_York" {% if settings.timezone == 'America/New_York' %}selected{% endif %}>Eastern Time (EST/EDT)</option>
+              <option value="America/Chicago" {% if settings.timezone == 'America/Chicago' %}selected{% endif %}>Central Time (CST/CDT)</option>
+              <option value="America/Denver" {% if settings.timezone == 'America/Denver' %}selected{% endif %}>Mountain Time (MST/MDT)</option>
+              <option value="America/Phoenix" {% if settings.timezone == 'America/Phoenix' %}selected{% endif %}>Arizona (MST - no DST)</option>
+              <option value="America/Regina" {% if settings.timezone == 'America/Regina' %}selected{% endif %}>Saskatchewan (CST - no DST)</option>
+              <option value="America/Los_Angeles" {% if settings.timezone == 'America/Los_Angeles' %}selected{% endif %}>Pacific Time (PST/PDT)</option>
+              <option value="America/Anchorage" {% if settings.timezone == 'America/Anchorage' %}selected{% endif %}>Alaska Time (AKST/AKDT)</option>
+              <option value="Pacific/Honolulu" {% if settings.timezone == 'Pacific/Honolulu' %}selected{% endif %}>Hawaii Time (HST - no DST)</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option value="Europe/London" {% if settings.timezone == 'Europe/London' %}selected{% endif %}>London (GMT/BST)</option>
+              <option value="Europe/Paris" {% if settings.timezone == 'Europe/Paris' %}selected{% endif %}>Paris (CET/CEST)</option>
+              <option value="Europe/Berlin" {% if settings.timezone == 'Europe/Berlin' %}selected{% endif %}>Berlin (CET/CEST)</option>
+              <option value="Europe/Athens" {% if settings.timezone == 'Europe/Athens' %}selected{% endif %}>Athens (EET/EEST)</option>
+              <option value="Europe/Moscow" {% if settings.timezone == 'Europe/Moscow' %}selected{% endif %}>Moscow (MSK)</option>
+            </optgroup>
+            <optgroup label="Asia">
+              <option value="Asia/Dubai" {% if settings.timezone == 'Asia/Dubai' %}selected{% endif %}>Dubai (GST)</option>
+              <option value="Asia/Kolkata" {% if settings.timezone == 'Asia/Kolkata' %}selected{% endif %}>India (IST)</option>
+              <option value="Asia/Shanghai" {% if settings.timezone == 'Asia/Shanghai' %}selected{% endif %}>China (CST)</option>
+              <option value="Asia/Tokyo" {% if settings.timezone == 'Asia/Tokyo' %}selected{% endif %}>Japan (JST)</option>
+              <option value="Asia/Seoul" {% if settings.timezone == 'Asia/Seoul' %}selected{% endif %}>South Korea (KST)</option>
+            </optgroup>
+            <optgroup label="Australia">
+              <option value="Australia/Perth" {% if settings.timezone == 'Australia/Perth' %}selected{% endif %}>Perth (AWST)</option>
+              <option value="Australia/Adelaide" {% if settings.timezone == 'Australia/Adelaide' %}selected{% endif %}>Adelaide (ACST/ACDT)</option>
+              <option value="Australia/Brisbane" {% if settings.timezone == 'Australia/Brisbane' %}selected{% endif %}>Brisbane (AEST - no DST)</option>
+              <option value="Australia/Sydney" {% if settings.timezone == 'Australia/Sydney' %}selected{% endif %}>Sydney (AEST/AEDT)</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="Pacific/Auckland" {% if settings.timezone == 'Pacific/Auckland' %}selected{% endif %}>Auckland (NZST/NZDT)</option>
+              <option value="America/Sao_Paulo" {% if settings.timezone == 'America/Sao_Paulo' %}selected{% endif %}>São Paulo (BRT/BRST)</option>
+              <option value="Africa/Johannesburg" {% if settings.timezone == 'Africa/Johannesburg' %}selected{% endif %}>Johannesburg (SAST)</option>
+            </optgroup>
+          </select>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Watch history timestamps will be displayed in this timezone. 
+            <strong>Note for Saskatchewan users:</strong> Select "Saskatchewan (CST - no DST)" to avoid daylight saving time adjustments.
+          </p>
+        </div>
+      </div>
+    </div>
+  </details>
+
   <button type="submit"
     class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-8 flex items-center justify-center">Save
     Changes</button>

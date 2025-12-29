@@ -7,3 +7,4 @@ thefuzz[speedup]
 openai
 ollama
 markdown
+pytz
