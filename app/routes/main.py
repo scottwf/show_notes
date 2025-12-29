@@ -1552,6 +1552,35 @@ def report_issue(media_type, media_id):
             current_app.logger.error(f"Error creating admin notifications: {e}", exc_info=True)
             # Don't fail the request if notifications fail
 
+        # Send Pushover notification to admins
+        try:
+            from ..utils import send_pushover_notification
+
+            # Build notification message
+            push_title = f"Issue Report: {title}"
+            push_message = f"User reported: {', '.join(issue_types)}"
+            if comment:
+                push_message += f"\n\nComment: {comment[:200]}"
+
+            # Send with Sonarr/Radarr link if available
+            url_title = "View in Sonarr" if media_type == 'episode' else "View in Radarr" if service_link else None
+            success, error = send_pushover_notification(
+                title=push_title,
+                message=push_message,
+                url=service_link,
+                url_title=url_title,
+                priority=1  # Requires confirmation from admin (high priority)
+            )
+
+            if success:
+                current_app.logger.info(f"Pushover notification sent for issue report {report_id}")
+            elif error and error != "Pushover not configured":
+                current_app.logger.error(f"Failed to send Pushover for issue {report_id}: {error}")
+
+        except Exception as e:
+            current_app.logger.error(f"Error sending Pushover notification: {e}", exc_info=True)
+            # Don't fail the request if Pushover fails - notification is optional
+
         flash('Issue reported. Thank you!', 'success')
         return redirect(url_for('main.home'))
 
