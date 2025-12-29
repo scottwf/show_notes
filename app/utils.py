@@ -8,6 +8,7 @@ import urllib.parse
 import datetime # For last_synced_at
 from flask import current_app
 from . import database
+import pytz  # For timezone conversion
 
 # logger = logging.getLogger(__name__) # Standard logging
 # current_app.logger is used for Flask specific logging within app context
@@ -1188,8 +1189,6 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
     Returns:
         str: The formatted datetime string.
     """
-    import pytz
-    
     if value is None:
         return ""
 
@@ -1211,11 +1210,14 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
         return value # Return original if not a string or datetime object
 
     if dt_obj:
-        # Get timezone from settings
+        # Get timezone from settings (cached in Flask g object per request)
         try:
-            db = database.get_db()
-            settings = db.execute('SELECT timezone FROM settings LIMIT 1').fetchone()
-            tz_name = settings['timezone'] if settings and settings['timezone'] else 'UTC'
+            from flask import g
+            if not hasattr(g, '_timezone_setting'):
+                db = database.get_db()
+                settings = db.execute('SELECT timezone FROM settings LIMIT 1').fetchone()
+                g._timezone_setting = settings['timezone'] if settings and settings['timezone'] else 'UTC'
+            tz_name = g._timezone_setting
         except Exception:
             tz_name = 'UTC'
         
@@ -1224,9 +1226,11 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
             # Ensure the datetime is timezone-aware (assume UTC if naive)
             if dt_obj.tzinfo is None:
                 dt_obj = pytz.UTC.localize(dt_obj)
-            elif dt_obj.tzinfo != pytz.UTC:
+            else:
                 # Convert to UTC first if it's in a different timezone
-                dt_obj = dt_obj.astimezone(pytz.UTC)
+                # Check using tzname instead of direct comparison
+                if dt_obj.tzinfo.zone != 'UTC':
+                    dt_obj = dt_obj.astimezone(pytz.UTC)
             
             # Convert to configured timezone
             target_tz = pytz.timezone(tz_name)
