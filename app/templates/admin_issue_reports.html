@@ -2,33 +2,125 @@
 {% block admin_page_title %}Issue Reports{% endblock %}
 {% block admin_page_header %}Issue Reports{% endblock %}
 {% block admin_page_content %}
-<table class="min-w-full text-sm">
-  <tr class="font-bold text-left">
-    <th class="pr-4">ID</th>
-    <th class="pr-4">Title</th>
-    <th class="pr-4">Type</th>
-    <th class="pr-4">Status</th>
-    <th class="pr-4">Comment</th>
-    <th class="pr-4">Created</th>
-    <th>Action</th>
-  </tr>
-  {% for r in reports %}
-  <tr class="border-t">
-    <td>{{ r.id }}</td>
-    <td>{{ r.title }}</td>
-    <td>{{ r.issue_type }}</td>
-    <td>{{ r.status }}</td>
-    <td>{{ r.comment }}</td>
-    <td>{{ r.created_at }}</td>
-    <td>
-      {% if r.status != 'resolved' %}
-      <form method="post" action="{{ url_for('admin.resolve_issue_report', report_id=r.id) }}" class="flex space-x-1">
-        <input type="text" name="resolution_notes" placeholder="notes" class="border px-1 py-0.5 text-xs">
-        <button type="submit" class="px-2 py-1 bg-green-600 text-white text-xs rounded">Resolve</button>
-      </form>
-      {% else %}Resolved{% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+
+<div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+    {% if reports %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-900">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        ID
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Title
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Type
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Status
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Comment
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Created
+                    </th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Action
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                {% for r in reports %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ r.id }}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                        <div class="max-w-xs truncate" title="{{ r.title }}">{{ r.title }}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            {% if r.issue_type == 'wrong_metadata' %}
+                                bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300
+                            {% elif r.issue_type == 'missing_episode' %}
+                                bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+                            {% elif r.issue_type == 'quality_issue' %}
+                                bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300
+                            {% else %}
+                                bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                            {% endif %}">
+                            {{ r.issue_type.replace('_', ' ').title() }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            {% if r.status == 'resolved' %}
+                                bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                            {% else %}
+                                bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
+                            {% endif %}">
+                            {{ r.status.title() }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                        <div class="max-w-xs truncate" title="{{ r.comment }}">
+                            {{ r.comment or '-' }}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {{ r.created_at | format_datetime('%Y-%m-%d %H:%M') if r.created_at else '-' }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        {% if r.status != 'resolved' %}
+                        <form method="post" action="{{ url_for('admin.resolve_issue_report', report_id=r.id) }}"
+                            class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" name="resolution_notes" placeholder="Resolution notes (optional)"
+                                class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md
+                                bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100
+                                focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+                            <button type="submit"
+                                class="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md
+                                font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-green-500
+                                focus:ring-offset-2 dark:focus:ring-offset-slate-800">
+                                Resolve
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-gray-500 dark:text-gray-400">
+                            Resolved
+                            {% if r.resolved_at %}
+                            <br>
+                            <span class="text-xs">{{ r.resolved_at | format_datetime('%Y-%m-%d %H:%M') }}</span>
+                            {% endif %}
+                        </span>
+                        {% if r.resolution_notes %}
+                        <div class="mt-1 text-xs text-gray-600 dark:text-gray-400 italic">
+                            {{ r.resolution_notes }}
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="px-6 py-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No issue reports</h3>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            There are currently no user-submitted issue reports.
+        </p>
+    </div>
+    {% endif %}
+</div>
+
 {% endblock %}
