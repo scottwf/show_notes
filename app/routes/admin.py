@@ -445,8 +445,8 @@ def logbook_data():
             query += ' AND plex_username = ?'
             params.append(user)
         if show:
-            query += ' AND (title LIKE ? OR grandparentTitle LIKE ? OR grandparent_title LIKE ?)'  # support different column names
-            params.extend([f'%{show}%']*3)
+            query += ' AND (title LIKE ? OR show_title LIKE ?)'
+            params.extend([f'%{show}%']*2)
         query += ' ORDER BY event_timestamp DESC, id DESC LIMIT 50'
         rows = db.execute(query, params).fetchall()
         # Enrich with episode detail URL and formatted time
@@ -484,9 +484,9 @@ def logbook_data():
                 }
                 row_dict['event_type_fmt'] = event_type_map.get(event_type, event_type)
             # Get show title and episode title
-            show_title = row_dict.get('grandparentTitle') or row_dict.get('grandparent_title')
+            show_title = row_dict.get('show_title')
             episode_title = row_dict.get('title')
-            row_dict['display_title'] = f'{show_title} – {episode_title}'
+            row_dict['display_title'] = f'{show_title} – {episode_title}' if show_title else episode_title
             # Get correct TMDB ID from sonarr_shows
             if tmdb_id:
                 sonarr_show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE tmdb_id=?', (tmdb_id,)).fetchone()

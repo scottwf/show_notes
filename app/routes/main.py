@@ -252,6 +252,13 @@ def plex_webhook():
                 except Exception:
                     tvdb_id = None
 
+            # Get the show's TMDB ID from our database using TVDB ID
+            show_tmdb_id = None
+            if tvdb_id:
+                show_record = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?', (tvdb_id,)).fetchone()
+                if show_record:
+                    show_tmdb_id = show_record['tmdb_id']
+
             season_num = metadata.get('parentIndex')
             episode_num = metadata.get('index')
             season_episode_str = None
@@ -270,7 +277,7 @@ def plex_webhook():
                 event_type, account.get('title'), player.get('title'), player.get('uuid'), metadata.get('sessionKey'),
                 metadata.get('ratingKey'), metadata.get('parentRatingKey'), metadata.get('grandparentRatingKey'), metadata.get('type'),
                 metadata.get('title'), metadata.get('grandparentTitle'), season_episode_str, metadata.get('viewOffset'),
-                metadata.get('duration'), tmdb_id, json.dumps(payload)
+                metadata.get('duration'), show_tmdb_id, json.dumps(payload)
             )
             db.execute(sql_insert, params)
             db.commit()
