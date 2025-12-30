@@ -1,0 +1,246 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div>
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">My Lists</h2>
+        <button onclick="showCreateListModal()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out">
+            <svg class="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            Create New List
+        </button>
+    </div>
+
+    <!-- Lists Grid -->
+    <div id="lists-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <!-- Lists will be loaded here -->
+        <div class="col-span-full text-center py-12">
+            <svg class="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+            </svg>
+            <p class="text-slate-500 dark:text-slate-400">Loading lists...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Create List Modal -->
+<div id="create-list-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Create New List</h3>
+        <form id="create-list-form" onsubmit="createList(event)">
+            <div class="mb-4">
+                <label for="list-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">List Name *</label>
+                <input type="text" id="list-name" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+            </div>
+            <div class="mb-4">
+                <label for="list-description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description (optional)</label>
+                <textarea id="list-description" rows="3" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="hideCreateListModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                    Create List
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit List Modal -->
+<div id="edit-list-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Edit List</h3>
+        <form id="edit-list-form" onsubmit="updateList(event)">
+            <input type="hidden" id="edit-list-id">
+            <div class="mb-4">
+                <label for="edit-list-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">List Name *</label>
+                <input type="text" id="edit-list-name" required class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+            </div>
+            <div class="mb-4">
+                <label for="edit-list-description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description (optional)</label>
+                <textarea id="edit-list-description" rows="3" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="hideEditListModal()" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Load lists on page load
+document.addEventListener('DOMContentLoaded', loadLists);
+
+async function loadLists() {
+    try {
+        const response = await fetch('/api/profile/lists');
+        const data = await response.json();
+
+        const container = document.getElementById('lists-container');
+
+        if (data.success && data.lists && data.lists.length > 0) {
+            container.innerHTML = data.lists.map(list => `
+                <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 border border-slate-200 dark:border-slate-700">
+                    <div class="flex items-start justify-between mb-2">
+                        <a href="/profile/lists/${list.id}" class="flex-1">
+                            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400">${list.name}</h3>
+                        </a>
+                        <div class="flex gap-1">
+                            <button onclick="showEditListModal(${list.id}, '${list.name.replace(/'/g, "\\'")}', '${(list.description || '').replace(/'/g, "\\'")}', event)" class="p-1 text-slate-500 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400" title="Edit list">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button onclick="deleteList(${list.id}, '${list.name.replace(/'/g, "\\'")}', event)" class="p-1 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400" title="Delete list">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    ${list.description ? `<p class="text-sm text-slate-600 dark:text-slate-400 mb-3 line-clamp-2">${list.description}</p>` : ''}
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-slate-500 dark:text-slate-400">${list.item_count} ${list.item_count === 1 ? 'item' : 'items'}</span>
+                        <a href="/profile/lists/${list.id}" class="text-sky-600 dark:text-sky-400 hover:underline">View →</a>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = `
+                <div class="col-span-full text-center py-12">
+                    <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    <p class="text-slate-500 dark:text-slate-400 mb-4">You haven't created any lists yet</p>
+                    <button onclick="showCreateListModal()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                        Create Your First List
+                    </button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading lists:', error);
+        document.getElementById('lists-container').innerHTML = `
+            <div class="col-span-full text-center py-12 text-red-500">
+                Error loading lists. Please try again.
+            </div>
+        `;
+    }
+}
+
+function showCreateListModal() {
+    document.getElementById('create-list-modal').classList.remove('hidden');
+    document.getElementById('list-name').focus();
+}
+
+function hideCreateListModal() {
+    document.getElementById('create-list-modal').classList.add('hidden');
+    document.getElementById('create-list-form').reset();
+}
+
+async function createList(event) {
+    event.preventDefault();
+
+    const name = document.getElementById('list-name').value;
+    const description = document.getElementById('list-description').value;
+
+    try {
+        const response = await fetch('/api/profile/lists', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, description})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            hideCreateListModal();
+            loadLists();
+        } else {
+            alert('Error creating list: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error creating list');
+    }
+}
+
+function showEditListModal(listId, name, description, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    document.getElementById('edit-list-id').value = listId;
+    document.getElementById('edit-list-name').value = name;
+    document.getElementById('edit-list-description').value = description;
+    document.getElementById('edit-list-modal').classList.remove('hidden');
+    document.getElementById('edit-list-name').focus();
+}
+
+function hideEditListModal() {
+    document.getElementById('edit-list-modal').classList.add('hidden');
+    document.getElementById('edit-list-form').reset();
+}
+
+async function updateList(event) {
+    event.preventDefault();
+
+    const listId = document.getElementById('edit-list-id').value;
+    const name = document.getElementById('edit-list-name').value;
+    const description = document.getElementById('edit-list-description').value;
+
+    try {
+        const response = await fetch(`/api/profile/lists/${listId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, description})
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            hideEditListModal();
+            loadLists();
+        } else {
+            alert('Error updating list: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error updating list');
+    }
+}
+
+async function deleteList(listId, listName, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!confirm(`Are you sure you want to delete "${listName}"? This will remove all items in the list.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/profile/lists/${listId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            loadLists();
+        } else {
+            alert('Error deleting list: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error deleting list');
+    }
+}
+</script>
+{% endblock %}

@@ -18,6 +18,7 @@ WARNING: This will DELETE ALL DATA including:
 """
 
 import os
+import sys
 import shutil
 from datetime import datetime
 
@@ -53,11 +54,14 @@ def main():
     db_size_mb = db_size / (1024 * 1024)
     print(f"📊 Current database: {db_size_mb:.2f} MB\n")
 
-    # Confirmation
-    response = input("Type 'DELETE EVERYTHING' to continue: ")
-    if response != "DELETE EVERYTHING":
-        print("\n❌ Cancelled. No changes made.\n")
-        return
+    # Confirmation (skip if --force flag provided)
+    if '--force' not in sys.argv:
+        response = input("Type 'DELETE EVERYTHING' to continue: ")
+        if response != "DELETE EVERYTHING":
+            print("\n❌ Cancelled. No changes made.\n")
+            return
+    else:
+        print("⚠️  --force flag detected, skipping confirmation...")
 
     print("\n🔄 Starting database reset...\n")
 

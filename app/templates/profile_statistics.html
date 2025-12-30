@@ -1,0 +1,421 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div>
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Watch Statistics & Viewing Trends</h2>
+
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="bg-gradient-to-br from-sky-500 to-blue-600 rounded-lg p-6 text-white shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sky-100 text-sm font-medium">Total Watch Time</p>
+                    <p id="total-watch-hours" class="text-3xl font-bold mt-1">--</p>
+                    <p class="text-sky-100 text-xs mt-1">hours</p>
+                </div>
+                <svg class="w-12 h-12 text-sky-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-6 text-white shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm font-medium">Episodes Watched</p>
+                    <p id="total-episodes" class="text-3xl font-bold mt-1">--</p>
+                    <p class="text-purple-100 text-xs mt-1">episodes</p>
+                </div>
+                <svg class="w-12 h-12 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg p-6 text-white shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm font-medium">Movies Watched</p>
+                    <p id="total-movies" class="text-3xl font-bold mt-1">--</p>
+                    <p class="text-green-100 text-xs mt-1">movies</p>
+                </div>
+                <svg class="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="bg-gradient-to-br from-orange-500 to-red-600 rounded-lg p-6 text-white shadow-lg">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-orange-100 text-sm font-medium">Current Streak</p>
+                    <p id="current-streak" class="text-3xl font-bold mt-1">--</p>
+                    <p class="text-orange-100 text-xs mt-1">days</p>
+                </div>
+                <svg class="w-12 h-12 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watch Time Chart -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Watch Time Trend</h3>
+            <div class="flex gap-2">
+                <button onclick="changePeriod(30)" class="period-btn px-3 py-1 text-sm rounded bg-sky-500 text-white" data-period="30">30 Days</button>
+                <button onclick="changePeriod(90)" class="period-btn px-3 py-1 text-sm rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-period="90">90 Days</button>
+                <button onclick="changePeriod(365)" class="period-btn px-3 py-1 text-sm rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-period="365">1 Year</button>
+            </div>
+        </div>
+        <div class="relative" style="height: 300px;">
+            <canvas id="watchTimeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Genre Distribution and Viewing Patterns Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- Genre Distribution -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Top Genres</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="genreChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Viewing Patterns by Hour -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Viewing by Hour</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="hourChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Shows/Movies -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Most Watched</h3>
+            <div class="flex gap-2">
+                <button onclick="changeTopMediaType('show')" class="media-type-btn px-3 py-1 text-sm rounded bg-sky-500 text-white" data-type="show">Shows</button>
+                <button onclick="changeTopMediaType('movie')" class="media-type-btn px-3 py-1 text-sm rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-type="movie">Movies</button>
+            </div>
+        </div>
+        <div id="top-items-list" class="space-y-3">
+            <p class="text-slate-500 dark:text-slate-400 text-center py-8">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- Statistics JavaScript -->
+<script>
+// Global variables for charts
+let watchTimeChart;
+let genreChart;
+let hourChart;
+let currentPeriod = 30;
+let currentMediaType = 'show';
+
+// Dark mode detection
+const isDarkMode = document.documentElement.classList.contains('dark');
+
+// Chart colors for dark mode
+const chartColors = {
+    primary: isDarkMode ? '#38bdf8' : '#0ea5e9',
+    secondary: isDarkMode ? '#818cf8' : '#6366f1',
+    success: isDarkMode ? '#34d399' : '#10b981',
+    warning: isDarkMode ? '#fbbf24' : '#f59e0b',
+    danger: isDarkMode ? '#f87171' : '#ef4444',
+    gridColor: isDarkMode ? '#475569' : '#cbd5e1',
+    textColor: isDarkMode ? '#cbd5e1' : '#475569'
+};
+
+// Load overview statistics
+async function loadOverview() {
+    try {
+        const response = await fetch('/api/profile/statistics/overview');
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('total-watch-hours').textContent = data.total_watch_time_hours || '0';
+            document.getElementById('total-episodes').textContent = data.total_episodes || '0';
+            document.getElementById('total-movies').textContent = data.total_movies || '0';
+            document.getElementById('current-streak').textContent = data.current_streak_days || '0';
+        }
+    } catch (error) {
+        console.error('Error loading overview:', error);
+    }
+}
+
+// Load watch time chart
+async function loadWatchTimeChart(period = 30) {
+    try {
+        const response = await fetch(`/api/profile/statistics/watch-time?period=${period}`);
+        const data = await response.json();
+
+        if (data.success) {
+            const ctx = document.getElementById('watchTimeChart').getContext('2d');
+
+            if (watchTimeChart) {
+                watchTimeChart.destroy();
+            }
+
+            watchTimeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.data.map(d => d.date),
+                    datasets: [{
+                        label: 'Watch Hours',
+                        data: data.data.map(d => d.watch_hours),
+                        borderColor: chartColors.primary,
+                        backgroundColor: chartColors.primary + '20',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.y} hours`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: chartColors.textColor
+                            },
+                            grid: {
+                                color: chartColors.gridColor
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: chartColors.textColor,
+                                maxTicksLimit: 10
+                            },
+                            grid: {
+                                color: chartColors.gridColor
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading watch time chart:', error);
+    }
+}
+
+// Load genre chart
+async function loadGenreChart() {
+    try {
+        const response = await fetch('/api/profile/statistics/genres');
+        const data = await response.json();
+
+        if (data.success && data.genres && data.genres.length > 0) {
+            const ctx = document.getElementById('genreChart').getContext('2d');
+
+            if (genreChart) {
+                genreChart.destroy();
+            }
+
+            const colors = [
+                '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981',
+                '#06b6d4', '#6366f1', '#f97316', '#14b8a6', '#a855f7'
+            ];
+
+            genreChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.genres.map(g => g.genre),
+                    datasets: [{
+                        data: data.genres.map(g => g.count),
+                        backgroundColor: colors,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                color: chartColors.textColor,
+                                padding: 10,
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading genre chart:', error);
+    }
+}
+
+// Load viewing patterns
+async function loadViewingPatterns() {
+    try {
+        const response = await fetch('/api/profile/statistics/viewing-patterns');
+        const data = await response.json();
+
+        if (data.success && data.by_hour) {
+            const ctx = document.getElementById('hourChart').getContext('2d');
+
+            if (hourChart) {
+                hourChart.destroy();
+            }
+
+            const hours = Array.from({length: 24}, (_, i) => {
+                const hour = i % 12 || 12;
+                const period = i < 12 ? 'AM' : 'PM';
+                return `${hour}${period}`;
+            });
+
+            hourChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'Views',
+                        data: data.by_hour,
+                        backgroundColor: chartColors.secondary,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: chartColors.textColor,
+                                stepSize: 1
+                            },
+                            grid: {
+                                color: chartColors.gridColor
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: chartColors.textColor
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading viewing patterns:', error);
+    }
+}
+
+// Load top shows/movies
+async function loadTopItems(type = 'show') {
+    try {
+        const response = await fetch(`/api/profile/statistics/top-shows?type=${type}&limit=10`);
+        const data = await response.json();
+
+        const listContainer = document.getElementById('top-items-list');
+
+        if (data.success && data.items && data.items.length > 0) {
+            listContainer.innerHTML = data.items.map((item, index) => `
+                <div class="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg hover:shadow-md transition-shadow">
+                    <div class="flex-shrink-0 w-8 text-center">
+                        <span class="text-2xl font-bold text-slate-400 dark:text-slate-500">${index + 1}</span>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <img src="${item.poster_path ? '/image_proxy?url=' + encodeURIComponent(item.poster_path) : '/static/logos/placeholder_poster.png'}"
+                             alt="${item.title}"
+                             class="w-12 h-18 object-cover rounded shadow-sm"
+                             onerror="this.src='/static/logos/placeholder_poster.png'">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">${item.title}</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400">
+                            ${item.watch_count} ${item.watch_count === 1 ? 'view' : 'views'} • ${item.watch_hours}h
+                        </p>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            listContainer.innerHTML = '<p class="text-slate-500 dark:text-slate-400 text-center py-8">No data available</p>';
+        }
+    } catch (error) {
+        console.error('Error loading top items:', error);
+        document.getElementById('top-items-list').innerHTML = '<p class="text-red-500 text-center py-8">Error loading data</p>';
+    }
+}
+
+// Change period for watch time chart
+function changePeriod(period) {
+    currentPeriod = period;
+
+    // Update button styles
+    document.querySelectorAll('.period-btn').forEach(btn => {
+        if (parseInt(btn.dataset.period) === period) {
+            btn.className = 'period-btn px-3 py-1 text-sm rounded bg-sky-500 text-white';
+        } else {
+            btn.className = 'period-btn px-3 py-1 text-sm rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
+        }
+    });
+
+    loadWatchTimeChart(period);
+}
+
+// Change media type for top items
+function changeTopMediaType(type) {
+    currentMediaType = type;
+
+    // Update button styles
+    document.querySelectorAll('.media-type-btn').forEach(btn => {
+        if (btn.dataset.type === type) {
+            btn.className = 'media-type-btn px-3 py-1 text-sm rounded bg-sky-500 text-white';
+        } else {
+            btn.className = 'media-type-btn px-3 py-1 text-sm rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
+        }
+    });
+
+    loadTopItems(type);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadOverview();
+    loadWatchTimeChart(currentPeriod);
+    loadGenreChart();
+    loadViewingPatterns();
+    loadTopItems(currentMediaType);
+});
+</script>
+{% endblock %}

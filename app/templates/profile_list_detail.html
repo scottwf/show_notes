@@ -1,0 +1,137 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div>
+    <!-- Back button and header -->
+    <div class="mb-6">
+        <a href="{{ url_for('main.profile_lists') }}" class="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center mb-3">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            Back to Lists
+        </a>
+        <div class="flex items-start justify-between">
+            <div class="flex-1">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ list.name }}</h2>
+                {% if list.description %}
+                <p class="text-slate-600 dark:text-slate-400 mt-1">{{ list.description }}</p>
+                {% endif %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                    <span id="item-count">{{ list.item_count }}</span> {{ 'item' if list.item_count == 1 else 'items' }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- List items grid -->
+    <div id="list-items" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <!-- Items will be loaded here -->
+        <div class="col-span-full text-center py-12">
+            <p class="text-slate-500 dark:text-slate-400">Loading items...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const listId = {{ list.id }};
+
+// Load list items on page load
+document.addEventListener('DOMContentLoaded', loadListItems);
+
+async function loadListItems() {
+    try {
+        const response = await fetch(`/api/profile/lists/${listId}`);
+        const data = await response.json();
+
+        const container = document.getElementById('list-items');
+
+        if (data.success && data.items && data.items.length > 0) {
+            container.innerHTML = data.items.map(item => {
+                const detailUrl = item.media_type === 'show'
+                    ? `/show/${item.tmdb_id}`
+                    : `/movie/${item.tmdb_id}`;
+
+                const posterUrl = item.poster_path
+                    ? `/image_proxy?url=${encodeURIComponent(item.poster_path)}`
+                    : '/static/logos/placeholder_poster.png';
+
+                return `
+                    <div class="group relative">
+                        <a href="${detailUrl}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-shadow">
+                                <img src="${posterUrl}"
+                                     alt="${item.title}"
+                                     class="w-full h-full object-cover"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+
+                                <!-- Remove button overlay -->
+                                <button onclick="removeItem(${item.id}, event)"
+                                        class="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
+                                        title="Remove from list">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </a>
+                        <div class="mt-2">
+                            <a href="${detailUrl}" class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                ${item.title}
+                            </a>
+                            ${item.year ? `<p class="text-xs text-slate-500 dark:text-slate-400">${item.year}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Update item count
+            document.getElementById('item-count').textContent = data.items.length;
+        } else {
+            container.innerHTML = `
+                <div class="col-span-full text-center py-12">
+                    <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                    </svg>
+                    <p class="text-slate-500 dark:text-slate-400 mb-4">This list is empty</p>
+                    <p class="text-sm text-slate-400 dark:text-slate-500">Browse shows and movies to add items to this list</p>
+                </div>
+            `;
+            document.getElementById('item-count').textContent = '0';
+        }
+    } catch (error) {
+        console.error('Error loading list items:', error);
+        document.getElementById('list-items').innerHTML = `
+            <div class="col-span-full text-center py-12 text-red-500">
+                Error loading list items. Please try again.
+            </div>
+        `;
+    }
+}
+
+async function removeItem(itemId, event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!confirm('Remove this item from the list?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/profile/lists/${listId}/items/${itemId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            loadListItems();
+        } else {
+            alert('Error removing item: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error removing item');
+    }
+}
+</script>
+{% endblock %}

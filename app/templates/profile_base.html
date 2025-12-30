@@ -14,7 +14,7 @@
                 </div>
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ user.username }}</h1>
-                    <p class="text-slate-600 dark:text-slate-400">Member since {{ user.created_at.strftime('%B %Y') if
+                    <p class="text-slate-600 dark:text-slate-400">Member since {{ user.created_at | format_datetime('%B %Y') if
                         user.created_at else 'Unknown' }}</p>
                 </div>
             </div>
@@ -60,6 +60,33 @@
                     </path>
                 </svg>
                 Favorites
+            </a>
+            <a href="{{ url_for('main.profile_progress') }}"
+                class="px-6 py-4 text-sm font-medium transition-colors {% if active_tab == 'progress' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 bg-sky-50 dark:bg-sky-900/20{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50{% endif %}">
+                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                </svg>
+                Progress
+            </a>
+            <a href="{{ url_for('main.profile_statistics') }}"
+                class="px-6 py-4 text-sm font-medium transition-colors {% if active_tab == 'statistics' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 bg-sky-50 dark:bg-sky-900/20{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50{% endif %}">
+                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                    </path>
+                </svg>
+                Statistics
+            </a>
+            <a href="{{ url_for('main.profile_lists') }}"
+                class="px-6 py-4 text-sm font-medium transition-colors {% if active_tab == 'lists' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 bg-sky-50 dark:bg-sky-900/20{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50{% endif %}">
+                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                    </path>
+                </svg>
+                Lists
             </a>
             <a href="{{ url_for('main.profile_notifications') }}"
                 class="px-6 py-4 text-sm font-medium transition-colors relative {% if active_tab == 'notifications' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400 bg-sky-50 dark:bg-sky-900/20{% else %}text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50{% endif %}">

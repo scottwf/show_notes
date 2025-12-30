@@ -34,7 +34,7 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for, session, jsonify,
     flash, current_app, Response, abort
 )
-from flask_login import login_user, login_required, logout_user # current_user is not directly used, session is used for username
+from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from .. import database
@@ -76,7 +76,9 @@ def check_onboarding():
     if request.endpoint and 'static' not in request.endpoint:
         # Allow access to specific endpoints even if onboarding is not complete
         exempt_endpoints = [
-            'main.onboarding', # Onboarding page itself
+            'main.onboarding', # Onboarding Step 1 (admin account)
+            'main.onboarding_services', # Onboarding Step 2 (service config)
+            'main.onboarding_test_service', # Onboarding service testing
             'main.login',
             'main.callback',
             'main.logout',
@@ -282,6 +284,71 @@ def plex_webhook():
             db.execute(sql_insert, params)
             db.commit()
             current_app.logger.info(f"Logged event '{event_type}' for '{metadata.get('title')}' to plex_activity_log.")
+
+            # Update user watch statistics for stop/scrobble events
+            if event_type in ['media.stop', 'media.scrobble']:
+                plex_username = account.get('title')
+                if plex_username:
+                    user = db.execute('SELECT id FROM users WHERE plex_username = ?', (plex_username,)).fetchone()
+                    if user:
+                        try:
+                            today = datetime.date.today()
+                            _update_daily_statistics(user['id'], today)
+                            _update_watch_streak(user['id'])
+                            current_app.logger.info(f"Updated watch statistics for user {user['id']}")
+                        except Exception as stats_error:
+                            current_app.logger.error(f"Error updating watch statistics: {stats_error}", exc_info=True)
+
+                        # Update episode watch progress for episodes
+                        if metadata.get('type') == 'episode':
+                            try:
+                                view_offset_ms = metadata.get('viewOffset', 0)
+                                duration_ms = metadata.get('duration', 0)
+                                watch_percentage = (view_offset_ms / duration_ms * 100) if duration_ms > 0 else 0
+
+                                # Mark as watched if >= 95% complete
+                                if watch_percentage >= 95:
+                                    # Find the episode in our database
+                                    if show_tmdb_id and season_num is not None and episode_num is not None:
+                                        # Get the show's internal ID
+                                        show_row = db.execute('SELECT id FROM sonarr_shows WHERE tmdb_id = ?', (show_tmdb_id,)).fetchone()
+                                        if show_row:
+                                            show_id = show_row['id']
+                                            # Get the episode's internal ID
+                                            episode_row = db.execute(
+                                                'SELECT id FROM sonarr_episodes WHERE show_id = ? AND season_number = ? AND episode_number = ?',
+                                                (show_id, season_num, episode_num)
+                                            ).fetchone()
+
+                                            if episode_row:
+                                                episode_id = episode_row['id']
+
+                                                # Insert or update episode progress
+                                                db.execute('''
+                                                    INSERT INTO user_episode_progress (
+                                                        user_id, show_id, episode_id, season_number, episode_number,
+                                                        is_watched, watch_count, last_watched_at, watch_percentage, marked_manually
+                                                    )
+                                                    VALUES (?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, ?, 0)
+                                                    ON CONFLICT (user_id, episode_id) DO UPDATE SET
+                                                        is_watched = 1,
+                                                        watch_count = watch_count + 1,
+                                                        last_watched_at = CURRENT_TIMESTAMP,
+                                                        watch_percentage = excluded.watch_percentage,
+                                                        updated_at = CURRENT_TIMESTAMP
+                                                ''', (user['id'], show_id, episode_id, season_num, episode_num, watch_percentage))
+                                                db.commit()
+
+                                                # Update show completion
+                                                _calculate_show_completion(user['id'], show_id)
+
+                                                current_app.logger.info(f"Marked episode {season_episode_str} as watched for user {user['id']}")
+                                            else:
+                                                current_app.logger.warning(f"Episode not found in database: show_id={show_id}, S{season_num}E{episode_num}")
+                                        else:
+                                            current_app.logger.warning(f"Show not found in database with TMDB ID: {show_tmdb_id}")
+                            except Exception as progress_error:
+                                current_app.logger.error(f"Error updating episode progress: {progress_error}", exc_info=True)
 
             # --- Store episode character data if available ---
             if metadata.get('type') == 'episode' and 'Role' in metadata:
@@ -683,12 +750,10 @@ def radarr_webhook():
 @main_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """
-    Initiates the Plex OAuth login process or handles admin username/password login.
+    Handles user login via username/password.
 
-    On ``GET`` requests, this starts the Plex OAuth flow by requesting a PIN and
-    redirecting the user to Plex for authentication. On ``POST`` requests it
-    validates the provided admin credentials and logs the user in using
-    Flask-Login.
+    On ``GET`` requests, renders the login page.
+    On ``POST`` requests, validates admin credentials and logs the user in.
     """
     if request.method == 'POST':
         username = request.form.get('username')
@@ -710,23 +775,123 @@ def login():
         flash('Invalid admin credentials.', 'danger')
         return redirect(url_for('main.login'))
 
-    # GET request - start Plex OAuth
+    # GET request - render login page
+    return render_template('login.html')
+
+@main_bp.route('/login/plex/start')
+def plex_login_start():
+    """
+    Initiates the Plex OAuth flow by creating a PIN and returning the auth URL.
+
+    Returns:
+        JSON response with the Plex auth URL for the user to authenticate.
+    """
     client_id = database.get_setting('plex_client_id')
     if not client_id:
-        flash("Plex Client ID is not configured in settings.", "danger")
-        return redirect(url_for('main.home'))
+        return jsonify({'error': 'Plex OAuth is not configured'}), 500
 
-    headers = {'X-Plex-Client-Identifier': client_id, 'Accept': 'application/json'}
-    r = requests.post('https://plex.tv/api/v2/pins?strong=true', headers=headers)
-    if r.status_code != 201:
-        flash('Failed to initiate Plex login.', 'danger')
-        return redirect(url_for('main.home'))
+    # Create a PIN for Plex OAuth
+    headers = {
+        'X-Plex-Client-Identifier': client_id,
+        'X-Plex-Product': 'ShowNotes',
+        'X-Plex-Version': '1.0',
+        'X-Plex-Platform': 'Web',
+        'X-Plex-Platform-Version': '1.0',
+        'X-Plex-Device': 'Browser',
+        'X-Plex-Device-Name': 'ShowNotes Web',
+        'Accept': 'application/json'
+    }
 
-    pin = r.json()
-    session['plex_pin_id'] = pin['id']
+    try:
+        response = requests.post('https://plex.tv/api/v2/pins?strong=true', headers=headers)
+        response.raise_for_status()
+        pin_data = response.json()
 
-    plex_auth_url = f"https://app.plex.tv/auth#?clientID={client_id}&code={pin['code']}&forwardUrl={url_for('main.callback', _external=True)}"
-    return redirect(plex_auth_url)
+        pin_id = pin_data.get('id')
+        pin_code = pin_data.get('code')
+
+        if not pin_id or not pin_code:
+            return jsonify({'error': 'Failed to generate Plex PIN'}), 500
+
+        # Store PIN ID in session for later polling
+        session['plex_pin_id'] = pin_id
+
+        # Build auth URL - don't use forwardUrl since localhost URLs may not be accepted
+        # The user will manually close the window after auth, and we'll poll for completion
+        auth_url = f'https://app.plex.tv/auth#?clientID={client_id}&code={pin_code}'
+
+        return jsonify({'authUrl': auth_url})
+
+    except Exception as e:
+        current_app.logger.error(f"Error starting Plex OAuth: {e}")
+        return jsonify({'error': 'Failed to start Plex authentication'}), 500
+
+@main_bp.route('/login/plex/poll')
+def plex_login_poll():
+    """
+    Polls the Plex API to check if the user has authorized the PIN.
+
+    Returns:
+        JSON response indicating whether authorization is complete.
+    """
+    pin_id = session.get('plex_pin_id')
+    client_id = database.get_setting('plex_client_id')
+
+    if not pin_id or not client_id:
+        return jsonify({'authorized': False, 'error': 'No active PIN session'}), 400
+
+    headers = {
+        'X-Plex-Client-Identifier': client_id,
+        'Accept': 'application/json'
+    }
+
+    try:
+        response = requests.get(f'https://plex.tv/api/v2/pins/{pin_id}', headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        auth_token = data.get('authToken')
+
+        if auth_token:
+            # Get user info from Plex
+            headers['X-Plex-Token'] = auth_token
+            user_response = requests.get('https://plex.tv/api/v2/user', headers=headers)
+            user_response.raise_for_status()
+            user_info = user_response.json()
+
+            plex_user_id = user_info.get('id')
+            plex_username = user_info.get('username') or user_info.get('title')
+
+            # Check if user exists in database
+            db = database.get_db()
+            user_record = db.execute('SELECT * FROM users WHERE plex_user_id = ?', (plex_user_id,)).fetchone()
+
+            if user_record:
+                # Log in the user
+                user_obj = current_app.login_manager._user_callback(user_record['id'])
+                if user_obj:
+                    login_user(user_obj, remember=True)
+                    session['user_id'] = user_obj.id
+                    session['username'] = user_obj.username
+                    session['is_admin'] = user_obj.is_admin
+                    db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?', (auth_token, user_obj.id,))
+                    db.commit()
+                    return jsonify({'authorized': True, 'username': user_obj.username})
+            else:
+                # If admin is already logged in, link their account to Plex
+                if current_user.is_authenticated and current_user.is_admin:
+                    db.execute('UPDATE users SET plex_user_id=?, plex_username=?, plex_token=? WHERE id=?',
+                              (plex_user_id, plex_username, auth_token, current_user.id))
+                    db.commit()
+                    return jsonify({'authorized': True, 'username': current_user.username, 'linked': True})
+                else:
+                    return jsonify({'authorized': False, 'error': f'Plex user {plex_username} is not registered in this application'})
+
+        return jsonify({'authorized': False})
+
+    except Exception as e:
+        current_app.logger.error(f"Error polling Plex auth status: {e}")
+        return jsonify({'authorized': False, 'error': str(e)}), 500
 
 @main_bp.route('/callback')
 def callback():
@@ -748,8 +913,8 @@ def callback():
     pin_id = session.get('plex_pin_id')
     client_id = database.get_setting('plex_client_id')
     if not pin_id or not client_id:
-        flash('Plex login session expired. Please try again.', 'warning')
-        return redirect(url_for('main.home'))
+        flash('Plex OAuth is not configured. Please use username/password login.', 'info')
+        return redirect(url_for('main.login'))
 
     # Poll for auth token
     poll_url = f'https://plex.tv/api/v2/pins/{pin_id}'
@@ -821,20 +986,10 @@ def logout():
 @main_bp.route('/onboarding', methods=['GET', 'POST'])
 def onboarding():
     """
-    Handles the initial setup and onboarding for the application.
+    Step 1 of onboarding: Create admin account.
 
-    If onboarding is already complete (an admin user exists), this page will
-    redirect to the homepage.
-
-    On a GET request, it renders the onboarding form.
-    On a POST request, it validates the form data (username and password),
-    creates the first administrative user, initializes the settings table, and
-    redirects to the login page.
-
-    Returns:
-        - A rendered HTML template for the onboarding page on GET.
-        - A redirect to the login page on successful POST.
-        - The onboarding template with errors on a failed POST.
+    If onboarding is already complete, redirects to homepage.
+    On POST, creates admin user and redirects to Step 2 (service configuration).
     """
     if is_onboarding_complete():
         return redirect(url_for('main.home'))
@@ -845,33 +1000,175 @@ def onboarding():
             # Create admin user
             pw_hash = generate_password_hash(request.form['password'])
             db.execute(
-                'INSERT INTO users (username, password_hash, is_admin, plex_user_id) VALUES (?, ?, 1, ?)',
-                (request.form['username'], pw_hash, request.form.get('plex_user_id'))
+                'INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)',
+                (request.form['username'], pw_hash)
             )
-            # Create settings
+            db.commit()
+
+            # Store username in session for Step 2
+            session['onboarding_username'] = request.form['username']
+
+            flash('Admin account created! Now configure your services.', 'success')
+            return redirect(url_for('main.onboarding_services'))
+        except Exception as e:
+            db.rollback()
+            flash(f'An error occurred: {e}', 'danger')
+            current_app.logger.error(f"Onboarding Step 1 error: {e}", exc_info=True)
+
+    return render_template('onboarding.html')
+
+@main_bp.route('/onboarding/services', methods=['GET', 'POST'])
+def onboarding_services():
+    """
+    Step 2 of onboarding: Configure services (Radarr, Sonarr, Tautulli, etc.)
+
+    Requires that Step 1 (admin account creation) has been completed.
+    On POST, creates settings record and completes onboarding.
+    """
+    # Check if Step 1 is complete (admin user exists)
+    db = database.get_db()
+    admin_user = db.execute('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').fetchone()
+
+    if not admin_user:
+        flash('Please create an admin account first.', 'warning')
+        return redirect(url_for('main.onboarding'))
+
+    # Check if onboarding is already complete (settings exist)
+    settings_record = db.execute('SELECT id FROM settings LIMIT 1').fetchone()
+    if settings_record:
+        flash('Onboarding already complete. Please log in.', 'info')
+        return redirect(url_for('main.login'))
+
+    if request.method == 'POST':
+        try:
+            # Create settings record with service configurations
             db.execute(
-                '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url, sonarr_url, sonarr_api_key, sonarr_remote_url, bazarr_url, bazarr_api_key, ollama_url, pushover_key, pushover_token, plex_client_id, tautulli_url, tautulli_api_key)
+                '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url,
+                   sonarr_url, sonarr_api_key, sonarr_remote_url,
+                   bazarr_url, bazarr_api_key, ollama_url,
+                   pushover_key, pushover_token, plex_client_id,
+                   tautulli_url, tautulli_api_key)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
-                    request.form.get('radarr_url', ''), request.form.get('radarr_api_key', ''),
+                    request.form.get('radarr_url', ''),
+                    request.form.get('radarr_api_key', ''),
                     request.form.get('radarr_remote_url', ''),
-                    request.form.get('sonarr_url', ''), request.form.get('sonarr_api_key', ''),
+                    request.form.get('sonarr_url', ''),
+                    request.form.get('sonarr_api_key', ''),
                     request.form.get('sonarr_remote_url', ''),
-                    request.form.get('bazarr_url', ''), request.form.get('bazarr_api_key', ''),
-                    request.form.get('ollama_url', ''), request.form.get('pushover_key', ''),
-                    request.form.get('pushover_token', ''), request.form.get('plex_client_id', ''),
-                    request.form.get('tautulli_url', ''), request.form.get('tautulli_api_key', '')
+                    request.form.get('bazarr_url', ''),
+                    request.form.get('bazarr_api_key', ''),
+                    request.form.get('ollama_url', ''),
+                    request.form.get('pushover_key', ''),
+                    request.form.get('pushover_token', ''),
+                    request.form.get('plex_client_id', ''),
+                    request.form.get('tautulli_url', ''),
+                    request.form.get('tautulli_api_key', '')
                 )
             )
             db.commit()
-            flash('Onboarding complete! Please log in.', 'success')
+
+            # Clear onboarding session data
+            session.pop('onboarding_username', None)
+
+            # Capture form values before starting background thread
+            has_radarr = bool(request.form.get('radarr_url') and request.form.get('radarr_api_key'))
+            has_sonarr = bool(request.form.get('sonarr_url') and request.form.get('sonarr_api_key'))
+            has_tautulli = bool(request.form.get('tautulli_url') and request.form.get('tautulli_api_key'))
+
+            # Automatically queue library imports in background
+            import threading
+            from ..utils import sync_radarr_library, sync_sonarr_library, sync_tautulli_watch_history
+
+            def run_background_imports(radarr, sonarr, tautulli):
+                """Run all initial library imports in sequence"""
+                with current_app.app_context():
+                    try:
+                        # Import Radarr library
+                        if radarr:
+                            current_app.logger.info("Starting automatic Radarr import after onboarding")
+                            sync_radarr_library()
+
+                        # Import Sonarr library
+                        if sonarr:
+                            current_app.logger.info("Starting automatic Sonarr import after onboarding")
+                            sync_sonarr_library()
+
+                        # Import Tautulli history
+                        if tautulli:
+                            current_app.logger.info("Starting automatic Tautulli import after onboarding")
+                            sync_tautulli_watch_history(full_import=False, max_records=1000)
+
+                        current_app.logger.info("All automatic imports completed")
+                    except Exception as e:
+                        current_app.logger.error(f"Error during automatic imports: {e}", exc_info=True)
+
+            # Start background thread for imports
+            import_thread = threading.Thread(
+                target=run_background_imports,
+                args=(has_radarr, has_sonarr, has_tautulli),
+                daemon=True
+            )
+            import_thread.start()
+
+            flash('Onboarding complete! Your media libraries are being imported in the background. Check the Event Logs to monitor progress.', 'success')
             return redirect(url_for('main.login'))
         except Exception as e:
             db.rollback()
-            flash(f'An error occurred during onboarding: {e}', 'danger')
-            current_app.logger.error(f"Onboarding error: {e}", exc_info=True)
+            flash(f'An error occurred during service configuration: {e}', 'danger')
+            current_app.logger.error(f"Onboarding Step 2 error: {e}", exc_info=True)
 
-    return render_template('onboarding.html')
+    return render_template('onboarding_services.html')
+
+@main_bp.route('/onboarding/test-service', methods=['POST'])
+def onboarding_test_service():
+    """
+    Test service connections during onboarding (no login required).
+
+    Expects JSON payload with 'service', 'url', and 'key' (API key).
+    Returns JSON indicating success or failure.
+    """
+    from ..utils import (
+        test_sonarr_connection_with_params,
+        test_radarr_connection_with_params,
+        test_bazarr_connection_with_params,
+        test_ollama_connection_with_params,
+        test_tautulli_connection_with_params,
+        test_pushover_notification_with_params
+    )
+
+    data = request.json
+    service = data.get('service')
+    url = data.get('url')
+    api_key = data.get('key')  # JavaScript sends 'key', not 'api_key'
+
+    current_app.logger.info(f'Onboarding test for {service} at {url}')
+
+    success = False
+    error_message = 'Invalid service specified.'
+
+    try:
+        if service == 'sonarr':
+            success, error_message = test_sonarr_connection_with_params(url, api_key)
+        elif service == 'radarr':
+            success, error_message = test_radarr_connection_with_params(url, api_key)
+        elif service == 'bazarr':
+            success, error_message = test_bazarr_connection_with_params(url, api_key)
+        elif service == 'ollama':
+            success, error_message = test_ollama_connection_with_params(url)
+        elif service == 'tautulli':
+            success, error_message = test_tautulli_connection_with_params(url, api_key)
+        elif service == 'pushover':
+            # For pushover, 'url' is user_key and 'key' is token
+            success, error_message = test_pushover_notification_with_params(api_key, url)
+
+        if success:
+            return jsonify({'success': True, 'message': 'Connection successful!'})
+        else:
+            return jsonify({'success': False, 'message': error_message or 'Connection test failed'})
+    except Exception as e:
+        current_app.logger.error(f"Service test error for {service}: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
 @main_bp.route('/search')
 @login_required
@@ -1751,7 +2048,8 @@ def profile_history():
 
     # Get currently playing/paused item
     current_plex_event = None
-    s_username = user['username']
+    # Use plex_username if available, otherwise fall back to username
+    s_username = user['plex_username'] if user['plex_username'] else user['username']
 
     current_event_row = db.execute(
         """
@@ -1805,7 +2103,7 @@ def profile_history():
             END
         ORDER BY latest_timestamp DESC
         LIMIT 50
-    """, (user['username'],)).fetchall()
+    """, (s_username,)).fetchall()
     
     # Enrich watch history with show/movie data
     enriched_history = []
@@ -2266,3 +2564,1482 @@ def resolve_notification_issue(notification_id):
         current_app.logger.error(f"Error creating resolution notification: {e}", exc_info=True)
 
     return jsonify({'success': True})
+
+
+# ============================================================================
+# Watch Statistics Helper Functions
+# ============================================================================
+
+def _calculate_watch_statistics(user_id, start_date, end_date):
+    """
+    Calculate watch statistics from plex_activity_log for a date range.
+
+    Args:
+        user_id: User ID
+        start_date: Start date (datetime.date)
+        end_date: End date (datetime.date)
+
+    Returns:
+        dict: Statistics for each date in the range
+    """
+    db = database.get_db()
+
+    # Get user's plex username
+    user = db.execute('SELECT plex_username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user or not user['plex_username']:
+        return {}
+
+    plex_username = user['plex_username']
+
+    # Query activity log for the date range
+    stats_by_date = {}
+    current_date = start_date
+
+    while current_date <= end_date:
+        date_start = datetime.datetime.combine(current_date, datetime.time.min)
+        date_end = datetime.datetime.combine(current_date, datetime.time.max)
+
+        # Get all watch events for this date
+        events = db.execute('''
+            SELECT
+                media_type,
+                tmdb_id,
+                duration_ms,
+                view_offset_ms
+            FROM plex_activity_log
+            WHERE plex_username = ?
+                AND event_timestamp >= ?
+                AND event_timestamp <= ?
+                AND event_type IN ('media.stop', 'media.scrobble')
+        ''', (plex_username, date_start, date_end)).fetchall()
+
+        # Calculate stats for this date
+        total_watch_time_ms = 0
+        episode_count = 0
+        movie_count = 0
+        unique_shows = set()
+
+        for event in events:
+            # Calculate watch time (use view_offset if available, otherwise duration)
+            watch_time = event['view_offset_ms'] or event['duration_ms'] or 0
+            total_watch_time_ms += watch_time
+
+            if event['media_type'] == 'episode':
+                episode_count += 1
+                if event['tmdb_id']:
+                    # For episodes, tmdb_id is the show's TMDB ID
+                    unique_shows.add(event['tmdb_id'])
+            elif event['media_type'] == 'movie':
+                movie_count += 1
+
+        stats_by_date[current_date.isoformat()] = {
+            'total_watch_time_ms': total_watch_time_ms,
+            'episode_count': episode_count,
+            'movie_count': movie_count,
+            'unique_shows_count': len(unique_shows)
+        }
+
+        current_date += datetime.timedelta(days=1)
+
+    return stats_by_date
+
+
+def _update_daily_statistics(user_id, date):
+    """
+    Update daily watch statistics for a user and date.
+    Called by webhook after watch events.
+
+    Args:
+        user_id: User ID
+        date: Date to update (datetime.date)
+    """
+    db = database.get_db()
+
+    # Calculate stats for this date
+    stats = _calculate_watch_statistics(user_id, date, date)
+    if not stats or date.isoformat() not in stats:
+        return
+
+    date_stats = stats[date.isoformat()]
+
+    # Insert or update daily statistics
+    db.execute('''
+        INSERT INTO user_watch_statistics
+        (user_id, stat_date, total_watch_time_ms, episode_count, movie_count, unique_shows_count)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, stat_date) DO UPDATE SET
+            total_watch_time_ms = excluded.total_watch_time_ms,
+            episode_count = excluded.episode_count,
+            movie_count = excluded.movie_count,
+            unique_shows_count = excluded.unique_shows_count,
+            updated_at = CURRENT_TIMESTAMP
+    ''', (
+        user_id,
+        date.isoformat(),
+        date_stats['total_watch_time_ms'],
+        date_stats['episode_count'],
+        date_stats['movie_count'],
+        date_stats['unique_shows_count']
+    ))
+
+    db.commit()
+
+
+def _calculate_current_streak(user_id):
+    """
+    Calculate the current watch streak for a user.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        int: Current streak length in days
+    """
+    db = database.get_db()
+
+    # Get all dates with watch activity, ordered by date descending
+    dates = db.execute('''
+        SELECT stat_date
+        FROM user_watch_statistics
+        WHERE user_id = ?
+            AND (episode_count > 0 OR movie_count > 0)
+        ORDER BY stat_date DESC
+    ''', (user_id,)).fetchall()
+
+    if not dates:
+        return 0
+
+    # Check if there's activity today or yesterday
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+
+    most_recent_date = datetime.date.fromisoformat(dates[0]['stat_date'])
+
+    if most_recent_date not in [today, yesterday]:
+        # Streak is broken
+        return 0
+
+    # Count consecutive days
+    streak_length = 1
+    expected_date = most_recent_date - datetime.timedelta(days=1)
+
+    for i in range(1, len(dates)):
+        current_date = datetime.date.fromisoformat(dates[i]['stat_date'])
+
+        if current_date == expected_date:
+            streak_length += 1
+            expected_date -= datetime.timedelta(days=1)
+        else:
+            # Gap found, streak ends
+            break
+
+    return streak_length
+
+
+def _update_watch_streak(user_id):
+    """
+    Update the watch streak record for a user.
+
+    Args:
+        user_id: User ID
+    """
+    db = database.get_db()
+
+    current_streak = _calculate_current_streak(user_id)
+
+    if current_streak == 0:
+        # Mark all streaks as not current
+        db.execute('''
+            UPDATE user_watch_streaks
+            SET is_current = 0
+            WHERE user_id = ? AND is_current = 1
+        ''', (user_id,))
+        db.commit()
+        return
+
+    # Get the most recent streak record
+    recent_streak = db.execute('''
+        SELECT id, streak_length_days, streak_start_date
+        FROM user_watch_streaks
+        WHERE user_id = ? AND is_current = 1
+        ORDER BY streak_end_date DESC
+        LIMIT 1
+    ''', (user_id,)).fetchone()
+
+    today = datetime.date.today()
+
+    if recent_streak:
+        # Update existing streak
+        streak_start = datetime.date.fromisoformat(recent_streak['streak_start_date'])
+
+        db.execute('''
+            UPDATE user_watch_streaks
+            SET streak_end_date = ?,
+                streak_length_days = ?
+            WHERE id = ?
+        ''', (today.isoformat(), current_streak, recent_streak['id']))
+    else:
+        # Create new streak record
+        streak_start = today - datetime.timedelta(days=current_streak - 1)
+
+        db.execute('''
+            INSERT INTO user_watch_streaks
+            (user_id, streak_start_date, streak_end_date, streak_length_days, is_current)
+            VALUES (?, ?, ?, ?, 1)
+        ''', (user_id, streak_start.isoformat(), today.isoformat(), current_streak))
+
+    db.commit()
+
+
+def _get_genre_distribution(user_id):
+    """
+    Get genre distribution from watched shows and movies.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        list: List of dicts with genre and watch_count
+    """
+    db = database.get_db()
+
+    # Get user's plex username
+    user = db.execute('SELECT plex_username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user or not user['plex_username']:
+        return []
+
+    plex_username = user['plex_username']
+
+    # Get all watched shows and movies from activity log
+    watched_media = db.execute('''
+        SELECT DISTINCT
+            pal.media_type,
+            pal.tmdb_id,
+            COUNT(*) as watch_count
+        FROM plex_activity_log pal
+        WHERE pal.plex_username = ?
+            AND pal.event_type IN ('media.stop', 'media.scrobble')
+            AND pal.tmdb_id IS NOT NULL
+        GROUP BY pal.media_type, pal.tmdb_id
+    ''', (plex_username,)).fetchall()
+
+    # Collect genres
+    genre_counts = {}
+
+    for media in watched_media:
+        genres = []
+
+        if media['media_type'] == 'episode' and media['tmdb_id']:
+            # For episodes, tmdb_id is the show's TMDB ID
+            show = db.execute('''
+                SELECT genres
+                FROM sonarr_shows
+                WHERE tmdb_id = ?
+            ''', (media['tmdb_id'],)).fetchone()
+
+            if show and show['genres']:
+                try:
+                    genres = json.loads(show['genres']) if isinstance(show['genres'], str) else show['genres']
+                except:
+                    pass
+
+        elif media['media_type'] == 'movie' and media['tmdb_id']:
+            # For movies, tmdb_id is the movie's TMDB ID
+            movie = db.execute('''
+                SELECT genres
+                FROM radarr_movies
+                WHERE tmdb_id = ?
+            ''', (media['tmdb_id'],)).fetchone()
+
+            if movie and movie['genres']:
+                try:
+                    genres = json.loads(movie['genres']) if isinstance(movie['genres'], str) else movie['genres']
+                except:
+                    pass
+
+        # Count genres
+        for genre in genres:
+            if genre:
+                genre_counts[genre] = genre_counts.get(genre, 0) + media['watch_count']
+
+    # Convert to list and sort by count
+    genre_list = [{'genre': genre, 'count': count} for genre, count in genre_counts.items()]
+    genre_list.sort(key=lambda x: x['count'], reverse=True)
+
+    return genre_list
+
+
+# ============================================================================
+# Watch Statistics API Endpoints
+# ============================================================================
+
+@main_bp.route('/api/profile/statistics/overview')
+@login_required
+def api_statistics_overview():
+    """Get overview statistics for the current user"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Get total watch time and counts (all time)
+    total_stats = db.execute('''
+        SELECT
+            COALESCE(SUM(total_watch_time_ms), 0) as total_watch_time_ms,
+            COALESCE(SUM(episode_count), 0) as total_episodes,
+            COALESCE(SUM(movie_count), 0) as total_movies
+        FROM user_watch_statistics
+        WHERE user_id = ?
+    ''', (user_id,)).fetchone()
+
+    # Get current streak
+    current_streak = _calculate_current_streak(user_id)
+
+    # Convert milliseconds to hours
+    total_hours = (total_stats['total_watch_time_ms'] or 0) / (1000 * 60 * 60)
+
+    return jsonify({
+        'success': True,
+        'total_watch_time_hours': round(total_hours, 1),
+        'total_episodes': total_stats['total_episodes'] or 0,
+        'total_movies': total_stats['total_movies'] or 0,
+        'current_streak_days': current_streak
+    })
+
+
+@main_bp.route('/api/profile/statistics/watch-time')
+@login_required
+def api_statistics_watch_time():
+    """Get daily watch time data for charts"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    # Get period parameter (default 30 days)
+    period = request.args.get('period', '30')
+    try:
+        days = int(period)
+        if days not in [30, 90, 365]:
+            days = 30
+    except:
+        days = 30
+
+    db = database.get_db()
+
+    # Get daily stats for the period
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=days - 1)
+
+    daily_stats = db.execute('''
+        SELECT
+            stat_date,
+            total_watch_time_ms,
+            episode_count,
+            movie_count
+        FROM user_watch_statistics
+        WHERE user_id = ?
+            AND stat_date >= ?
+            AND stat_date <= ?
+        ORDER BY stat_date ASC
+    ''', (user_id, start_date.isoformat(), end_date.isoformat())).fetchall()
+
+    # Fill in missing dates with zeros
+    data = []
+    current_date = start_date
+    stats_dict = {row['stat_date']: row for row in daily_stats}
+
+    while current_date <= end_date:
+        date_str = current_date.isoformat()
+        if date_str in stats_dict:
+            row = stats_dict[date_str]
+            watch_hours = (row['total_watch_time_ms'] or 0) / (1000 * 60 * 60)
+            data.append({
+                'date': date_str,
+                'watch_hours': round(watch_hours, 2),
+                'episode_count': row['episode_count'] or 0,
+                'movie_count': row['movie_count'] or 0
+            })
+        else:
+            data.append({
+                'date': date_str,
+                'watch_hours': 0,
+                'episode_count': 0,
+                'movie_count': 0
+            })
+
+        current_date += datetime.timedelta(days=1)
+
+    return jsonify({
+        'success': True,
+        'data': data
+    })
+
+
+@main_bp.route('/api/profile/statistics/genres')
+@login_required
+def api_statistics_genres():
+    """Get genre distribution for pie chart"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    genres = _get_genre_distribution(user_id)
+
+    return jsonify({
+        'success': True,
+        'genres': genres[:10]  # Limit to top 10 genres
+    })
+
+
+@main_bp.route('/api/profile/statistics/viewing-patterns')
+@login_required
+def api_statistics_viewing_patterns():
+    """Get viewing patterns by hour and day of week"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Get user's plex username
+    user = db.execute('SELECT plex_username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user or not user['plex_username']:
+        return jsonify({'success': True, 'patterns': []})
+
+    plex_username = user['plex_username']
+
+    # Get all watch events
+    events = db.execute('''
+        SELECT event_timestamp
+        FROM plex_activity_log
+        WHERE plex_username = ?
+            AND event_type IN ('media.stop', 'media.scrobble')
+    ''', (plex_username,)).fetchall()
+
+    # Count by hour and day of week
+    hour_counts = [0] * 24
+    day_counts = [0] * 7  # 0=Monday, 6=Sunday
+
+    for event in events:
+        try:
+            # Parse timestamp
+            if isinstance(event['event_timestamp'], str):
+                timestamp = datetime.datetime.fromisoformat(event['event_timestamp'].replace('Z', '+00:00'))
+            else:
+                timestamp = event['event_timestamp']
+
+            hour_counts[timestamp.hour] += 1
+            day_counts[timestamp.weekday()] += 1
+        except:
+            pass
+
+    return jsonify({
+        'success': True,
+        'by_hour': hour_counts,
+        'by_day': day_counts
+    })
+
+
+@main_bp.route('/api/profile/statistics/top-shows')
+@login_required
+def api_statistics_top_shows():
+    """Get top watched shows or movies"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    # Get parameters
+    media_type = request.args.get('type', 'show')
+    limit = request.args.get('limit', '10')
+
+    try:
+        limit = int(limit)
+        if limit > 50:
+            limit = 50
+    except:
+        limit = 10
+
+    db = database.get_db()
+
+    # Get user's plex username
+    user = db.execute('SELECT plex_username FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user or not user['plex_username']:
+        return jsonify({'success': True, 'items': []})
+
+    plex_username = user['plex_username']
+
+    if media_type == 'show':
+        # Get top shows
+        top_items = db.execute('''
+            SELECT
+                s.id,
+                s.title,
+                s.poster_path,
+                COUNT(*) as watch_count,
+                SUM(pal.duration_ms) as total_watch_time_ms
+            FROM plex_activity_log pal
+            JOIN sonarr_shows s ON pal.tmdb_id = s.tmdb_id
+            WHERE pal.plex_username = ?
+                AND pal.media_type = 'episode'
+                AND pal.event_type IN ('media.stop', 'media.scrobble')
+            GROUP BY s.id, s.title, s.poster_path
+            ORDER BY watch_count DESC
+            LIMIT ?
+        ''', (plex_username, limit)).fetchall()
+    else:
+        # Get top movies
+        top_items = db.execute('''
+            SELECT
+                m.id,
+                m.title,
+                m.poster_path,
+                COUNT(*) as watch_count,
+                SUM(pal.duration_ms) as total_watch_time_ms
+            FROM plex_activity_log pal
+            JOIN radarr_movies m ON pal.tmdb_id = m.tmdb_id
+            WHERE pal.plex_username = ?
+                AND pal.media_type = 'movie'
+                AND pal.event_type IN ('media.stop', 'media.scrobble')
+            GROUP BY m.id, m.title, m.poster_path
+            ORDER BY watch_count DESC
+            LIMIT ?
+        ''', (plex_username, limit)).fetchall()
+
+    # Format results
+    items = []
+    for item in top_items:
+        watch_hours = (item['total_watch_time_ms'] or 0) / (1000 * 60 * 60)
+        items.append({
+            'id': item['id'],
+            'title': item['title'],
+            'poster_path': item['poster_path'],
+            'watch_count': item['watch_count'],
+            'watch_hours': round(watch_hours, 1)
+        })
+
+    return jsonify({
+        'success': True,
+        'items': items
+    })
+
+
+@main_bp.route('/profile/statistics')
+@login_required
+def profile_statistics():
+    """Display user watch statistics and viewing trends"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your statistics.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Get basic counts for the tab navigation
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Count total active sessions across all users
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0] or 0
+
+    total_episodes = db.execute(
+        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
+    ).fetchone()[0] or 0
+
+    total_movies = db.execute(
+        'SELECT COUNT(*) FROM radarr_movies'
+    ).fetchone()[0] or 0
+
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    return render_template('profile_statistics.html',
+                         user=user,
+                         now_playing_count=now_playing_count,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='statistics')
+
+
+# ============================================================================
+# Custom Lists API Endpoints
+# ============================================================================
+
+@main_bp.route('/api/profile/lists', methods=['GET'])
+@login_required
+def api_get_lists():
+    """Get all lists for the current user"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    lists = db.execute('''
+        SELECT id, name, description, item_count, created_at, updated_at
+        FROM user_lists
+        WHERE user_id = ?
+        ORDER BY updated_at DESC
+    ''', (user_id,)).fetchall()
+
+    lists_data = []
+    for lst in lists:
+        lists_data.append({
+            'id': lst['id'],
+            'name': lst['name'],
+            'description': lst['description'],
+            'item_count': lst['item_count'] or 0,
+            'created_at': lst['created_at'],
+            'updated_at': lst['updated_at']
+        })
+
+    return jsonify({
+        'success': True,
+        'lists': lists_data
+    })
+
+
+@main_bp.route('/api/profile/lists', methods=['POST'])
+@login_required
+def api_create_list():
+    """Create a new list"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    description = data.get('description', '').strip()
+
+    if not name:
+        return jsonify({'success': False, 'error': 'List name is required'}), 400
+
+    db = database.get_db()
+
+    try:
+        cur = db.execute('''
+            INSERT INTO user_lists (user_id, name, description)
+            VALUES (?, ?, ?)
+        ''', (user_id, name, description))
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'list_id': cur.lastrowid
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error creating list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>', methods=['GET'])
+@login_required
+def api_get_list(list_id):
+    """Get a specific list with all its items"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Get list info and verify ownership
+    lst = db.execute('''
+        SELECT id, name, description, item_count, created_at, updated_at
+        FROM user_lists
+        WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    # Get list items with metadata
+    items = db.execute('''
+        SELECT
+            li.id,
+            li.media_type,
+            li.show_id,
+            li.movie_id,
+            li.notes,
+            li.added_at,
+            li.sort_order,
+            COALESCE(s.title, m.title) as title,
+            COALESCE(s.poster_path, m.poster_path) as poster_path,
+            COALESCE(s.tmdb_id, m.tmdb_id) as tmdb_id,
+            s.year as show_year,
+            m.year as movie_year
+        FROM user_list_items li
+        LEFT JOIN sonarr_shows s ON li.show_id = s.id AND li.media_type = 'show'
+        LEFT JOIN radarr_movies m ON li.movie_id = m.id AND li.media_type = 'movie'
+        WHERE li.list_id = ?
+        ORDER BY COALESCE(li.sort_order, li.id) ASC
+    ''', (list_id,)).fetchall()
+
+    items_data = []
+    for item in items:
+        items_data.append({
+            'id': item['id'],
+            'media_type': item['media_type'],
+            'show_id': item['show_id'],
+            'movie_id': item['movie_id'],
+            'title': item['title'],
+            'poster_path': item['poster_path'],
+            'tmdb_id': item['tmdb_id'],
+            'year': item['show_year'] or item['movie_year'],
+            'notes': item['notes'],
+            'added_at': item['added_at'],
+            'sort_order': item['sort_order']
+        })
+
+    return jsonify({
+        'success': True,
+        'list': {
+            'id': lst['id'],
+            'name': lst['name'],
+            'description': lst['description'],
+            'item_count': lst['item_count'] or 0,
+            'created_at': lst['created_at'],
+            'updated_at': lst['updated_at']
+        },
+        'items': items_data
+    })
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>', methods=['PATCH'])
+@login_required
+def api_update_list(list_id):
+    """Update list name/description"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify ownership
+    lst = db.execute('''
+        SELECT id FROM user_lists WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    description = data.get('description', '').strip()
+
+    if not name:
+        return jsonify({'success': False, 'error': 'List name is required'}), 400
+
+    try:
+        db.execute('''
+            UPDATE user_lists
+            SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (name, description, list_id))
+        db.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error updating list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>', methods=['DELETE'])
+@login_required
+def api_delete_list(list_id):
+    """Delete a list"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify ownership
+    lst = db.execute('''
+        SELECT id FROM user_lists WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    try:
+        db.execute('DELETE FROM user_lists WHERE id = ?', (list_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error deleting list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>/items', methods=['POST'])
+@login_required
+def api_add_list_item(list_id):
+    """Add an item to a list"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify ownership
+    lst = db.execute('''
+        SELECT id FROM user_lists WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    data = request.get_json()
+    media_type = data.get('media_type')
+    show_id = data.get('show_id')
+    movie_id = data.get('movie_id')
+    notes = data.get('notes', '').strip()
+
+    if media_type not in ['show', 'movie']:
+        return jsonify({'success': False, 'error': 'Invalid media type'}), 400
+
+    if media_type == 'show' and not show_id:
+        return jsonify({'success': False, 'error': 'show_id required for shows'}), 400
+
+    if media_type == 'movie' and not movie_id:
+        return jsonify({'success': False, 'error': 'movie_id required for movies'}), 400
+
+    try:
+        # Get the next sort order
+        max_sort = db.execute('''
+            SELECT MAX(sort_order) as max_sort FROM user_list_items WHERE list_id = ?
+        ''', (list_id,)).fetchone()
+
+        next_sort = (max_sort['max_sort'] or 0) + 1
+
+        db.execute('''
+            INSERT INTO user_list_items (list_id, media_type, show_id, movie_id, notes, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (list_id, media_type, show_id, movie_id, notes, next_sort))
+        db.commit()
+
+        return jsonify({'success': True})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'error': 'Item already in list'}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error adding item to list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>/items/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_remove_list_item(list_id, item_id):
+    """Remove an item from a list"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify list ownership
+    lst = db.execute('''
+        SELECT id FROM user_lists WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    try:
+        db.execute('''
+            DELETE FROM user_list_items
+            WHERE id = ? AND list_id = ?
+        ''', (item_id, list_id))
+        db.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error removing item from list: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/lists/<int:list_id>/items/<int:item_id>', methods=['PATCH'])
+@login_required
+def api_update_list_item(list_id, item_id):
+    """Update list item notes or order"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Verify list ownership
+    lst = db.execute('''
+        SELECT id FROM user_lists WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        return jsonify({'success': False, 'error': 'List not found'}), 404
+
+    data = request.get_json()
+    notes = data.get('notes')
+    sort_order = data.get('sort_order')
+
+    if notes is None and sort_order is None:
+        return jsonify({'success': False, 'error': 'No update data provided'}), 400
+
+    try:
+        if notes is not None and sort_order is not None:
+            db.execute('''
+                UPDATE user_list_items
+                SET notes = ?, sort_order = ?
+                WHERE id = ? AND list_id = ?
+            ''', (notes, sort_order, item_id, list_id))
+        elif notes is not None:
+            db.execute('''
+                UPDATE user_list_items
+                SET notes = ?
+                WHERE id = ? AND list_id = ?
+            ''', (notes, item_id, list_id))
+        elif sort_order is not None:
+            db.execute('''
+                UPDATE user_list_items
+                SET sort_order = ?
+                WHERE id = ? AND list_id = ?
+            ''', (sort_order, item_id, list_id))
+
+        db.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error updating list item: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/check-in-lists/<media_type>/<int:media_id>', methods=['GET'])
+@login_required
+def api_check_in_lists(media_type, media_id):
+    """Check which lists contain a specific item"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    if media_type not in ['show', 'movie']:
+        return jsonify({'success': False, 'error': 'Invalid media type'}), 400
+
+    db = database.get_db()
+
+    if media_type == 'show':
+        lists_with_item = db.execute('''
+            SELECT ul.id, ul.name
+            FROM user_lists ul
+            JOIN user_list_items uli ON ul.id = uli.list_id
+            WHERE ul.user_id = ?
+                AND uli.media_type = 'show'
+                AND uli.show_id = ?
+        ''', (user_id, media_id)).fetchall()
+    else:
+        lists_with_item = db.execute('''
+            SELECT ul.id, ul.name
+            FROM user_lists ul
+            JOIN user_list_items uli ON ul.id = uli.list_id
+            WHERE ul.user_id = ?
+                AND uli.media_type = 'movie'
+                AND uli.movie_id = ?
+        ''', (user_id, media_id)).fetchall()
+
+    lists_data = [{'id': lst['id'], 'name': lst['name']} for lst in lists_with_item]
+
+    return jsonify({
+        'success': True,
+        'lists': lists_data
+    })
+
+
+@main_bp.route('/profile/lists')
+@login_required
+def profile_lists():
+    """Display user's custom lists"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your lists.', 'error')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Count total active sessions
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0] or 0
+
+    total_episodes = db.execute(
+        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
+    ).fetchone()[0] or 0
+
+    total_movies = db.execute(
+        'SELECT COUNT(*) FROM radarr_movies'
+    ).fetchone()[0] or 0
+
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    return render_template('profile_lists.html',
+                         user=user,
+                         now_playing_count=now_playing_count,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='lists')
+
+
+@main_bp.route('/profile/lists/<int:list_id>')
+@login_required
+def profile_list_detail(list_id):
+    """Display a specific list with all its items"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view this list.', 'error')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Get list info and verify ownership
+    lst = db.execute('''
+        SELECT id, name, description, item_count, created_at, updated_at
+        FROM user_lists
+        WHERE id = ? AND user_id = ?
+    ''', (list_id, user_id)).fetchone()
+
+    if not lst:
+        flash('List not found.', 'error')
+        return redirect(url_for('main.profile_lists'))
+
+    # Count total active sessions
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0] or 0
+
+    total_episodes = db.execute(
+        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
+    ).fetchone()[0] or 0
+
+    total_movies = db.execute(
+        'SELECT COUNT(*) FROM radarr_movies'
+    ).fetchone()[0] or 0
+
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    return render_template('profile_list_detail.html',
+                         user=user,
+                         list=lst,
+                         now_playing_count=now_playing_count,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='lists')
+
+
+# ============================================================================
+# Watch Progress Helper Functions
+# ============================================================================
+
+def _calculate_show_completion(user_id, show_id):
+    """
+    Calculate and update show completion percentage.
+
+    Args:
+        user_id: User ID
+        show_id: Show ID (database ID, not TMDB)
+    """
+    db = database.get_db()
+
+    # Get total episodes for the show
+    total_episodes = db.execute('''
+        SELECT COUNT(*) FROM sonarr_episodes WHERE show_id = ?
+    ''', (show_id,)).fetchone()[0]
+
+    # Get watched episodes count
+    watched_count = db.execute('''
+        SELECT COUNT(*) FROM user_episode_progress
+        WHERE user_id = ? AND show_id = ? AND is_watched = 1
+    ''', (user_id, show_id)).fetchone()[0]
+
+    # Calculate percentage
+    percentage = (watched_count / total_episodes * 100) if total_episodes > 0 else 0
+
+    # Update show progress
+    db.execute('''
+        INSERT INTO user_show_progress (user_id, show_id, total_episodes, watched_episodes, completion_percentage)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (user_id, show_id) DO UPDATE SET
+            total_episodes = excluded.total_episodes,
+            watched_episodes = excluded.watched_episodes,
+            completion_percentage = excluded.completion_percentage,
+            updated_at = CURRENT_TIMESTAMP
+    ''', (user_id, show_id, total_episodes, watched_count, percentage))
+
+    db.commit()
+
+
+# ============================================================================
+# Watch Progress API Endpoints
+# ============================================================================
+
+@main_bp.route('/api/profile/progress/shows', methods=['GET'])
+@login_required
+def api_get_progress_shows():
+    """Get shows with progress filtered by status"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    status = request.args.get('status', 'watching')
+
+    db = database.get_db()
+
+    shows = db.execute('''
+        SELECT
+            usp.id,
+            usp.show_id,
+            usp.watched_episodes,
+            usp.total_episodes,
+            usp.completion_percentage,
+            usp.status,
+            usp.last_watched_at,
+            s.title,
+            s.poster_path,
+            s.tmdb_id,
+            s.year
+        FROM user_show_progress usp
+        JOIN sonarr_shows s ON usp.show_id = s.id
+        WHERE usp.user_id = ? AND usp.status = ?
+        ORDER BY usp.last_watched_at DESC
+    ''', (user_id, status)).fetchall()
+
+    shows_data = []
+    for show in shows:
+        shows_data.append({
+            'id': show['id'],
+            'show_id': show['show_id'],
+            'title': show['title'],
+            'poster_path': show['poster_path'],
+            'tmdb_id': show['tmdb_id'],
+            'year': show['year'],
+            'watched_episodes': show['watched_episodes'] or 0,
+            'total_episodes': show['total_episodes'] or 0,
+            'completion_percentage': round(show['completion_percentage'] or 0, 1),
+            'status': show['status'],
+            'last_watched_at': show['last_watched_at']
+        })
+
+    return jsonify({
+        'success': True,
+        'shows': shows_data
+    })
+
+
+@main_bp.route('/api/profile/progress/show/<int:show_id>', methods=['GET'])
+@login_required
+def api_get_show_progress(show_id):
+    """Get detailed progress for a specific show"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    # Get show info
+    show = db.execute('SELECT * FROM sonarr_shows WHERE id = ?', (show_id,)).fetchone()
+    if not show:
+        return jsonify({'success': False, 'error': 'Show not found'}), 404
+
+    # Get episode progress
+    episodes = db.execute('''
+        SELECT
+            e.id,
+            e.season_number,
+            e.episode_number,
+            e.title,
+            e.air_date,
+            COALESCE(uep.is_watched, 0) as is_watched,
+            uep.watch_count,
+            uep.last_watched_at
+        FROM sonarr_episodes e
+        LEFT JOIN user_episode_progress uep ON e.id = uep.episode_id AND uep.user_id = ?
+        WHERE e.show_id = ?
+        ORDER BY e.season_number ASC, e.episode_number ASC
+    ''', (user_id, show_id)).fetchall()
+
+    episodes_data = []
+    for ep in episodes:
+        episodes_data.append({
+            'id': ep['id'],
+            'season_number': ep['season_number'],
+            'episode_number': ep['episode_number'],
+            'title': ep['title'],
+            'air_date': ep['air_date'],
+            'is_watched': bool(ep['is_watched']),
+            'watch_count': ep['watch_count'] or 0,
+            'last_watched_at': ep['last_watched_at']
+        })
+
+    return jsonify({
+        'success': True,
+        'episodes': episodes_data
+    })
+
+
+@main_bp.route('/api/profile/progress/episode/<int:episode_id>/toggle', methods=['POST'])
+@login_required
+def api_toggle_episode_watched(episode_id):
+    """Toggle episode watched status"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    data = request.get_json() or {}
+    is_watched = data.get('is_watched', True)
+
+    db = database.get_db()
+
+    # Get episode info
+    episode = db.execute('''
+        SELECT id, show_id, season_number, episode_number
+        FROM sonarr_episodes
+        WHERE id = ?
+    ''', (episode_id,)).fetchone()
+
+    if not episode:
+        return jsonify({'success': False, 'error': 'Episode not found'}), 404
+
+    try:
+        # Insert or update episode progress
+        db.execute('''
+            INSERT INTO user_episode_progress
+            (user_id, show_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, episode_id) DO UPDATE SET
+                is_watched = excluded.is_watched,
+                marked_manually = 1,
+                last_watched_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, episode['show_id'], episode_id, episode['season_number'], episode['episode_number'], is_watched))
+
+        db.commit()
+
+        # Recalculate show completion
+        _calculate_show_completion(user_id, episode['show_id'])
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error toggling episode watched: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/progress/show/<int:show_id>/status', methods=['PATCH'])
+@login_required
+def api_update_show_status(show_id):
+    """Update show status (watching, completed, dropped, plan_to_watch)"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    data = request.get_json()
+    status = data.get('status')
+
+    if status not in ['watching', 'completed', 'dropped', 'plan_to_watch']:
+        return jsonify({'success': False, 'error': 'Invalid status'}), 400
+
+    db = database.get_db()
+
+    try:
+        # Ensure show progress record exists
+        db.execute('''
+            INSERT INTO user_show_progress (user_id, show_id, status)
+            VALUES (?, ?, ?)
+            ON CONFLICT (user_id, show_id) DO UPDATE SET
+                status = excluded.status,
+                updated_at = CURRENT_TIMESTAMP
+        ''', (user_id, show_id, status))
+
+        db.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error updating show status: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/profile/progress/season/<int:show_id>/<int:season_number>/mark-all', methods=['POST'])
+@login_required
+def api_mark_season_watched(show_id, season_number):
+    """Mark all episodes in a season as watched or unwatched"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    data = request.get_json() or {}
+    is_watched = data.get('is_watched', True)
+
+    db = database.get_db()
+
+    try:
+        # Get all episodes in the season
+        episodes = db.execute('''
+            SELECT id, season_number, episode_number
+            FROM sonarr_episodes
+            WHERE show_id = ? AND season_number = ?
+        ''', (show_id, season_number)).fetchall()
+
+        if not episodes:
+            return jsonify({'success': False, 'error': 'No episodes found'}), 404
+
+        # Mark each episode
+        for episode in episodes:
+            db.execute('''
+                INSERT INTO user_episode_progress
+                (user_id, show_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id, episode_id) DO UPDATE SET
+                    is_watched = excluded.is_watched,
+                    marked_manually = 1,
+                    last_watched_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (user_id, show_id, episode['id'], episode['season_number'], episode['episode_number'], is_watched))
+
+        db.commit()
+
+        # Recalculate show completion
+        _calculate_show_completion(user_id, show_id)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Error marking season: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/profile/progress')
+@login_required
+def profile_progress():
+    """Display user's watch progress"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your progress.', 'error')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Count total active sessions
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0] or 0
+
+    total_episodes = db.execute(
+        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
+    ).fetchone()[0] or 0
+
+    total_movies = db.execute(
+        'SELECT COUNT(*) FROM radarr_movies'
+    ).fetchone()[0] or 0
+
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    return render_template('profile_progress.html',
+                         user=user,
+                         now_playing_count=now_playing_count,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='progress')

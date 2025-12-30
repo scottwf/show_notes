@@ -28,8 +28,8 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (service === 'ollama') {
           url = document.getElementById('ollama_url').value;
         } else if (service === 'pushover') {
-          key = document.getElementById('pushover_api_token').value;
-          url = document.getElementById('pushover_user_key').value;
+          key = document.getElementById('pushover_token').value;
+          url = document.getElementById('pushover_key').value;
         }
         // POST to a dedicated test endpoint for each service
         const resp = await fetch(`/onboarding/test-service`, {

@@ -1562,14 +1562,15 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
 
 def test_tautulli_connection():
     """Tests the connection to the configured Tautulli service."""
-    # Tautulli's get_history endpoint with a limit of 1 is a good way to test.
-    # It requires the API key.
-    return _test_service_connection(
-        "Tautulli",
-        'tautulli_url',
-        'tautulli_api_key',
-        endpoint='/api/v2?cmd=get_history&length=1'
-    )
+    # Get settings from database
+    tautulli_url = database.get_setting('tautulli_url')
+    tautulli_api_key = database.get_setting('tautulli_api_key')
+
+    if not tautulli_url:
+        return False, "Tautulli URL not configured."
+
+    # Use the _with_params version which correctly handles Tautulli API key as a query parameter
+    return test_tautulli_connection_with_params(tautulli_url, tautulli_api_key)
 
 def test_tautulli_connection_with_params(url, api_key):
     """
@@ -1582,11 +1583,17 @@ def test_tautulli_connection_with_params(url, api_key):
     Returns:
         tuple: (bool, str) indicating success and a result message.
     """
+    # Tautulli expects API key as a query parameter, not a header
+    params = {'apikey': api_key} if api_key else {}
+    params['cmd'] = 'get_history'
+    params['length'] = '1'
+
     return _test_service_connection_with_params(
         "Tautulli",
         url,
-        api_key,
-        endpoint='/api/v2?cmd=get_history&length=1'
+        api_key=None,  # Don't pass api_key since Tautulli doesn't use headers
+        endpoint='/api/v2',
+        params=params
     )
 
 def parse_llm_markdown_sections(md):

@@ -182,7 +182,7 @@
                     <p class="text-xs text-slate-500 dark:text-slate-400">
                         <span class="font-medium">Last Updated:</span> 
                         <span class="text-green-600 dark:text-green-400">
-                            {{ radarr_last_webhook.received_at.strftime('%Y-%m-%d %H:%M') if radarr_last_webhook and radarr_last_webhook.received_at else 'Unknown' }}
+                            {{ radarr_last_webhook.received_at | format_datetime('%Y-%m-%d %H:%M') if radarr_last_webhook and radarr_last_webhook.received_at else 'Unknown' }}
                         </span>
                     </p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -221,7 +221,7 @@
                     <p class="text-xs text-slate-500 dark:text-slate-400">
                         <span class="font-medium">Last Updated:</span> 
                         <span class="text-green-600 dark:text-green-400">
-                            {{ sonarr_last_webhook.received_at.strftime('%Y-%m-%d %H:%M') if sonarr_last_webhook and sonarr_last_webhook.received_at else 'Unknown' }}
+                            {{ sonarr_last_webhook.received_at | format_datetime('%Y-%m-%d %H:%M') if sonarr_last_webhook and sonarr_last_webhook.received_at else 'Unknown' }}
                         </span>
                     </p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">

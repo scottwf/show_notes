@@ -50,6 +50,38 @@
                                 </path>
                             </svg>
                         </button>
+
+                        <!-- Add to List Button -->
+                        <div class="relative">
+                            <button id="add-to-list-btn" onclick="toggleListDropdown()"
+                                class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                                title="Add to list">
+                                <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-sky-500" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                                    </path>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Menu -->
+                            <div id="list-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50">
+                                <div class="p-3 border-b border-slate-200 dark:border-slate-700">
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Add to List</h3>
+                                </div>
+                                <div id="lists-container" class="max-h-64 overflow-y-auto">
+                                    <!-- Lists will be loaded here -->
+                                    <div class="p-4 text-center text-sm text-slate-500">
+                                        Loading lists...
+                                    </div>
+                                </div>
+                                <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+                                    <button onclick="createNewList()" class="w-full px-3 py-2 text-sm bg-sky-500 hover:bg-sky-600 text-white rounded transition-colors">
+                                        Create New List
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                         {% endif %}
                     </div>
 
@@ -273,43 +305,67 @@
             <details class="mb-3 border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden group" {% if
                 loop.first %}open{% endif %}>
                 <summary
-                    class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600">
-                    Season {{ season.season_number }}
-                    <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
-                        ({{ season.episodes | length }} episode{{ 's' if (season.episodes | length) != 1 else '' }})
-                    </span>
+                    class="p-3 cursor-pointer font-semibold text-lg bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-600/60 transition-colors duration-150 ease-in-out group-open:border-b group-open:border-gray-300 dark:group-open:border-gray-600 flex justify-between items-center">
+                    <div>
+                        Season {{ season.season_number }}
+                        <span class="text-sm font-normal text-gray-600 dark:text-gray-400">
+                            ({{ season.episodes | length }} episode{{ 's' if (season.episodes | length) != 1 else '' }})
+                        </span>
+                    </div>
+                    <div class="flex gap-2" onclick="event.stopPropagation()">
+                        <button onclick="markSeasonWatched({{ show.id }}, {{ season.season_number }}, true)"
+                                class="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
+                                title="Mark all episodes watched">
+                            Mark Watched
+                        </button>
+                        <button onclick="markSeasonWatched({{ show.id }}, {{ season.season_number }}, false)"
+                                class="px-3 py-1 text-xs bg-slate-500 hover:bg-slate-600 text-white rounded transition-colors"
+                                title="Mark all episodes unwatched">
+                            Mark Unwatched
+                        </button>
+                    </div>
                 </summary>
                 <div class="p-3 bg-gray-50 dark:bg-gray-800/50">
                     <ul class="space-y-3">
                         {% for episode in season.episodes %}
                         <li class="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h4 class="font-medium text-gray-800 dark:text-gray-100">
-                                        <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}"
-                                            class="hover:underline">
-                                            {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
-                                        </a>
-                                    </h4>
-                                    {% if episode.overview %}
-                                    <p
-                                        class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
-                                        {{ episode.overview }}
-                                    </p>
+                            <div class="flex items-start gap-3">
+                                <!-- Watch checkbox -->
+                                <input type="checkbox"
+                                       class="mt-1.5 w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-sky-600 focus:ring-sky-500 focus:ring-offset-0 cursor-pointer"
+                                       data-episode-id="{{ episode.id }}"
+                                       onchange="toggleEpisodeWatched({{ episode.id }}, this.checked)">
+
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h4 class="font-medium text-gray-800 dark:text-gray-100">
+                                                <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}"
+                                                    class="hover:underline">
+                                                    {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
+                                                </a>
+                                            </h4>
+                                            {% if episode.overview %}
+                                            <p
+                                                class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
+                                                {{ episode.overview }}
+                                            </p>
+                                            {% endif %}
+                                        </div>
+                                        {% if episode.air_date_utc %}
+                                        <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
+                                            {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% if episode.has_file %}
+                                    <span
+                                        class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
+                                        Available
+                                    </span>
                                     {% endif %}
                                 </div>
-                                {% if episode.air_date_utc %}
-                                <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
-                                    {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
-                                </span>
-                                {% endif %}
                             </div>
-                            {% if episode.has_file %}
-                            <span
-                                class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-                                Available
-                            </span>
-                            {% endif %}
                         </li>
                         {% else %}
                         <li class="text-gray-500 dark:text-gray-400">No episodes listed for this season.</li>
@@ -428,8 +484,255 @@
         }
     }
 
-    // Check favorite status on page load 
-    document.addEventListener('DOMContentLoaded', checkFavoriteStatus);
+    // Watch progress functionality
+    async function loadEpisodeProgress() {
+        const showId = {{ show.id }};
+
+        try {
+            const response = await fetch(`/api/profile/progress/show/${showId}`);
+            const data = await response.json();
+
+            if (data.success && data.episodes) {
+                // Update all episode checkboxes based on watched status
+                data.episodes.forEach(ep => {
+                    const checkbox = document.querySelector(`input[data-episode-id="${ep.episode_id}"]`);
+                    if (checkbox) {
+                        checkbox.checked = ep.is_watched;
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error loading episode progress:', error);
+        }
+    }
+
+    async function toggleEpisodeWatched(episodeId, isWatched) {
+        try {
+            const response = await fetch(`/api/profile/progress/episode/${episodeId}/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ is_watched: isWatched })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                alert('Failed to update episode: ' + (data.error || 'Unknown error'));
+                // Revert checkbox state on error
+                const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
+                if (checkbox) {
+                    checkbox.checked = !isWatched;
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling episode:', error);
+            alert('Failed to update episode. Please try again.');
+            // Revert checkbox state on error
+            const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
+            if (checkbox) {
+                checkbox.checked = !isWatched;
+            }
+        }
+    }
+
+    async function markSeasonWatched(showId, seasonNumber, isWatched) {
+        try {
+            const response = await fetch(`/api/profile/progress/season/${showId}/${seasonNumber}/mark-all`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ is_watched: isWatched })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Update all checkboxes for this season
+                const seasonEpisodes = document.querySelectorAll(`input[data-episode-id]`);
+                seasonEpisodes.forEach(checkbox => {
+                    // We need to check if this checkbox belongs to the current season
+                    // This is a simple approach - in production you might want to add data-season-number to checkboxes
+                    const episodeDiv = checkbox.closest('details');
+                    if (episodeDiv) {
+                        const summaryText = episodeDiv.querySelector('summary')?.textContent || '';
+                        if (summaryText.includes(`Season ${seasonNumber}`)) {
+                            checkbox.checked = isWatched;
+                        }
+                    }
+                });
+            } else {
+                alert('Failed to update season: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error marking season:', error);
+            alert('Failed to update season. Please try again.');
+        }
+    }
+
+    // Add to List functionality
+    let userLists = [];
+    const showId = {{ show.id }};
+
+    async function loadUserLists() {
+        try {
+            const response = await fetch('/api/profile/lists');
+            const data = await response.json();
+
+            if (data.success && data.lists) {
+                userLists = data.lists;
+                await checkListStatus();
+            }
+        } catch (error) {
+            console.error('Error loading lists:', error);
+        }
+    }
+
+    async function checkListStatus() {
+        try {
+            const response = await fetch(`/api/profile/check-in-lists/show/${showId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                renderListsDropdown(data.list_ids || []);
+            }
+        } catch (error) {
+            console.error('Error checking list status:', error);
+            renderListsDropdown([]);
+        }
+    }
+
+    function renderListsDropdown(activeListIds) {
+        const container = document.getElementById('lists-container');
+
+        if (userLists.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-sm text-slate-500">
+                    No lists yet. Create one below!
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = userLists.map(list => {
+            const isInList = activeListIds.includes(list.id);
+            return `
+                <button onclick="toggleListItem(${list.id}, ${isInList})"
+                        class="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center justify-between border-b border-slate-100 dark:border-slate-700 last:border-0">
+                    <div>
+                        <div class="text-sm font-medium text-slate-800 dark:text-slate-100">${list.name}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">${list.item_count} item${list.item_count !== 1 ? 's' : ''}</div>
+                    </div>
+                    ${isInList ? `
+                        <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    ` : ''}
+                </button>
+            `;
+        }).join('');
+    }
+
+    async function toggleListItem(listId, isInList) {
+        try {
+            if (isInList) {
+                // Remove from list - we need to find the item ID first
+                const list = await fetch(`/api/profile/lists/${listId}`);
+                const listData = await list.json();
+
+                if (listData.success && listData.items) {
+                    const item = listData.items.find(i => i.show_id === showId);
+                    if (item) {
+                        const response = await fetch(`/api/profile/lists/${listId}/items/${item.id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            await loadUserLists(); // Reload to update counts
+                        } else {
+                            alert('Failed to remove from list: ' + (data.error || 'Unknown error'));
+                        }
+                    }
+                }
+            } else {
+                // Add to list
+                const response = await fetch(`/api/profile/lists/${listId}/items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        media_type: 'show',
+                        show_id: showId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadUserLists(); // Reload to update counts
+                } else {
+                    alert('Failed to add to list: ' + (data.error || 'Unknown error'));
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling list item:', error);
+            alert('Failed to update list. Please try again.');
+        }
+    }
+
+    function toggleListDropdown() {
+        const dropdown = document.getElementById('list-dropdown');
+        dropdown.classList.toggle('hidden');
+    }
+
+    function createNewList() {
+        const listName = prompt('Enter list name:');
+        if (!listName) return;
+
+        fetch('/api/profile/lists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: listName,
+                description: ''
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadUserLists();
+            } else {
+                alert('Failed to create list: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error creating list:', error);
+            alert('Failed to create list. Please try again.');
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        const dropdown = document.getElementById('list-dropdown');
+        const btn = document.getElementById('add-to-list-btn');
+
+        if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    // Check favorite status and load episode progress on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        checkFavoriteStatus();
+        loadEpisodeProgress();
+        loadUserLists();
+    });
 </script>
 
 {% endblock %}

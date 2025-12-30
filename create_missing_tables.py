@@ -21,6 +21,22 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
+    # Ensure users table has local authentication columns
+    print("▶️  Checking users table...")
+    cur.execute("PRAGMA table_info(users)")
+    existing_cols = [row[1] for row in cur.fetchall()]
+
+    if 'username' not in existing_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        print("   ✓ Added username column to users table")
+
+    if 'password_hash' not in existing_cols:
+        cur.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+        print("   ✓ Added password_hash column to users table")
+
+    if 'username' in existing_cols and 'password_hash' in existing_cols:
+        print("   ✓ Users table already has authentication columns")
+
     # Create sonarr_shows
     print("▶️  Creating sonarr_shows...")
     cur.execute("""
@@ -113,7 +129,8 @@ def main():
             rating_type TEXT,
             genres TEXT,
             certification TEXT,
-            runtime INTEGER
+            runtime INTEGER,
+            release_date TEXT
         )
     """)
 
@@ -160,6 +177,59 @@ def main():
         )
     """)
 
+    # Create user_favorites
+    print("▶️  Creating user_favorites...")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            show_id INTEGER NOT NULL,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            is_dropped BOOLEAN DEFAULT 0,
+            dropped_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            UNIQUE (user_id, show_id)
+        )
+    """)
+
+    # Create user_preferences
+    print("▶️  Creating user_preferences...")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id INTEGER PRIMARY KEY,
+            default_view TEXT DEFAULT 'grid',
+            episodes_per_page INTEGER DEFAULT 20,
+            spoiler_protection TEXT DEFAULT 'partial',
+            notification_digest TEXT DEFAULT 'immediate',
+            quiet_hours_start TEXT,
+            quiet_hours_end TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+
+    # Create user_notifications
+    print("▶️  Creating user_notifications...")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            show_id INTEGER NOT NULL,
+            notification_type VARCHAR(50) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            episode_id INTEGER,
+            season_number INTEGER,
+            episode_number INTEGER,
+            is_read BOOLEAN DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            read_at DATETIME,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            FOREIGN KEY (show_id) REFERENCES sonarr_shows (id) ON DELETE CASCADE
+        )
+    """)
+
     # Create indexes
     print("▶️  Creating indexes...")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id)")
@@ -170,6 +240,12 @@ def main():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_subtitles_show_tmdb_id ON subtitles (show_tmdb_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_subtitles_season_episode ON subtitles (show_tmdb_id, season_number, episode_number)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_subtitles_line_search ON subtitles (search_blob)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id ON user_favorites (user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_favorites_show_id ON user_favorites (show_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON user_notifications (user_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_notifications_show_id ON user_notifications (show_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_notifications_is_read ON user_notifications (is_read)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_user_notifications_created_at ON user_notifications (created_at DESC)")
 
     conn.commit()
     conn.close()
@@ -184,6 +260,9 @@ def main():
     print("  • radarr_movies")
     print("  • plex_activity_log")
     print("  • subtitles")
+    print("  • user_favorites")
+    print("  • user_preferences")
+    print("  • user_notifications")
     print("\n✨ Your database is now ready for onboarding!\n")
 
 if __name__ == '__main__':

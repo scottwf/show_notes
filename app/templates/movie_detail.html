@@ -25,7 +25,43 @@
 
                 <!-- Title, Year, Overview -->
                 <div class="text-center md:text-left relative z-10 flex-grow">
-                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-2 tracking-tight">{{ movie.title }}</h1>
+                    <div class="flex flex-wrap items-center gap-3 mb-2 justify-center md:justify-start">
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight tracking-tight">{{ movie.title }}</h1>
+
+                        <!-- Add to List Button -->
+                        {% if session.user_id %}
+                        <div class="relative">
+                            <button id="add-to-list-btn" onclick="toggleListDropdown()"
+                                class="flex-shrink-0 p-3 rounded-full bg-slate-100/20 dark:bg-slate-700/50 hover:bg-slate-200/30 dark:hover:bg-slate-600/70 transition-colors shadow-md hover:shadow-lg"
+                                title="Add to list">
+                                <svg class="w-8 h-8 text-white hover:text-sky-400" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                                    </path>
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Menu -->
+                            <div id="list-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50">
+                                <div class="p-3 border-b border-slate-200 dark:border-slate-700">
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Add to List</h3>
+                                </div>
+                                <div id="lists-container" class="max-h-64 overflow-y-auto">
+                                    <!-- Lists will be loaded here -->
+                                    <div class="p-4 text-center text-sm text-slate-500">
+                                        Loading lists...
+                                    </div>
+                                </div>
+                                <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+                                    <button onclick="createNewList()" class="w-full px-3 py-2 text-sm bg-sky-500 hover:bg-sky-600 text-white rounded transition-colors">
+                                        Create New List
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
                     {% if movie.year %}
                     <p class="text-xl sm:text-2xl text-gray-300 mb-6 font-light">{{ movie.year }}</p>
                     {% endif %}
@@ -200,4 +236,166 @@
     </div>
 
 </div>
+
+<script>
+    // Add to List functionality
+    let userLists = [];
+    const movieId = {{ movie.id }};
+
+    async function loadUserLists() {
+        try {
+            const response = await fetch('/api/profile/lists');
+            const data = await response.json();
+
+            if (data.success && data.lists) {
+                userLists = data.lists;
+                await checkListStatus();
+            }
+        } catch (error) {
+            console.error('Error loading lists:', error);
+        }
+    }
+
+    async function checkListStatus() {
+        try {
+            const response = await fetch(`/api/profile/check-in-lists/movie/${movieId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                renderListsDropdown(data.list_ids || []);
+            }
+        } catch (error) {
+            console.error('Error checking list status:', error);
+            renderListsDropdown([]);
+        }
+    }
+
+    function renderListsDropdown(activeListIds) {
+        const container = document.getElementById('lists-container');
+
+        if (userLists.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-sm text-slate-500">
+                    No lists yet. Create one below!
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = userLists.map(list => {
+            const isInList = activeListIds.includes(list.id);
+            return `
+                <button onclick="toggleListItem(${list.id}, ${isInList})"
+                        class="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center justify-between border-b border-slate-100 dark:border-slate-700 last:border-0">
+                    <div>
+                        <div class="text-sm font-medium text-slate-800 dark:text-slate-100">${list.name}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">${list.item_count} item${list.item_count !== 1 ? 's' : ''}</div>
+                    </div>
+                    ${isInList ? `
+                        <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    ` : ''}
+                </button>
+            `;
+        }).join('');
+    }
+
+    async function toggleListItem(listId, isInList) {
+        try {
+            if (isInList) {
+                // Remove from list - we need to find the item ID first
+                const list = await fetch(`/api/profile/lists/${listId}`);
+                const listData = await list.json();
+
+                if (listData.success && listData.items) {
+                    const item = listData.items.find(i => i.movie_id === movieId);
+                    if (item) {
+                        const response = await fetch(`/api/profile/lists/${listId}/items/${item.id}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            await loadUserLists(); // Reload to update counts
+                        } else {
+                            alert('Failed to remove from list: ' + (data.error || 'Unknown error'));
+                        }
+                    }
+                }
+            } else {
+                // Add to list
+                const response = await fetch(`/api/profile/lists/${listId}/items`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        media_type: 'movie',
+                        movie_id: movieId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadUserLists(); // Reload to update counts
+                } else {
+                    alert('Failed to add to list: ' + (data.error || 'Unknown error'));
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling list item:', error);
+            alert('Failed to update list. Please try again.');
+        }
+    }
+
+    function toggleListDropdown() {
+        const dropdown = document.getElementById('list-dropdown');
+        dropdown.classList.toggle('hidden');
+    }
+
+    function createNewList() {
+        const listName = prompt('Enter list name:');
+        if (!listName) return;
+
+        fetch('/api/profile/lists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: listName,
+                description: ''
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadUserLists();
+            } else {
+                alert('Failed to create list: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error creating list:', error);
+            alert('Failed to create list. Please try again.');
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        const dropdown = document.getElementById('list-dropdown');
+        const btn = document.getElementById('add-to-list-btn');
+
+        if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    // Load lists on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadUserLists();
+    });
+</script>
 {% endblock %}
