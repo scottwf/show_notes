@@ -2073,24 +2073,8 @@ def profile_history():
         current_plex_event = _get_plex_event_details(current_event_row, db)
         current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
 
-    # Count total active sessions across all users
-    # Get the latest event for each session_key and count those that are in active state
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT 
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*) 
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0]
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     # Get watch history (recent 50 unique items)
     # Group by unique episode/movie to show only one entry per item
@@ -2166,43 +2150,12 @@ def profile_history():
         # JavaScript will handle displaying in user's local timezone
         
         enriched_history.append(item_dict)
-    
-    # Get watch statistics
-    total_episodes = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'episode'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-    
-    total_movies = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'movie'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-    
-    # Get favorite count
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0]
-
-    # Get unread notification count
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0]
 
     return render_template('profile_history.html',
                          user=user,
                          current_plex_event=current_plex_event,
                          watch_history=enriched_history,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
-                         now_playing_count=now_playing_count,
+                         **stats,
                          active_tab='history')
 
 
