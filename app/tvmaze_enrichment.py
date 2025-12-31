@@ -84,12 +84,14 @@ class TVMazeEnrichmentService:
 
         network = tvmaze_data.get('network', {})
         network_name = network.get('name') if network else None
-        network_country = network.get('country', {}).get('code') if network else None
+        country = network.get('country') if network else None
+        network_country = country.get('code') if country else None
 
         if not network_name:
             web_channel = tvmaze_data.get('webChannel', {})
             network_name = web_channel.get('name') if web_channel else None
-            network_country = web_channel.get('country', {}).get('code') if web_channel else None
+            country = web_channel.get('country') if web_channel else None
+            network_country = country.get('code') if country else None
 
         genres = tvmaze_data.get('genres', [])
         genres_json = json.dumps(genres) if genres else None
@@ -99,7 +101,7 @@ class TVMazeEnrichmentService:
 
         return {
             'premiered': tvmaze_data.get('premiered'),
-            'end_date': tvmaze_data.get('ended'),
+            'ended': tvmaze_data.get('ended'),
             'tvmaze_summary': summary,
             'genres': genres_json,
             'network_name': network_name,
@@ -112,13 +114,13 @@ class TVMazeEnrichmentService:
         """Update sonarr_shows with TVMaze metadata"""
         db.execute("""
             UPDATE sonarr_shows
-            SET tvmaze_id = ?, premiered = ?, end_date = ?,
+            SET tvmaze_id = ?, premiered = ?, ended = ?,
                 tvmaze_summary = ?, genres = ?, network_name = ?,
                 network_country = ?, runtime = ?, tvmaze_rating = ?,
                 tvmaze_enriched_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (
-            tvmaze_id, metadata.get('premiered'), metadata.get('end_date'),
+            tvmaze_id, metadata.get('premiered'), metadata.get('ended'),
             metadata.get('tvmaze_summary'), metadata.get('genres'),
             metadata.get('network_name'), metadata.get('network_country'),
             metadata.get('runtime'), metadata.get('tvmaze_rating'),

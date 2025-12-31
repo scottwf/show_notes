@@ -397,6 +397,42 @@
     </div>
   </details>
 
+  <!-- Jellyseerr -->
+  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
+    <summary class="flex items-center gap-x-3 cursor-pointer">
+      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12">
+        <svg class="w-full h-full text-purple-500 dark:text-purple-400" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+        </svg>
+      </span>
+      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">Jellyseerr</span>
+    </summary>
+    <div class="mt-4">
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Jellyseerr (or Overseerr) allows users to request new content for your media library.</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="jellyseer_url">
+            URL
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(e.g., http://localhost:5055)</span>
+          </label>
+          <input type="text" id="jellyseer_url" name="jellyseer_url" value="{{ settings.jellyseer_url or '' }}"
+            placeholder="http://localhost:5055"
+            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This URL will be used for "Request on Jellyseerr" links on show and movie detail pages</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="jellyseer_api_key">
+            API Key
+            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for season request integration)</span>
+          </label>
+          <input type="text" id="jellyseer_api_key" name="jellyseer_api_key" value="{{ settings.jellyseer_api_key or '' }}"
+            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Required for "Request Season" buttons. Find this in Jellyseerr Settings → General</p>
+        </div>
+      </div>
+    </div>
+  </details>
+
   <!-- TheTVDB -->
   <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
     <summary class="flex items-center gap-x-3 cursor-pointer">

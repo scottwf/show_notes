@@ -82,6 +82,44 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Report Problem Button -->
+                        <button onclick="openReportModal()"
+                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                            title="Report a problem">
+                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-red-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9">
+                                </path>
+                            </svg>
+                        </button>
+
+                        <!-- Recommend Button -->
+                        <button onclick="openRecommendModal()"
+                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                            title="Recommend to others">
+                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-green-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5">
+                                </path>
+                            </svg>
+                        </button>
+
+                        <!-- Request on Jellyseerr Button -->
+                        {% if jellyseer_url and show.tmdb_id %}
+                        <a href="{{ jellyseer_url }}/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer"
+                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                            title="Request on Jellyseerr">
+                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-purple-500" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M12 4v16m8-8H4">
+                                </path>
+                            </svg>
+                        </a>
+                        {% endif %}
                         {% endif %}
                     </div>
 
@@ -323,6 +361,13 @@
                                 title="Mark all episodes unwatched">
                             Mark Unwatched
                         </button>
+                        {% if jellyseer_url and show.tmdb_id %}
+                        <button onclick="requestSeason({{ show.tmdb_id }}, {{ season.season_number }})"
+                                class="px-3 py-1 text-xs bg-purple-500 hover:bg-purple-600 text-white rounded transition-colors"
+                                title="Request this season on Jellyseerr">
+                            Request Season
+                        </button>
+                        {% endif %}
                     </div>
                 </summary>
                 <div class="p-3 bg-gray-50 dark:bg-gray-800/50">
@@ -352,11 +397,22 @@
                                             </p>
                                             {% endif %}
                                         </div>
-                                        {% if episode.air_date_utc %}
-                                        <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pl-4 pt-1">
-                                            {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
-                                        </span>
-                                        {% endif %}
+                                        <div class="flex items-center gap-2 pl-4">
+                                            {% if episode.air_date_utc %}
+                                            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pt-1">
+                                                {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
+                                            </span>
+                                            {% endif %}
+                                            {% if session.user_id %}
+                                            <a href="{{ url_for('main.report_issue', media_type='episode', media_id=episode.id, show_id=show.id, title=show.title + ' - S' + '%02d'|format(season.season_number) + 'E' + '%02d'|format(episode.episode_number) + ': ' + (episode.title or 'TBA')) }}"
+                                               class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                               title="Report issue with this episode">
+                                                <svg class="w-4 h-4 text-slate-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path>
+                                                </svg>
+                                            </a>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                     {% if episode.has_file %}
                                     <span
@@ -413,6 +469,109 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Report Problem Modal -->
+<div id="report-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Report a Problem</h3>
+                <button onclick="closeReportModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="report-form" action="{{ url_for('main.report_issue', media_type='show', media_id=show.id) }}" method="POST">
+                <input type="hidden" name="show_id" value="{{ show.id }}">
+                <input type="hidden" name="title" value="{{ show.title }}">
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        What's the problem?
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="issue_type" value="missing_metadata" class="mr-2">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Missing or incorrect information</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="issue_type" value="wrong_poster" class="mr-2">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Wrong poster or artwork</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="issue_type" value="playback_issue" class="mr-2">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Playback issue</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="issue_type" value="other" class="mr-2">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Other</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="report-comment" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Additional details (optional)
+                    </label>
+                    <textarea id="report-comment" name="comment" rows="4"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="Please provide any additional information..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeReportModal()"
+                        class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg">
+                        Submit Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Recommend Modal -->
+<div id="recommend-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Recommend "{{ show.title }}"</h3>
+                <button onclick="closeRecommendModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="recommend-form">
+                <div class="mb-4">
+                    <label for="recommend-note" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Why do you recommend this? (optional)
+                    </label>
+                    <textarea id="recommend-note" name="note" rows="3"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="Great show because..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeRecommendModal()"
+                        class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
+                        Recommend
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
     // Favorite toggle functionality
@@ -724,6 +883,102 @@
 
         if (dropdown && btn && !dropdown.contains(event.target) && !btn.contains(event.target)) {
             dropdown.classList.add('hidden');
+        }
+    });
+
+    // Jellyseer Season Request
+    async function requestSeason(tmdbId, seasonNumber) {
+        if (!confirm(`Request Season ${seasonNumber} on Jellyseerr?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/jellyseer/request-season', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tmdb_id: tmdbId,
+                    season_number: seasonNumber
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert(data.message || `Season ${seasonNumber} requested successfully!`);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error requesting season:', error);
+            alert('Error requesting season. Please try again.');
+        }
+    }
+
+    // Report and Recommend Modal Functions
+    function openReportModal() {
+        document.getElementById('report-modal').classList.remove('hidden');
+    }
+
+    function closeReportModal() {
+        document.getElementById('report-modal').classList.add('hidden');
+    }
+
+    function openRecommendModal() {
+        document.getElementById('recommend-modal').classList.remove('hidden');
+    }
+
+    function closeRecommendModal() {
+        document.getElementById('recommend-modal').classList.add('hidden');
+    }
+
+    // Handle recommend form submission
+    document.getElementById('recommend-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const note = document.getElementById('recommend-note').value;
+        const showId = {{ show.id }};
+
+        try {
+            const response = await fetch('/api/profile/recommendations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    media_type: 'show',
+                    media_id: showId,
+                    title: '{{ show.title }}',
+                    note: note
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('Thanks for your recommendation!');
+                closeRecommendModal();
+                document.getElementById('recommend-note').value = '';
+            } else {
+                alert('Error submitting recommendation: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error submitting recommendation. Please try again.');
+        }
+    });
+
+    // Close modals when clicking outside
+    document.getElementById('report-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeReportModal();
+        }
+    });
+
+    document.getElementById('recommend-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeRecommendModal();
         }
     });
 

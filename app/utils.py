@@ -1510,7 +1510,7 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
                            tmdb_id, raw_payload)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
-                        item.get('event'),
+                        item.get('event') or 'watched',
                         item.get('friendly_name'),
                         item.get('player'),
                         None,

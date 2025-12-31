@@ -231,6 +231,12 @@ def plex_webhook():
             account = payload.get('Account', {})
             player = payload.get('Player', {})
 
+            # Skip trailers and short content (less than 10 minutes)
+            duration_ms = metadata.get('duration', 0)
+            if duration_ms and duration_ms < 600000:  # 10 minutes in milliseconds
+                current_app.logger.info(f"Skipping short content (likely trailer): '{metadata.get('title')}' ({duration_ms}ms)")
+                return jsonify({'status': 'skipped', 'reason': 'trailer or short content'}), 200
+
             tmdb_id = None
             tvdb_id = None
             guids = metadata.get('Guid')
@@ -315,10 +321,12 @@ def plex_webhook():
                                         if show_row:
                                             show_id = show_row['id']
                                             # Get the episode's internal ID
-                                            episode_row = db.execute(
-                                                'SELECT id FROM sonarr_episodes WHERE show_id = ? AND season_number = ? AND episode_number = ?',
-                                                (show_id, season_num, episode_num)
-                                            ).fetchone()
+                                            episode_row = db.execute('''
+                                                SELECT e.id
+                                                FROM sonarr_episodes e
+                                                JOIN sonarr_seasons s ON e.season_id = s.id
+                                                WHERE s.show_id = ? AND s.season_number = ? AND e.episode_number = ?
+                                            ''', (show_id, season_num, episode_num)).fetchone()
 
                                             if episode_row:
                                                 episode_id = episode_row['id']
@@ -326,17 +334,17 @@ def plex_webhook():
                                                 # Insert or update episode progress
                                                 db.execute('''
                                                     INSERT INTO user_episode_progress (
-                                                        user_id, show_id, episode_id, season_number, episode_number,
+                                                        user_id, episode_id, season_number, episode_number,
                                                         is_watched, watch_count, last_watched_at, watch_percentage, marked_manually
                                                     )
-                                                    VALUES (?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, ?, 0)
+                                                    VALUES (?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, ?, 0)
                                                     ON CONFLICT (user_id, episode_id) DO UPDATE SET
                                                         is_watched = 1,
                                                         watch_count = watch_count + 1,
                                                         last_watched_at = CURRENT_TIMESTAMP,
                                                         watch_percentage = excluded.watch_percentage,
                                                         updated_at = CURRENT_TIMESTAMP
-                                                ''', (user['id'], show_id, episode_id, season_num, episode_num, watch_percentage))
+                                                ''', (user['id'], episode_id, season_num, episode_num, watch_percentage))
                                                 db.commit()
 
                                                 # Update show completion
@@ -768,6 +776,7 @@ def login():
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
+                    session['profile_photo_url'] = user_record.get('profile_photo_url')
                     db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
                     db.commit()
                     flash(f'Welcome back, {user_obj.username}!', 'success')
@@ -874,6 +883,8 @@ def plex_login_poll():
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
+                    user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (user_obj.id,)).fetchone()
+                    session['profile_photo_url'] = user_record.get('profile_photo_url') if user_record else None
                     db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?', (auth_token, user_obj.id,))
                     db.commit()
                     return jsonify({'authorized': True, 'username': user_obj.username})
@@ -958,6 +969,8 @@ def callback():
         session['user_id'] = user_obj.id
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
+        user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (user_obj.id,)).fetchone()
+        session['profile_photo_url'] = user_record.get('profile_photo_url') if user_record else None
         db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
         db.commit()
         flash(f'Welcome back, {user_obj.username}!', 'success')
@@ -1440,12 +1453,17 @@ def show_detail(tmdb_id):
         seasons_with_episodes
     )
 
+    # Get Jellyseer URL for request button
+    settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
+    jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
+
     return render_template('show_detail.html',
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
                            next_up_episode=next_up_episode,
-                           cast_members=cast_members
+                           cast_members=cast_members,
+                           jellyseer_url=jellyseer_url
                            )
 
 def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes, user_prefs=None):
@@ -1905,87 +1923,9 @@ def report_issue(media_type, media_id):
         report_id = cursor.lastrowid
         db.commit()
 
-        # Create notifications for all admins
-        try:
-            import re
-
-            # Get all admin users
-            admins = db.execute('SELECT id FROM users WHERE is_admin = 1').fetchall()
-
-            # Parse episode info from title (format: "Show - S01E02: Episode")
-            season_num = None
-            episode_num = None
-            if media_type == 'episode' and ' - S' in title:
-                match = re.search(r'S(\d+)E(\d+)', title)
-                if match:
-                    season_num = int(match.group(1))
-                    episode_num = int(match.group(2))
-
-            # Get Sonarr/Radarr link for admins to replace the file
-            service_link = None
-            if media_type == 'episode' and show_id:
-                # Get Sonarr series info
-                show_info = db.execute(
-                    'SELECT sonarr_id, title FROM sonarr_shows WHERE id = ?',
-                    (show_id,)
-                ).fetchone()
-
-                if show_info:
-                    # Use remote URL if available, otherwise fall back to local URL
-                    sonarr_url = database.get_setting('sonarr_remote_url') or database.get_setting('sonarr_url')
-                    if sonarr_url:
-                        # Create title slug for Sonarr URL
-                        title_slug = show_info['title'].lower()
-                        title_slug = re.sub(r'[^\w\s-]', '', title_slug)
-                        title_slug = re.sub(r'[\s_]+', '-', title_slug)
-                        title_slug = title_slug.strip('-')
-                        service_link = f"{sonarr_url.rstrip('/')}/series/{title_slug}"
-            elif media_type == 'movie':
-                # Get Radarr movie info
-                movie_info = db.execute(
-                    'SELECT radarr_id, title FROM radarr_movies WHERE id = ?',
-                    (media_id,)
-                ).fetchone()
-
-                if movie_info:
-                    # Use remote URL if available, otherwise fall back to local URL
-                    radarr_url = database.get_setting('radarr_remote_url') or database.get_setting('radarr_url')
-                    if radarr_url:
-                        # Create title slug for Radarr URL
-                        title_slug = movie_info['title'].lower()
-                        title_slug = re.sub(r'[^\w\s-]', '', title_slug)
-                        title_slug = re.sub(r'[\s_]+', '-', title_slug)
-                        title_slug = title_slug.strip('-')
-                        service_link = f"{radarr_url.rstrip('/')}/movie/{title_slug}"
-
-            # Create notification for each admin
-            for admin in admins:
-                notification_title = f"New Issue Report: {title}"
-                notification_message = f"User reported: {', '.join(issue_types)}"
-                if comment:
-                    notification_message += f" - {comment[:100]}"
-
-                db.execute('''
-                    INSERT INTO user_notifications
-                    (user_id, show_id, notification_type, title, message, season_number, episode_number, issue_report_id, service_url)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    admin['id'],
-                    show_id,
-                    'new_issue_report',
-                    notification_title,
-                    notification_message,
-                    season_num,
-                    episode_num,
-                    report_id,
-                    service_link
-                ))
-
-            db.commit()
-            current_app.logger.info(f"Created {len(admins)} admin notifications for issue report")
-        except Exception as e:
-            current_app.logger.error(f"Error creating admin notifications: {e}", exc_info=True)
-            # Don't fail the request if notifications fail
+        # NOTE: Admin notifications disabled - admins can view reports on dedicated admin page
+        # Issue reports no longer create in-app notifications to avoid clutter
+        # Pushover notifications (below) still sent for immediate awareness
 
         # Send Pushover notification to admins
         try:
@@ -2086,6 +2026,7 @@ def profile_history():
 
     # Get watch history (recent 50 unique items)
     # Group by unique episode/movie to show only one entry per item
+    # Filter out trailers (duration < 10 minutes = 600000ms)
     watch_history = db.execute("""
         SELECT
             id, event_type, plex_username, media_type, title, show_title,
@@ -2095,6 +2036,7 @@ def profile_history():
         FROM plex_activity_log
         WHERE plex_username = ?
         AND event_type IN ('media.stop', 'media.scrobble')
+        AND (duration_ms IS NULL OR duration_ms >= 600000)
         GROUP BY
             CASE
                 WHEN media_type = 'episode' THEN show_title || '-' || season_episode
@@ -3192,19 +3134,47 @@ def profile_statistics():
 @main_bp.route('/api/profile/lists', methods=['GET'])
 @login_required
 def api_get_lists():
-    """Get all lists for the current user"""
+    """Get lists - supports filter param: 'mine', 'public', 'shared'"""
     user_id = session.get('user_id')
     if not user_id:
         return jsonify({'success': False, 'error': 'Not logged in'}), 401
 
     db = database.get_db()
+    filter_type = request.args.get('filter', 'mine')
 
-    lists = db.execute('''
-        SELECT id, name, description, item_count, created_at, updated_at
-        FROM user_lists
-        WHERE user_id = ?
-        ORDER BY updated_at DESC
-    ''', (user_id,)).fetchall()
+    if filter_type == 'public':
+        # Get all public lists from all users
+        lists = db.execute('''
+            SELECT l.id, l.name, l.description, l.item_count, l.is_public,
+                   l.created_at, l.updated_at, l.user_id,
+                   u.username as owner_username
+            FROM user_lists l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.is_public = 1
+            ORDER BY l.updated_at DESC
+        ''').fetchall()
+    elif filter_type == 'shared':
+        # Get public lists from other users
+        lists = db.execute('''
+            SELECT l.id, l.name, l.description, l.item_count, l.is_public,
+                   l.created_at, l.updated_at, l.user_id,
+                   u.username as owner_username
+            FROM user_lists l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.is_public = 1 AND l.user_id != ?
+            ORDER BY l.updated_at DESC
+        ''', (user_id,)).fetchall()
+    else:  # 'mine' or default
+        # Get only current user's lists (public and private)
+        lists = db.execute('''
+            SELECT l.id, l.name, l.description, l.item_count, l.is_public,
+                   l.created_at, l.updated_at, l.user_id,
+                   u.username as owner_username
+            FROM user_lists l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.user_id = ?
+            ORDER BY l.updated_at DESC
+        ''', (user_id,)).fetchall()
 
     lists_data = []
     for lst in lists:
@@ -3213,6 +3183,9 @@ def api_get_lists():
             'name': lst['name'],
             'description': lst['description'],
             'item_count': lst['item_count'] or 0,
+            'is_public': bool(lst['is_public']),
+            'is_owner': lst['user_id'] == user_id,
+            'owner_username': lst['owner_username'],
             'created_at': lst['created_at'],
             'updated_at': lst['updated_at']
         })
@@ -3234,6 +3207,7 @@ def api_create_list():
     data = request.get_json()
     name = data.get('name', '').strip()
     description = data.get('description', '').strip()
+    is_public = data.get('is_public', False)
 
     if not name:
         return jsonify({'success': False, 'error': 'List name is required'}), 400
@@ -3242,9 +3216,9 @@ def api_create_list():
 
     try:
         cur = db.execute('''
-            INSERT INTO user_lists (user_id, name, description)
-            VALUES (?, ?, ?)
-        ''', (user_id, name, description))
+            INSERT INTO user_lists (user_id, name, description, is_public)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, name, description, is_public))
         db.commit()
 
         return jsonify({
@@ -3266,15 +3240,17 @@ def api_get_list(list_id):
 
     db = database.get_db()
 
-    # Get list info and verify ownership
+    # Get list info - allow access to public lists or owned lists
     lst = db.execute('''
-        SELECT id, name, description, item_count, created_at, updated_at
-        FROM user_lists
-        WHERE id = ? AND user_id = ?
+        SELECT l.id, l.name, l.description, l.item_count, l.created_at, l.updated_at,
+               l.user_id, l.is_public, u.username as owner_username
+        FROM user_lists l
+        JOIN users u ON l.user_id = u.id
+        WHERE l.id = ? AND (l.user_id = ? OR l.is_public = 1)
     ''', (list_id, user_id)).fetchone()
 
     if not lst:
-        return jsonify({'success': False, 'error': 'List not found'}), 404
+        return jsonify({'success': False, 'error': 'List not found or not accessible'}), 404
 
     # Get list items with metadata
     items = db.execute('''
@@ -3287,7 +3263,7 @@ def api_get_list(list_id):
             li.added_at,
             li.sort_order,
             COALESCE(s.title, m.title) as title,
-            COALESCE(s.poster_path, m.poster_path) as poster_path,
+            COALESCE(s.poster_url, m.poster_url) as poster_path,
             COALESCE(s.tmdb_id, m.tmdb_id) as tmdb_id,
             s.year as show_year,
             m.year as movie_year
@@ -3321,6 +3297,9 @@ def api_get_list(list_id):
             'name': lst['name'],
             'description': lst['description'],
             'item_count': lst['item_count'] or 0,
+            'is_public': bool(lst['is_public']),
+            'is_owner': lst['user_id'] == user_id,
+            'owner_username': lst['owner_username'],
             'created_at': lst['created_at'],
             'updated_at': lst['updated_at']
         },
@@ -3349,16 +3328,24 @@ def api_update_list(list_id):
     data = request.get_json()
     name = data.get('name', '').strip()
     description = data.get('description', '').strip()
+    is_public = data.get('is_public')
 
     if not name:
         return jsonify({'success': False, 'error': 'List name is required'}), 400
 
     try:
-        db.execute('''
-            UPDATE user_lists
-            SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (name, description, list_id))
+        if is_public is not None:
+            db.execute('''
+                UPDATE user_lists
+                SET name = ?, description = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (name, description, is_public, list_id))
+        else:
+            db.execute('''
+                UPDATE user_lists
+                SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (name, description, list_id))
         db.commit()
 
         return jsonify({'success': True})
@@ -3774,7 +3761,7 @@ def api_get_progress_shows():
             usp.status,
             usp.last_watched_at,
             s.title,
-            s.poster_path,
+            s.poster_url as poster_path,
             s.tmdb_id,
             s.year
         FROM user_show_progress usp
@@ -3824,27 +3811,28 @@ def api_get_show_progress(show_id):
     episodes = db.execute('''
         SELECT
             e.id,
-            e.season_number,
+            s.season_number,
             e.episode_number,
             e.title,
-            e.air_date,
+            e.air_date_utc,
             COALESCE(uep.is_watched, 0) as is_watched,
             uep.watch_count,
             uep.last_watched_at
         FROM sonarr_episodes e
+        JOIN sonarr_seasons s ON e.season_id = s.id
         LEFT JOIN user_episode_progress uep ON e.id = uep.episode_id AND uep.user_id = ?
-        WHERE e.show_id = ?
-        ORDER BY e.season_number ASC, e.episode_number ASC
+        WHERE s.show_id = ?
+        ORDER BY s.season_number ASC, e.episode_number ASC
     ''', (user_id, show_id)).fetchall()
 
     episodes_data = []
     for ep in episodes:
         episodes_data.append({
-            'id': ep['id'],
+            'episode_id': ep['id'],
             'season_number': ep['season_number'],
             'episode_number': ep['episode_number'],
             'title': ep['title'],
-            'air_date': ep['air_date'],
+            'air_date': ep['air_date_utc'],
             'is_watched': bool(ep['is_watched']),
             'watch_count': ep['watch_count'] or 0,
             'last_watched_at': ep['last_watched_at']
@@ -3871,9 +3859,10 @@ def api_toggle_episode_watched(episode_id):
 
     # Get episode info
     episode = db.execute('''
-        SELECT id, show_id, season_number, episode_number
-        FROM sonarr_episodes
-        WHERE id = ?
+        SELECT e.id, s.show_id, s.season_number, e.episode_number
+        FROM sonarr_episodes e
+        JOIN sonarr_seasons s ON e.season_id = s.id
+        WHERE e.id = ?
     ''', (episode_id,)).fetchone()
 
     if not episode:
@@ -3883,14 +3872,14 @@ def api_toggle_episode_watched(episode_id):
         # Insert or update episode progress
         db.execute('''
             INSERT INTO user_episode_progress
-            (user_id, show_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
-            VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            (user_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
+            VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
             ON CONFLICT (user_id, episode_id) DO UPDATE SET
                 is_watched = excluded.is_watched,
                 marked_manually = 1,
                 last_watched_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, episode['show_id'], episode_id, episode['season_number'], episode['episode_number'], is_watched))
+        ''', (user_id, episode_id, episode['season_number'], episode['episode_number'], is_watched))
 
         db.commit()
 
@@ -3953,9 +3942,10 @@ def api_mark_season_watched(show_id, season_number):
     try:
         # Get all episodes in the season
         episodes = db.execute('''
-            SELECT id, season_number, episode_number
-            FROM sonarr_episodes
-            WHERE show_id = ? AND season_number = ?
+            SELECT e.id, s.season_number, e.episode_number
+            FROM sonarr_episodes e
+            JOIN sonarr_seasons s ON e.season_id = s.id
+            WHERE s.show_id = ? AND s.season_number = ?
         ''', (show_id, season_number)).fetchall()
 
         if not episodes:
@@ -3965,14 +3955,14 @@ def api_mark_season_watched(show_id, season_number):
         for episode in episodes:
             db.execute('''
                 INSERT INTO user_episode_progress
-                (user_id, show_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                (user_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
+                VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
                 ON CONFLICT (user_id, episode_id) DO UPDATE SET
                     is_watched = excluded.is_watched,
                     marked_manually = 1,
                     last_watched_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-            ''', (user_id, show_id, episode['id'], episode['season_number'], episode['episode_number'], is_watched))
+            ''', (user_id, episode['id'], episode['season_number'], episode['episode_number'], is_watched))
 
         db.commit()
 
@@ -4043,3 +4033,503 @@ def profile_progress():
                          favorite_count=favorite_count,
                          unread_notification_count=unread_notification_count,
                          active_tab='progress')
+
+@main_bp.route('/profile/settings')
+@login_required
+def profile_settings():
+    """Display user profile settings page"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your settings.', 'error')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Count total active sessions
+    now_playing_count = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                plex_username,
+                event_type,
+                MAX(event_timestamp) as last_event_time,
+                MAX(id) as last_event_id
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """).fetchone()[0] or 0
+
+    total_episodes = db.execute(
+        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
+    ).fetchone()[0] or 0
+
+    total_movies = db.execute(
+        'SELECT COUNT(*) FROM radarr_movies'
+    ).fetchone()[0] or 0
+
+    favorite_count = db.execute(
+        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    unread_notification_count = db.execute(
+        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+        (user_id,)
+    ).fetchone()[0] or 0
+
+    return render_template('profile_settings.html',
+                         user=user,
+                         now_playing_count=now_playing_count,
+                         total_episodes=total_episodes,
+                         total_movies=total_movies,
+                         favorite_count=favorite_count,
+                         unread_notification_count=unread_notification_count,
+                         active_tab='settings')
+
+@main_bp.route('/help')
+def help():
+    """Display user manual and help documentation"""
+    return render_template('help.html')
+
+@main_bp.route('/discover')
+def discover():
+    """Display trending and upcoming content from Jellyseerr"""
+    db = database.get_db()
+    settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
+    jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
+
+    return render_template('discover.html', jellyseer_url=jellyseer_url)
+
+@main_bp.route('/api/profile/settings', methods=['POST'])
+@login_required
+def update_profile_settings():
+    """Update user profile settings (bio, privacy, photo)"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Get form data
+        bio = request.form.get('bio', '').strip()
+        profile_show_profile = request.form.get('profile_show_profile') == 'true'
+        profile_show_lists = request.form.get('profile_show_lists') == 'true'
+        profile_show_favorites = request.form.get('profile_show_favorites') == 'true'
+        profile_show_history = request.form.get('profile_show_history') == 'true'
+        profile_show_progress = request.form.get('profile_show_progress') == 'true'
+
+        # Validate bio length
+        if len(bio) > 500:
+            return jsonify({'success': False, 'error': 'Bio must be 500 characters or less'}), 400
+
+        # Handle photo upload if present
+        photo_url = None
+        if 'photo' in request.files:
+            photo = request.files['photo']
+            if photo and photo.filename:
+                # Validate file size (5MB)
+                photo.seek(0, 2)  # Seek to end
+                file_size = photo.tell()
+                photo.seek(0)  # Seek back to start
+
+                if file_size > 5 * 1024 * 1024:
+                    return jsonify({'success': False, 'error': 'File size must be less than 5MB'}), 400
+
+                # Validate file type
+                allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+                file_ext = os.path.splitext(photo.filename)[1].lower()
+                if file_ext not in allowed_extensions:
+                    return jsonify({'success': False, 'error': 'Invalid file type. Use JPG, PNG, GIF, or WEBP'}), 400
+
+                # Save photo to uploads directory
+                upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'profiles')
+                os.makedirs(upload_dir, exist_ok=True)
+
+                # Generate unique filename
+                filename = f"{user_id}_{int(time.time())}{file_ext}"
+                filepath = os.path.join(upload_dir, filename)
+                photo.save(filepath)
+
+                # Store relative URL
+                photo_url = f"/static/uploads/profiles/{filename}"
+
+        # Update user profile
+        if photo_url:
+            db.execute('''
+                UPDATE users
+                SET bio = ?, profile_photo_url = ?,
+                    profile_show_profile = ?, profile_show_lists = ?,
+                    profile_show_favorites = ?, profile_show_history = ?,
+                    profile_show_progress = ?
+                WHERE id = ?
+            ''', (bio, photo_url, profile_show_profile, profile_show_lists,
+                  profile_show_favorites, profile_show_history, profile_show_progress, user_id))
+        else:
+            db.execute('''
+                UPDATE users
+                SET bio = ?, profile_show_profile = ?, profile_show_lists = ?,
+                    profile_show_favorites = ?, profile_show_history = ?,
+                    profile_show_progress = ?
+                WHERE id = ?
+            ''', (bio, profile_show_profile, profile_show_lists,
+                  profile_show_favorites, profile_show_history, profile_show_progress, user_id))
+
+        db.commit()
+
+        return jsonify({'success': True, 'photo_url': photo_url})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error updating profile settings: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@main_bp.route('/api/profile/settings/photo', methods=['DELETE'])
+@login_required
+def delete_profile_photo():
+    """Remove user's profile photo"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Get current photo URL
+        user = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (user_id,)).fetchone()
+
+        if user and user['profile_photo_url']:
+            # Delete file from filesystem
+            photo_path = user['profile_photo_url']
+            if photo_path.startswith('/static/'):
+                full_path = os.path.join(current_app.root_path, photo_path.lstrip('/'))
+                if os.path.exists(full_path):
+                    try:
+                        os.remove(full_path)
+                    except Exception as e:
+                        current_app.logger.warning(f"Could not delete photo file: {str(e)}")
+
+        # Remove from database
+        db.execute('UPDATE users SET profile_photo_url = NULL WHERE id = ?', (user_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error deleting profile photo: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
+# RECOMMENDATIONS
+# ========================================
+
+@main_bp.route('/api/profile/recommendations', methods=['POST'])
+@login_required
+def create_recommendation():
+    """Submit a recommendation for a show or movie"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    data = request.get_json()
+    media_type = data.get('media_type')
+    media_id = data.get('media_id')
+    title = data.get('title', '')
+    note = data.get('note', '').strip()
+
+    if not media_type or not media_id:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    if media_type not in ['show', 'movie']:
+        return jsonify({'success': False, 'error': 'Invalid media type'}), 400
+
+    db = database.get_db()
+
+    try:
+        # Insert recommendation
+        db.execute('''
+            INSERT INTO user_recommendations (user_id, media_type, media_id, title, note)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, media_type, media_id, title, note))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error creating recommendation: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
+# JELLYSEER INTEGRATION
+# ========================================
+
+@main_bp.route('/api/jellyseer/request-season', methods=['POST'])
+@login_required
+def jellyseer_request_season():
+    """Request a specific season on Jellyseerr"""
+    data = request.get_json()
+    tmdb_id = data.get('tmdb_id')
+    season_number = data.get('season_number')
+
+    if not tmdb_id or season_number is None:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    db = database.get_db()
+    settings = db.execute('SELECT jellyseer_url, jellyseer_api_key FROM settings LIMIT 1').fetchone()
+
+    if not settings or not settings['jellyseer_url'] or not settings['jellyseer_api_key']:
+        return jsonify({'success': False, 'error': 'Jellyseerr not configured'}), 400
+
+    jellyseer_url = settings['jellyseer_url'].rstrip('/')
+    api_key = settings['jellyseer_api_key']
+
+    try:
+        import requests
+
+        # Request the season via Jellyseerr API
+        response = requests.post(
+            f'{jellyseer_url}/api/v1/request',
+            headers={
+                'X-Api-Key': api_key,
+                'Content-Type': 'application/json'
+            },
+            json={
+                'mediaType': 'tv',
+                'mediaId': int(tmdb_id),
+                'seasons': [int(season_number)]
+            },
+            timeout=10
+        )
+
+        if response.status_code in [200, 201]:
+            return jsonify({'success': True, 'message': f'Season {season_number} requested successfully'})
+        else:
+            error_msg = response.json().get('message', 'Unknown error') if response.headers.get('content-type', '').startswith('application/json') else response.text
+            return jsonify({'success': False, 'error': f'Jellyseerr error: {error_msg}'}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Jellyseerr request failed: {str(e)}")
+        return jsonify({'success': False, 'error': f'Connection error: {str(e)}'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error requesting season: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@main_bp.route('/api/jellyseer/trending', methods=['GET'])
+def jellyseer_trending():
+    """Fetch trending content from Jellyseerr"""
+    db = database.get_db()
+    settings = db.execute('SELECT jellyseer_url, jellyseer_api_key FROM settings LIMIT 1').fetchone()
+
+    if not settings or not settings['jellyseer_url'] or not settings['jellyseer_api_key']:
+        return jsonify({'success': False, 'error': 'Jellyseerr not configured'}), 400
+
+    jellyseer_url = settings['jellyseer_url'].rstrip('/')
+    api_key = settings['jellyseer_api_key']
+
+    try:
+        import requests
+
+        # Fetch trending content from Jellyseerr
+        response = requests.get(
+            f'{jellyseer_url}/api/v1/discover/trending',
+            headers={
+                'X-Api-Key': api_key,
+                'Content-Type': 'application/json'
+            },
+            params={
+                'page': 1,
+                'language': 'en'
+            },
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            # Transform the data to include only what we need
+            trending = []
+            for item in data.get('results', [])[:12]:  # Limit to 12 items
+                trending.append({
+                    'id': item.get('id'),
+                    'tmdb_id': item.get('id'),
+                    'title': item.get('title') or item.get('name'),
+                    'overview': item.get('overview'),
+                    'poster_path': item.get('posterPath'),
+                    'backdrop_path': item.get('backdropPath'),
+                    'media_type': item.get('mediaType'),
+                    'vote_average': item.get('voteAverage'),
+                    'release_date': item.get('releaseDate') or item.get('firstAirDate'),
+                    'year': (item.get('releaseDate') or item.get('firstAirDate', ''))[:4] if (item.get('releaseDate') or item.get('firstAirDate')) else None
+                })
+
+            return jsonify({
+                'success': True,
+                'trending': trending
+            })
+        else:
+            error_msg = response.json().get('message', 'Unknown error') if response.headers.get('content-type', '').startswith('application/json') else response.text
+            return jsonify({'success': False, 'error': f'Jellyseerr error: {error_msg}'}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Jellyseerr trending fetch failed: {str(e)}")
+        return jsonify({'success': False, 'error': f'Connection error: {str(e)}'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error fetching trending: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@main_bp.route('/api/jellyseer/upcoming', methods=['GET'])
+def jellyseer_upcoming():
+    """Fetch upcoming content from Jellyseerr"""
+    db = database.get_db()
+    settings = db.execute('SELECT jellyseer_url, jellyseer_api_key FROM settings LIMIT 1').fetchone()
+
+    if not settings or not settings['jellyseer_url'] or not settings['jellyseer_api_key']:
+        return jsonify({'success': False, 'error': 'Jellyseerr not configured'}), 400
+
+    jellyseer_url = settings['jellyseer_url'].rstrip('/')
+    api_key = settings['jellyseer_api_key']
+
+    try:
+        import requests
+
+        # Fetch upcoming movies from Jellyseerr
+        response = requests.get(
+            f'{jellyseer_url}/api/v1/discover/movies/upcoming',
+            headers={
+                'X-Api-Key': api_key,
+                'Content-Type': 'application/json'
+            },
+            params={
+                'page': 1,
+                'language': 'en'
+            },
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            # Transform the data to include only what we need
+            upcoming = []
+            for item in data.get('results', [])[:12]:  # Limit to 12 items
+                upcoming.append({
+                    'id': item.get('id'),
+                    'tmdb_id': item.get('id'),
+                    'title': item.get('title'),
+                    'overview': item.get('overview'),
+                    'poster_path': item.get('posterPath'),
+                    'backdrop_path': item.get('backdropPath'),
+                    'media_type': 'movie',
+                    'vote_average': item.get('voteAverage'),
+                    'release_date': item.get('releaseDate'),
+                    'year': item.get('releaseDate', '')[:4] if item.get('releaseDate') else None
+                })
+
+            return jsonify({
+                'success': True,
+                'upcoming': upcoming
+            })
+        else:
+            error_msg = response.json().get('message', 'Unknown error') if response.headers.get('content-type', '').startswith('application/json') else response.text
+            return jsonify({'success': False, 'error': f'Jellyseerr error: {error_msg}'}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"Jellyseerr upcoming fetch failed: {str(e)}")
+        return jsonify({'success': False, 'error': f'Connection error: {str(e)}'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error fetching upcoming: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========================================
+# ANNOUNCEMENTS
+# ========================================
+
+@main_bp.route('/api/announcements/active', methods=['GET'])
+def api_active_announcements():
+    """Get active announcements for display to users"""
+    try:
+        db = database.get_db()
+        now = datetime.datetime.now(timezone.utc).isoformat()
+
+        # Get announcements that are:
+        # 1. Active (is_active = 1)
+        # 2. Either no start_date OR start_date <= now
+        # 3. Either no end_date OR end_date >= now
+        announcements = db.execute('''
+            SELECT id, title, message, type, created_at
+            FROM announcements
+            WHERE is_active = 1
+              AND (start_date IS NULL OR start_date <= ?)
+              AND (end_date IS NULL OR end_date >= ?)
+            ORDER BY created_at DESC
+        ''', (now, now)).fetchall()
+
+        return jsonify({
+            'success': True,
+            'announcements': [dict(a) for a in announcements]
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching active announcements: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========================================
+# PROBLEM REPORTS
+# ========================================
+
+@main_bp.route('/api/problem-reports', methods=['POST'])
+@login_required
+def create_problem_report():
+    """Submit a problem report"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    try:
+        data = request.get_json()
+
+        category = data.get('category', '').strip()
+        title = data.get('title', '').strip()
+        description = data.get('description', '').strip()
+        show_id = data.get('show_id')
+        movie_id = data.get('movie_id')
+        episode_id = data.get('episode_id')
+
+        if not category or not title or not description:
+            return jsonify({
+                'success': False,
+                'error': 'Category, title, and description are required'
+            }), 400
+
+        db = database.get_db()
+
+        cur = db.execute('''
+            INSERT INTO problem_reports
+            (user_id, category, title, description, show_id, movie_id, episode_id, status, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'open', 'normal')
+        ''', (user_id, category, title, description, show_id, movie_id, episode_id))
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'id': cur.lastrowid
+        })
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error creating problem report: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

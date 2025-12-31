@@ -51,8 +51,8 @@ async function loadListItems() {
                     ? `/show/${item.tmdb_id}`
                     : `/movie/${item.tmdb_id}`;
 
-                const posterUrl = item.poster_path
-                    ? `/image_proxy?url=${encodeURIComponent(item.poster_path)}`
+                const posterUrl = item.tmdb_id
+                    ? `/image_proxy/poster/${item.tmdb_id}`
                     : '/static/logos/placeholder_poster.png';
 
                 return `

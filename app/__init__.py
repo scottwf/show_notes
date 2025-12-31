@@ -1,6 +1,6 @@
 import os
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime
 from logging.handlers import RotatingFileHandler
 from flask import Flask
 from flask_login import LoginManager
@@ -117,6 +117,11 @@ def create_app(test_config=None):
     # Register Jinja filters
     app.jinja_env.filters['format_datetime'] = format_datetime_simple
     app.jinja_env.filters['format_ms'] = format_milliseconds
+
+    # Register context processor to make current year available in all templates
+    @app.context_processor
+    def inject_current_year():
+        return {'current_year': datetime.now().year}
 
     app.logger.info('ShowNotes application successfully created.')
     return app

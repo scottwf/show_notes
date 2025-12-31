@@ -1,0 +1,208 @@
+{% extends "profile_base.html" %}
+
+{% block profile_content %}
+<div class="max-w-3xl">
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Profile Settings</h2>
+
+    <form id="profile-settings-form" class="space-y-6">
+        <!-- Profile Photo -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Profile Photo</h3>
+
+            <div class="flex items-center gap-6">
+                <div class="relative">
+                    <div id="profile-photo-preview" class="w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg overflow-hidden">
+                        <span id="profile-initials">{{ user.username[0].upper() }}</span>
+                        <img id="profile-photo-img" src="{{ user.profile_photo_url }}" alt="Profile" class="w-full h-full object-cover {% if not user.profile_photo_url %}hidden{% endif %}">
+                    </div>
+                </div>
+
+                <div class="flex-1">
+                    <input type="file" id="profile-photo-input" accept="image/*" class="hidden" onchange="previewPhoto(event)">
+                    <button type="button" onclick="document.getElementById('profile-photo-input').click()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg mb-2">
+                        Upload Photo
+                    </button>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">JPG, PNG or GIF. Max size 5MB.</p>
+                    {% if user.profile_photo_url %}
+                    <button type="button" onclick="removePhoto()" class="text-sm text-red-600 hover:text-red-700 dark:text-red-400 mt-2">
+                        Remove photo
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Bio -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">About You</h3>
+
+            <div class="mb-4">
+                <label for="bio" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Bio</label>
+                <textarea id="bio" name="bio" rows="4" maxlength="500" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Tell others about yourself...">{{ user.bio or '' }}</textarea>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1"><span id="bio-count">{{ (user.bio or '') | length }}</span>/500 characters</p>
+            </div>
+        </div>
+
+        <!-- Privacy Settings -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Privacy Settings</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Control what other users can see on your profile. Unchecked items will be private and only visible to you.</p>
+
+            <div class="space-y-4">
+                <!-- Profile Info -->
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="profile-show-profile" {% if user.profile_show_profile %}checked{% endif %} class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Profile Information</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Show your profile photo, bio, and basic information to other users</p>
+                    </div>
+                </label>
+
+                <!-- Lists -->
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="profile-show-lists" {% if user.profile_show_lists %}checked{% endif %} class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Custom Lists</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Allow others to see and view your public custom lists</p>
+                    </div>
+                </label>
+
+                <!-- Favorites -->
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="profile-show-favorites" {% if user.profile_show_favorites %}checked{% endif %} class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Favorite Shows & Movies</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Display your favorites on your public profile</p>
+                    </div>
+                </label>
+
+                <!-- Watch History -->
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="profile-show-history" {% if user.profile_show_history %}checked{% endif %} class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Watch History</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Show your recently watched shows and movies to other users</p>
+                    </div>
+                </label>
+
+                <!-- Watch Progress -->
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="checkbox" id="profile-show-progress" {% if user.profile_show_progress %}checked{% endif %} class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Watch Progress</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Allow others to see your currently watching shows and progress</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-end gap-3">
+            <button type="button" onclick="window.location.href='{{ url_for('main.profile_history') }}'" class="px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                Cancel
+            </button>
+            <button type="submit" class="px-6 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+let photoFile = null;
+
+// Bio character counter
+document.getElementById('bio').addEventListener('input', function() {
+    document.getElementById('bio-count').textContent = this.value.length;
+});
+
+function previewPhoto(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+    }
+
+    photoFile = file;
+
+    // Preview the image
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = document.getElementById('profile-photo-img');
+        const initials = document.getElementById('profile-initials');
+        img.src = e.target.result;
+        img.classList.remove('hidden');
+        initials.classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function removePhoto() {
+    if (!confirm('Remove your profile photo?')) return;
+
+    fetch('/api/profile/settings/photo', {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const img = document.getElementById('profile-photo-img');
+            const initials = document.getElementById('profile-initials');
+            img.classList.add('hidden');
+            initials.classList.remove('hidden');
+            photoFile = null;
+        } else {
+            alert('Error removing photo: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error removing photo');
+    });
+}
+
+document.getElementById('profile-settings-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData();
+    formData.append('bio', document.getElementById('bio').value);
+    formData.append('profile_show_profile', document.getElementById('profile-show-profile').checked);
+    formData.append('profile_show_lists', document.getElementById('profile-show-lists').checked);
+    formData.append('profile_show_favorites', document.getElementById('profile-show-favorites').checked);
+    formData.append('profile_show_history', document.getElementById('profile-show-history').checked);
+    formData.append('profile_show_progress', document.getElementById('profile-show-progress').checked);
+
+    if (photoFile) {
+        formData.append('photo', photoFile);
+    }
+
+    try {
+        const response = await fetch('/api/profile/settings', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Profile updated successfully!');
+            window.location.href = '{{ url_for('main.profile_history') }}';
+        } else {
+            alert('Error updating profile: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error updating profile');
+    }
+});
+</script>
+{% endblock %}

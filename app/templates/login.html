@@ -43,9 +43,6 @@
   const plexLoginBtn = document.getElementById('plex-login-btn');
   if (plexLoginBtn) {
     plexLoginBtn.addEventListener('click', async () => {
-      document.getElementById('login_status').textContent = 'Plex OAuth not configured. Please use username/password.';
-      // TODO: Implement Plex OAuth when needed
-      /*
       document.getElementById('login_status').textContent = 'Connecting to Plex...';
       const resp = await fetch('/login/plex/start');
       const data = await resp.json();
@@ -88,7 +85,8 @@
     } else {
       document.getElementById('login_status').textContent = 'Could not open Plex login window. Please ensure popups are not blocked.';
     }
-  });
+    });
+  }
   </script>
 </div>
 {% endblock %}

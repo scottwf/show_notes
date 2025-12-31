@@ -645,7 +645,7 @@ def settings():
             ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
-            thetvdb_api_key=?, timezone=? WHERE id=?''', (
+            thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('radarr_remote_url'),
@@ -666,6 +666,8 @@ def settings():
             request.form.get('tautulli_api_key'),
             request.form.get('thetvdb_api_key'),
             request.form.get('timezone', 'UTC'),
+            request.form.get('jellyseer_url'),
+            request.form.get('jellyseer_api_key'),
             settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
         ))
         db.commit()
@@ -1578,6 +1580,254 @@ def api_event_log_detail(log_id):
 
     except Exception as e:
         current_app.logger.error(f"Error fetching log detail: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========================================
+# ANNOUNCEMENTS
+# ========================================
+
+@admin_bp.route('/announcements')
+@login_required
+@admin_required
+def announcements():
+    """Admin page for managing announcements"""
+    return render_template('admin_announcements.html')
+
+@admin_bp.route('/api/admin/announcements', methods=['GET'])
+@login_required
+@admin_required
+def api_get_announcements():
+    """Get all announcements"""
+    try:
+        db = get_db()
+        announcements = db.execute('''
+            SELECT id, title, message, type, is_active, start_date, end_date, created_at, updated_at
+            FROM announcements
+            ORDER BY created_at DESC
+        ''').fetchall()
+
+        return jsonify({
+            'success': True,
+            'announcements': [dict(a) for a in announcements]
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching announcements: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@admin_bp.route('/api/admin/announcements', methods=['POST'])
+@login_required
+@admin_required
+def api_create_announcement():
+    """Create a new announcement"""
+    db = None
+    try:
+        data = request.get_json()
+
+        title = data.get('title', '').strip()
+        message = data.get('message', '').strip()
+        type_ = data.get('type', 'info')
+        is_active = data.get('is_active', True)
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+
+        if not title or not message:
+            return jsonify({
+                'success': False,
+                'error': 'Title and message are required'
+            }), 400
+
+        db = get_db()
+        user_id = session.get('user_id')
+
+        cur = db.execute('''
+            INSERT INTO announcements (title, message, type, is_active, start_date, end_date, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (title, message, type_, is_active, start_date, end_date, user_id))
+
+        db.commit()
+
+        return jsonify({
+            'success': True,
+            'id': cur.lastrowid
+        })
+
+    except Exception as e:
+        if db:
+            db.rollback()
+        current_app.logger.error(f"Error creating announcement: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@admin_bp.route('/api/admin/announcements/<int:announcement_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def api_update_announcement(announcement_id):
+    """Update an announcement"""
+    try:
+        data = request.get_json()
+
+        title = data.get('title', '').strip()
+        message = data.get('message', '').strip()
+        type_ = data.get('type', 'info')
+        is_active = data.get('is_active', True)
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+
+        if not title or not message:
+            return jsonify({
+                'success': False,
+                'error': 'Title and message are required'
+            }), 400
+
+        db = get_db()
+
+        db.execute('''
+            UPDATE announcements
+            SET title = ?, message = ?, type = ?, is_active = ?,
+                start_date = ?, end_date = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (title, message, type_, is_active, start_date, end_date, announcement_id))
+
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error updating announcement: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@admin_bp.route('/api/admin/announcements/<int:announcement_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def api_delete_announcement(announcement_id):
+    """Delete an announcement"""
+    try:
+        db = get_db()
+        db.execute('DELETE FROM announcements WHERE id = ?', (announcement_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error deleting announcement: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ========================================
+# PROBLEM REPORTS
+# ========================================
+
+@admin_bp.route('/problem-reports')
+@login_required
+@admin_required
+def problem_reports():
+    """Admin page for managing problem reports"""
+    return render_template('admin_problem_reports.html')
+
+@admin_bp.route('/api/admin/problem-reports', methods=['GET'])
+@login_required
+@admin_required
+def api_get_problem_reports():
+    """Get all problem reports with optional status filter"""
+    try:
+        db = get_db()
+        status = request.args.get('status')
+
+        if status and status != 'all':
+            reports = db.execute('''
+                SELECT pr.*, u.username,
+                       s.title as show_title,
+                       m.title as movie_title,
+                       e.title as episode_title
+                FROM problem_reports pr
+                JOIN users u ON pr.user_id = u.id
+                LEFT JOIN sonarr_shows s ON pr.show_id = s.id
+                LEFT JOIN radarr_movies m ON pr.movie_id = m.id
+                LEFT JOIN sonarr_episodes e ON pr.episode_id = e.id
+                WHERE pr.status = ?
+                ORDER BY pr.created_at DESC
+            ''', (status,)).fetchall()
+        else:
+            reports = db.execute('''
+                SELECT pr.*, u.username,
+                       s.title as show_title,
+                       m.title as movie_title,
+                       e.title as episode_title
+                FROM problem_reports pr
+                JOIN users u ON pr.user_id = u.id
+                LEFT JOIN sonarr_shows s ON pr.show_id = s.id
+                LEFT JOIN radarr_movies m ON pr.movie_id = m.id
+                LEFT JOIN sonarr_episodes e ON pr.episode_id = e.id
+                ORDER BY pr.created_at DESC
+            ''').fetchall()
+
+        return jsonify({
+            'success': True,
+            'reports': [dict(r) for r in reports]
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching problem reports: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@admin_bp.route('/api/admin/problem-reports/<int:report_id>', methods=['PATCH'])
+@login_required
+@admin_required
+def api_update_problem_report(report_id):
+    """Update a problem report"""
+    try:
+        data = request.get_json()
+
+        status = data.get('status')
+        priority = data.get('priority')
+        admin_notes = data.get('admin_notes', '').strip()
+
+        db = get_db()
+        user_id = session.get('user_id')
+
+        # If marking as resolved, set resolved_by and resolved_at
+        if status == 'resolved':
+            db.execute('''
+                UPDATE problem_reports
+                SET status = ?, priority = ?, admin_notes = ?,
+                    resolved_by = ?, resolved_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (status, priority, admin_notes, user_id, report_id))
+        else:
+            db.execute('''
+                UPDATE problem_reports
+                SET status = ?, priority = ?, admin_notes = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (status, priority, admin_notes, report_id))
+
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error updating problem report: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

@@ -1,0 +1,311 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Announcements{% endblock %}
+{% block admin_page_header %}Announcements{% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+    <!-- Header with Create Button -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">Manage Announcements</h1>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">Create and manage site-wide announcements for users</p>
+        </div>
+        <button onclick="openCreateModal()" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            New Announcement
+        </button>
+    </div>
+
+    <!-- Announcements List -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-900">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Title</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Schedule</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="announcements-list" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                    <!-- Populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="announcement-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" onclick="if(event.target === this) closeModal()">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-xl font-bold text-slate-900 dark:text-slate-100">New Announcement</h2>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="announcement-form" class="space-y-4">
+                <input type="hidden" id="announcement-id">
+
+                <!-- Title -->
+                <div>
+                    <label for="title" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Title</label>
+                    <input type="text" id="title" required maxlength="200"
+                           class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                           placeholder="e.g., Server Maintenance Scheduled">
+                </div>
+
+                <!-- Message -->
+                <div>
+                    <label for="message" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Message</label>
+                    <textarea id="message" required rows="4"
+                              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                              placeholder="Announcement details..."></textarea>
+                </div>
+
+                <!-- Type -->
+                <div>
+                    <label for="type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type</label>
+                    <select id="type"
+                            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <option value="info">Info (Blue)</option>
+                        <option value="warning">Warning (Yellow)</option>
+                        <option value="maintenance">Maintenance (Orange)</option>
+                        <option value="success">Success (Green)</option>
+                    </select>
+                </div>
+
+                <!-- Active Status -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="is-active" checked
+                           class="w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500">
+                    <label for="is-active" class="ml-2 text-sm text-slate-700 dark:text-slate-300">Active (show to users immediately)</label>
+                </div>
+
+                <!-- Schedule -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="start-date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Start Date (Optional)</label>
+                        <input type="datetime-local" id="start-date"
+                               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    </div>
+                    <div>
+                        <label for="end-date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">End Date (Optional)</label>
+                        <input type="datetime-local" id="end-date"
+                               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex justify-end gap-3 mt-6">
+                    <button type="button" onclick="closeModal()"
+                            class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg">
+                        Save Announcement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let announcements = [];
+
+// Load announcements on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadAnnouncements();
+});
+
+async function loadAnnouncements() {
+    try {
+        const response = await fetch('/api/admin/announcements');
+        const data = await response.json();
+
+        if (data.success) {
+            announcements = data.announcements;
+            renderAnnouncements();
+        }
+    } catch (error) {
+        console.error('Error loading announcements:', error);
+    }
+}
+
+function renderAnnouncements() {
+    const tbody = document.getElementById('announcements-list');
+
+    if (announcements.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
+                    No announcements yet. Create one to get started!
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = announcements.map(ann => {
+        const typeColors = {
+            info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+            maintenance: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+            success: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+        };
+
+        const schedule = [];
+        if (ann.start_date) schedule.push(`From ${new Date(ann.start_date).toLocaleDateString()}`);
+        if (ann.end_date) schedule.push(`Until ${new Date(ann.end_date).toLocaleDateString()}`);
+        const scheduleText = schedule.length > 0 ? schedule.join(' ') : 'Always';
+
+        return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <td class="px-6 py-4">
+                    <div class="text-sm font-medium text-slate-900 dark:text-slate-100">${escapeHtml(ann.title)}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">${escapeHtml(ann.message)}</div>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="px-2 py-1 text-xs font-medium rounded ${typeColors[ann.type] || typeColors.info}">
+                        ${ann.type}
+                    </span>
+                </td>
+                <td class="px-6 py-4">
+                    ${ann.is_active
+                        ? '<span class="text-green-600 dark:text-green-400">✓ Active</span>'
+                        : '<span class="text-slate-400">Inactive</span>'}
+                </td>
+                <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                    ${scheduleText}
+                </td>
+                <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                    ${new Date(ann.created_at).toLocaleDateString()}
+                </td>
+                <td class="px-6 py-4 text-right space-x-2">
+                    <button onclick="editAnnouncement(${ann.id})"
+                            class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300">
+                        Edit
+                    </button>
+                    <button onclick="deleteAnnouncement(${ann.id})"
+                            class="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openCreateModal() {
+    document.getElementById('modal-title').textContent = 'New Announcement';
+    document.getElementById('announcement-form').reset();
+    document.getElementById('announcement-id').value = '';
+    document.getElementById('is-active').checked = true;
+    document.getElementById('announcement-modal').classList.remove('hidden');
+    document.getElementById('announcement-modal').classList.add('flex');
+}
+
+function editAnnouncement(id) {
+    const ann = announcements.find(a => a.id === id);
+    if (!ann) return;
+
+    document.getElementById('modal-title').textContent = 'Edit Announcement';
+    document.getElementById('announcement-id').value = ann.id;
+    document.getElementById('title').value = ann.title;
+    document.getElementById('message').value = ann.message;
+    document.getElementById('type').value = ann.type;
+    document.getElementById('is-active').checked = ann.is_active;
+
+    if (ann.start_date) {
+        document.getElementById('start-date').value = ann.start_date.slice(0, 16);
+    }
+    if (ann.end_date) {
+        document.getElementById('end-date').value = ann.end_date.slice(0, 16);
+    }
+
+    document.getElementById('announcement-modal').classList.remove('hidden');
+    document.getElementById('announcement-modal').classList.add('flex');
+}
+
+function closeModal() {
+    document.getElementById('announcement-modal').classList.add('hidden');
+    document.getElementById('announcement-modal').classList.remove('flex');
+}
+
+document.getElementById('announcement-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('announcement-id').value;
+    const data = {
+        title: document.getElementById('title').value,
+        message: document.getElementById('message').value,
+        type: document.getElementById('type').value,
+        is_active: document.getElementById('is-active').checked,
+        start_date: document.getElementById('start-date').value || null,
+        end_date: document.getElementById('end-date').value || null
+    };
+
+    try {
+        const url = id ? `/api/admin/announcements/${id}` : '/api/admin/announcements';
+        const method = id ? 'PATCH' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            closeModal();
+            loadAnnouncements();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error saving announcement:', error);
+        alert('Error saving announcement');
+    }
+});
+
+async function deleteAnnouncement(id) {
+    if (!confirm('Delete this announcement?')) return;
+
+    try {
+        const response = await fetch(`/api/admin/announcements/${id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            loadAnnouncements();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error deleting announcement:', error);
+        alert('Error deleting announcement');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

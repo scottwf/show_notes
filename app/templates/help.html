@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}Help - User Manual{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900 py-8">
+  <div class="container mx-auto px-4 max-w-4xl">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">ShowNotes User Manual</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400">Everything you need to know about using ShowNotes</p>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8 border border-slate-200 dark:border-slate-700">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Quick Navigation</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <a href="#getting-started" class="text-sky-600 dark:text-sky-400 hover:underline">→ Getting Started</a>
+        <a href="#profiles" class="text-sky-600 dark:text-sky-400 hover:underline">→ Your Profile</a>
+        <a href="#watch-tracking" class="text-sky-600 dark:text-sky-400 hover:underline">→ Watch Progress Tracking</a>
+        <a href="#favorites" class="text-sky-600 dark:text-sky-400 hover:underline">→ Favorites</a>
+        <a href="#custom-lists" class="text-sky-600 dark:text-sky-400 hover:underline">→ Custom Lists</a>
+        <a href="#statistics" class="text-sky-600 dark:text-sky-400 hover:underline">→ Watch Statistics</a>
+        <a href="#recommendations" class="text-sky-600 dark:text-sky-400 hover:underline">→ Recommendations</a>
+        <a href="#problem-reports" class="text-sky-600 dark:text-sky-400 hover:underline">→ Reporting Problems</a>
+        <a href="#notifications" class="text-sky-600 dark:text-sky-400 hover:underline">→ Notifications</a>
+        <a href="#privacy" class="text-sky-600 dark:text-sky-400 hover:underline">→ Privacy Settings</a>
+      </div>
+    </div>
+
+    <!-- Getting Started -->
+    <section id="getting-started" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Getting Started</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100">What is ShowNotes?</h3>
+          <p>ShowNotes is your personal hub for tracking, organizing, and discovering TV shows and movies. It integrates with your Plex media server to automatically track what you watch, while providing powerful features to manage your viewing experience.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Logging In</h3>
+          <p>ShowNotes uses Plex authentication. Click the "Sign In" button and authorize with your Plex account to get started. Your watch history will automatically sync from Plex.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Homepage</h3>
+          <p>Your homepage shows:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Continue Watching:</strong> Shows and movies you're currently watching</li>
+            <li><strong>Recently Watched:</strong> Your recent viewing history</li>
+            <li><strong>Now Playing:</strong> Count of active viewing sessions across all users</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Search</h3>
+          <p>Use the search bar at the top of every page to find shows and movies in your library. Search by title to quickly jump to show details, episode lists, and metadata.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Your Profile -->
+    <section id="profiles" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Your Profile</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Access your profile by clicking your profile picture or initial in the top-right corner and selecting "Your Profile".</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Profile Settings</h3>
+          <p>Customize your profile with:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Profile Photo:</strong> Upload a custom profile picture</li>
+            <li><strong>Bio:</strong> Write a short description about yourself (max 500 characters)</li>
+            <li><strong>Privacy Controls:</strong> Choose what information is visible to other users (see Privacy Settings section)</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Profile Tabs</h3>
+          <p>Your profile has several sections:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>History:</strong> View your complete watch history with timestamps</li>
+            <li><strong>Favorites:</strong> Shows and movies you've marked as favorites</li>
+            <li><strong>Lists:</strong> Your custom collections and lists</li>
+            <li><strong>Progress:</strong> Track your progress on shows you're watching</li>
+            <li><strong>Statistics:</strong> Visualize your viewing patterns and trends</li>
+            <li><strong>Notifications:</strong> Stay updated on announcements and system messages</li>
+            <li><strong>Settings:</strong> Manage your profile and privacy settings</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Watch Progress Tracking -->
+    <section id="watch-tracking" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Watch Progress Tracking</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Keep track of which episodes you've watched and your progress on TV series.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Automatic Tracking</h3>
+          <p>ShowNotes automatically marks episodes as watched when you watch them in Plex (95% completion or more). No manual effort required!</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Manual Tracking</h3>
+          <p>You can also manually mark episodes as watched or unwatched:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Episode Checkboxes:</strong> Click the checkbox next to any episode on a show's detail page to toggle watched status</li>
+            <li><strong>Mark Season Watched:</strong> Click "Mark Watched" on any season to mark all episodes as watched at once</li>
+            <li><strong>Mark Season Unwatched:</strong> Click "Mark Unwatched" to reset a season's progress</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Progress Page</h3>
+          <p>Visit Profile → Progress to see all your shows organized by status:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Watching:</strong> Shows you're currently watching</li>
+            <li><strong>Plan to Watch:</strong> Shows you want to watch later</li>
+            <li><strong>Completed:</strong> Shows you've finished watching</li>
+            <li><strong>Dropped:</strong> Shows you've stopped watching</li>
+          </ul>
+          <p class="mt-2">Each show displays a progress bar showing how many episodes you've watched out of the total available.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Changing Show Status</h3>
+          <p>Hover over any show poster on the Progress page to reveal a dropdown menu where you can change its status (Watching, Plan to Watch, Completed, Dropped).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Favorites -->
+    <section id="favorites" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Favorites</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Save your favorite shows and movies for quick access.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Adding Favorites</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Visit any show or movie detail page</li>
+            <li>Click the heart icon button (usually in the top-right area of the page)</li>
+            <li>The heart will fill to indicate it's been added to your favorites</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Viewing Favorites</h3>
+          <p>Go to Profile → Favorites to see all your favorite shows and movies in a grid view with posters.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Removing Favorites</h3>
+          <p>Click the heart icon again on any show/movie detail page to remove it from favorites, or remove it directly from the Favorites page.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Custom Lists -->
+    <section id="custom-lists" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Custom Lists & Collections</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Create custom lists to organize shows and movies however you like.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Creating a List</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Go to Profile → Lists</li>
+            <li>Click the "Create New List" button</li>
+            <li>Enter a name and optional description</li>
+            <li>Choose whether to make the list public or private</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Adding Items to Lists</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Visit any show or movie detail page</li>
+            <li>Look for the "Add to List" button or dropdown</li>
+            <li>Select which list(s) to add the item to</li>
+            <li>Optionally add personal notes about why you added it</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Managing Lists</h3>
+          <p>On your Lists page you can:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Click any list to view its contents</li>
+            <li>Edit list name and description</li>
+            <li>Remove items from the list</li>
+            <li>Reorder items by dragging and dropping (if enabled)</li>
+            <li>Delete entire lists</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Public vs Private Lists</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Private Lists:</strong> Only you can see these lists</li>
+            <li><strong>Public Lists:</strong> Other users can view your public lists if you've enabled list sharing in privacy settings</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Statistics -->
+    <section id="statistics" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Watch Statistics</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Visualize your viewing habits with detailed statistics and charts.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Statistics Dashboard</h3>
+          <p>Visit Profile → Statistics to see:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Total Watch Time:</strong> How many hours you've spent watching</li>
+            <li><strong>Episode & Movie Counts:</strong> Number of episodes and movies watched</li>
+            <li><strong>Current Streak:</strong> How many consecutive days you've watched something</li>
+            <li><strong>Watch Time Chart:</strong> Visualize your watching activity over time (30, 90, or 365 days)</li>
+            <li><strong>Genre Distribution:</strong> See which genres you watch most</li>
+            <li><strong>Viewing Patterns:</strong> Discover what times of day and days of week you watch most</li>
+            <li><strong>Top Shows/Movies:</strong> Your most-watched content</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Time Periods</h3>
+          <p>Most statistics can be filtered by time period (last 30 days, 90 days, or 365 days) to see recent trends or long-term patterns.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recommendations -->
+    <section id="recommendations" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Recommendations</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Share your favorite shows and movies with the community by recommending them.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Making a Recommendation</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Visit any show or movie detail page</li>
+            <li>Click the "Recommend" button (thumbs-up icon)</li>
+            <li>Add a note explaining why you recommend it</li>
+            <li>Submit your recommendation</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Purpose</h3>
+          <p>Recommendations help other users discover great content. They may appear in community feeds or recommendation sections (if enabled by your administrator).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem Reports -->
+    <section id="problem-reports" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Reporting Problems</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Found an issue with a show, movie, or episode? Report it to help improve the library quality.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">How to Report</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Visit the show or movie detail page</li>
+            <li>Click the flag/report icon button</li>
+            <li>Select the problem category (Missing Content, Incorrect Metadata, Playback Issue, Subtitle Issue, Quality Issue, or Other)</li>
+            <li>Enter a title and detailed description</li>
+            <li>Submit the report</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Episode-Level Reports</h3>
+          <p>You can also report issues with specific episodes by clicking the flag icon next to individual episodes in the episode list.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">What Happens Next</h3>
+          <p>Your report is sent to administrators who can review and address the issue. Reports help maintain high-quality metadata and playback for the entire community.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Common Problem Categories</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Missing Content:</strong> Episodes or seasons that should exist but are missing</li>
+            <li><strong>Incorrect Metadata:</strong> Wrong titles, descriptions, posters, or episode information</li>
+            <li><strong>Playback Issue:</strong> Video won't play, buffers constantly, or has technical problems</li>
+            <li><strong>Subtitle Issue:</strong> Missing subtitles, out-of-sync subtitles, or incorrect language</li>
+            <li><strong>Quality Issue:</strong> Poor video quality, audio problems, or encoding issues</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Notifications -->
+    <section id="notifications" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Notifications</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Stay informed about important announcements and system updates.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Notification Types</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Announcements:</strong> Important messages from administrators (displayed as banners at the top of pages)</li>
+            <li><strong>System Notifications:</strong> Updates about your account or features</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Viewing Notifications</h3>
+          <p>Go to Profile → Notifications to see all your notifications. Unread notifications will be highlighted.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Dismissing Announcements</h3>
+          <p>Click the "X" button on any announcement banner to dismiss it. It won't show up again for you.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy Settings -->
+    <section id="privacy" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Privacy Settings</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>Control what information other users can see about your activity and profile.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Accessing Privacy Settings</h3>
+          <p>Go to Profile → Settings to manage your privacy preferences.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Privacy Options</h3>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><strong>Profile Information:</strong> Show your profile photo, bio, and basic info to other users</li>
+            <li><strong>Custom Lists:</strong> Allow others to see and view your public custom lists</li>
+            <li><strong>Favorites:</strong> Show your favorited shows and movies to others</li>
+            <li><strong>Watch History:</strong> Allow others to see what you've watched (usually kept private)</li>
+            <li><strong>Watch Progress:</strong> Show your progress on shows you're currently watching</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Recommendations</h3>
+          <p>For maximum privacy, uncheck all options except Profile Information and Custom Lists. This keeps your watching habits private while still allowing you to participate in the community.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Saving Changes</h3>
+          <p>Don't forget to click "Save Changes" after adjusting your privacy settings for them to take effect.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Additional Features -->
+    <section id="additional-features" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Additional Features</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Dark Mode</h3>
+          <p>Click the sun/moon icon in the top-right corner to toggle between light and dark modes. Your preference is saved automatically.</p>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Request Content (Jellyseerr Integration)</h3>
+          <p>If your administrator has enabled Jellyseerr integration, you can:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Click "Request on Jellyseerr" on show/movie detail pages to request content not yet in the library</li>
+            <li>Click "Request Season" buttons to request specific seasons of a TV show</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Episode Details</h3>
+          <p>On show detail pages, you can see:</p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Full episode lists organized by season</li>
+            <li>Episode titles, air dates, and descriptions</li>
+            <li>Episode runtime</li>
+            <li>Watch status checkboxes</li>
+          </ul>
+
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mt-6">Cast & Crew</h3>
+          <p>Show and movie detail pages display cast members with photos when available.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tips & Best Practices -->
+    <section id="tips" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Tips & Best Practices</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <ul class="list-disc list-inside space-y-2 ml-4">
+            <li><strong>Let Plex Do the Work:</strong> Watch tracking happens automatically when you watch in Plex (95%+ completion). You only need manual checkboxes for content watched elsewhere.</li>
+
+            <li><strong>Organize with Lists:</strong> Create themed lists like "Comfort Shows," "Watch with Family," "Summer Watching," etc. to organize your library your way.</li>
+
+            <li><strong>Use Progress Tracking:</strong> Move shows between Watching/Plan to Watch/Completed to keep track of what you're actively watching vs. planning to start.</li>
+
+            <li><strong>Review Your Stats:</strong> Check your Statistics page periodically to discover your viewing patterns and trends.</li>
+
+            <li><strong>Protect Your Privacy:</strong> If you don't want others seeing your watch history, make sure to uncheck "Watch History" in your privacy settings.</li>
+
+            <li><strong>Report Issues Early:</strong> If you notice incorrect metadata or playback problems, report them right away so they can be fixed for everyone.</li>
+
+            <li><strong>Share Recommendations:</strong> When you discover a great show, recommend it to help others find quality content.</li>
+
+            <li><strong>Check Announcements:</strong> Watch for announcement banners at the top of pages for important updates from administrators.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Help -->
+    <section id="getting-help" class="mb-12">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4">Getting Help</h2>
+
+        <div class="space-y-4 text-slate-700 dark:text-slate-300">
+          <p>If you encounter issues or have questions not covered in this manual:</p>
+          <ul class="list-disc list-inside space-y-2 ml-4">
+            <li><strong>Contact Your Administrator:</strong> Reach out to the person who manages your ShowNotes instance</li>
+            <li><strong>Report Technical Issues:</strong> Use the problem reporting feature to report bugs or technical problems</li>
+            <li><strong>Check Announcements:</strong> Administrators often post important information and answers in announcements</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <div class="text-center mt-12 pb-8">
+      <p class="text-slate-500 dark:text-slate-400">
+        <a href="{{ url_for('main.home') }}" class="text-sky-600 dark:text-sky-400 hover:underline">Return to Homepage</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
