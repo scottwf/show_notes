@@ -1125,6 +1125,7 @@ def onboarding_services():
 
     Requires that Step 1 (admin account creation) has been completed.
     On POST, creates settings record and completes onboarding.
+    On GET, pre-populates form fields from .env file if available.
     """
     # Check if Step 1 is complete (admin user exists)
     db = database.get_db()
@@ -1139,6 +1140,25 @@ def onboarding_services():
     if settings_record:
         flash('Onboarding already complete. Please log in.', 'info')
         return redirect(url_for('main.login'))
+
+    # Load environment variables for pre-populating form
+    env_settings = {
+        'base_url': os.getenv('BASE_URL', ''),
+        'radarr_url': os.getenv('RADARR_URL', ''),
+        'radarr_api_key': os.getenv('RADARR_API_KEY', ''),
+        'radarr_remote_url': os.getenv('RADARR_REMOTE_URL', ''),
+        'sonarr_url': os.getenv('SONARR_URL', ''),
+        'sonarr_api_key': os.getenv('SONARR_API_KEY', ''),
+        'sonarr_remote_url': os.getenv('SONARR_REMOTE_URL', ''),
+        'bazarr_url': os.getenv('BAZARR_URL', ''),
+        'bazarr_api_key': os.getenv('BAZARR_API_KEY', ''),
+        'tautulli_url': os.getenv('TAUTULLI_URL', ''),
+        'tautulli_api_key': os.getenv('TAUTULLI_API_KEY', ''),
+        'ollama_url': os.getenv('OLLAMA_API_URL', 'http://localhost:11434'),
+        'pushover_key': os.getenv('PUSHOVER_USER_KEY', ''),
+        'pushover_token': os.getenv('PUSHOVER_API_TOKEN', ''),
+        'plex_client_id': os.getenv('PLEX_CLIENT_ID', '')
+    }
 
     if request.method == 'POST':
         try:
@@ -1219,7 +1239,7 @@ def onboarding_services():
             flash(f'An error occurred during service configuration: {e}', 'danger')
             current_app.logger.error(f"Onboarding Step 2 error: {e}", exc_info=True)
 
-    return render_template('onboarding_services.html')
+    return render_template('onboarding_services.html', env_settings=env_settings)
 
 @main_bp.route('/onboarding/test-service', methods=['POST'])
 def onboarding_test_service():
