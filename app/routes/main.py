@@ -235,19 +235,149 @@ def _get_plex_event_details(plex_event_row, db):
     return item_details
 
 @main_bp.route('/')
+@login_required
 def home():
     """
-    Redirects to the user's profile page (watch history with now playing).
+    User's profile page (watch history with now playing).
 
-    The profile page now serves as the default landing page, displaying
-    currently playing media and watch history.
+    This is the homepage/landing page displaying currently playing media and watch history.
     """
-    # If user is logged in, redirect to profile
-    if session.get('user_id'):
-        return redirect(url_for('main.profile_history'))
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('main.login'))
 
-    # If not logged in, redirect to login
-    return redirect(url_for('main.login'))
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
+    # Get currently playing/paused item from Tautulli (real-time data)
+    from ..utils import get_tautulli_current_activity
+
+    current_plex_event = None
+    s_username = user['plex_username'] if user['plex_username'] else user['username']
+
+    tautulli_session = get_tautulli_current_activity(username=s_username)
+
+    if tautulli_session:
+        # Convert Tautulli session data to our expected format
+        # Safely convert numeric values to int
+        parent_index = int(tautulli_session.get('parent_media_index', 0) or 0)
+        media_index = int(tautulli_session.get('media_index', 0) or 0)
+        view_offset = int(tautulli_session.get('view_offset', 0) or 0)
+        duration = int(tautulli_session.get('duration', 0) or 0)
+        progress_percent = int(tautulli_session.get('progress_percent', 0) or 0)
+
+        current_plex_event = {
+            'title': tautulli_session.get('full_title') or tautulli_session.get('title'),
+            'media_type': tautulli_session.get('media_type'),
+            'show_title': tautulli_session.get('grandparent_title'),
+            'season_episode': f"S{parent_index:02d}E{media_index:02d}" if tautulli_session.get('media_type') == 'episode' else None,
+            'view_offset_ms': view_offset * 1000,  # Tautulli returns seconds
+            'duration_ms': duration * 1000,  # Tautulli returns seconds
+            'state': tautulli_session.get('state'),  # playing, paused, buffering
+            'progress_percent': progress_percent,
+            'year': tautulli_session.get('year'),
+            'rating_key': tautulli_session.get('rating_key'),
+            'grandparent_rating_key': tautulli_session.get('grandparent_rating_key'),
+            'poster_url': tautulli_session.get('thumb'),
+        }
+
+        # Try to get TMDB ID from our database
+        if current_plex_event['media_type'] == 'movie':
+            movie = db.execute('SELECT tmdb_id FROM radarr_movies WHERE title = ?',
+                             (current_plex_event['title'],)).fetchone()
+            if movie:
+                current_plex_event['tmdb_id'] = movie['tmdb_id']
+                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
+        elif current_plex_event['media_type'] == 'episode' and current_plex_event['show_title']:
+            show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE LOWER(title) = ?',
+                            (current_plex_event['show_title'].lower(),)).fetchone()
+            if show:
+                current_plex_event['show_tmdb_id'] = show['tmdb_id']
+                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
+
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
+
+    # Get watch history (recent 50 unique items)
+    # Group by unique episode/movie to show only one entry per item
+    # Filter out trailers (duration < 10 minutes = 600000ms)
+    watch_history = db.execute("""
+        SELECT
+            id, event_type, plex_username, media_type, title, show_title,
+            season_episode, view_offset_ms, duration_ms, event_timestamp,
+            tmdb_id, grandparent_rating_key,
+            MAX(event_timestamp) as latest_timestamp
+        FROM plex_activity_log
+        WHERE plex_username = ?
+        AND event_type IN ('media.stop', 'media.scrobble')
+        AND (duration_ms IS NULL OR duration_ms >= 600000)
+        GROUP BY
+            CASE
+                WHEN media_type = 'episode' THEN show_title || '-' || season_episode
+                WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
+                ELSE title
+            END
+        ORDER BY latest_timestamp DESC
+        LIMIT 50
+    """, (s_username,)).fetchall()
+
+    # Enrich watch history with show/movie data
+    enriched_history = []
+    for item in watch_history:
+        item_dict = dict(item)
+
+        # Try to get additional metadata
+        if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
+            movie = db.execute(
+                'SELECT title, year, poster_url FROM radarr_movies WHERE tmdb_id = ?',
+                (item_dict['tmdb_id'],)
+            ).fetchone()
+
+            if movie:
+                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
+                item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
+
+        elif item_dict['media_type'] == 'episode' and item_dict.get('show_title'):
+            show = db.execute(
+                'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
+                (item_dict['show_title'].lower(),)
+            ).fetchone()
+
+            if show:
+                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
+                item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+
+                # Try to find episode detail link
+                if item_dict.get('season_episode'):
+                    match = re.match(r'S(\d+)E(\d+)', item_dict['season_episode'])
+                    if match:
+                        season_num = int(match.group(1))
+                        episode_num = int(match.group(2))
+                        item_dict['episode_detail_url'] = url_for('main.episode_detail',
+                                                                    tmdb_id=show['tmdb_id'],
+                                                                    season_number=season_num,
+                                                                    episode_number=episode_num)
+
+
+        # Keep raw timestamp for client-side timezone conversion
+        # JavaScript will handle displaying in user's local timezone
+
+        enriched_history.append(item_dict)
+
+    return render_template('profile_history.html',
+                         user=user_dict,
+                         current_plex_event=current_plex_event,
+                         watch_history=enriched_history,
+                         **stats,
+                         active_tab='history')
 
 # ============================================================================
 # WEBHOOK ENDPOINTS
@@ -2081,154 +2211,9 @@ def report_issue(media_type, media_id):
 
 @main_bp.route('/profile')
 @main_bp.route('/profile/history')
-@login_required
 def profile_history():
-    """Display user's watch history and currently playing media"""
-    user_id = session.get('user_id')
-    if not user_id:
-        flash('Please log in to view your profile.', 'warning')
-        return redirect(url_for('main.login'))
-
-    db = database.get_db()
-
-    # Get user info
-    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-
-    # Convert user row to dict so we can add the plex_member_since field
-    user_dict = dict(user)
-    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
-    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
-
-    # Get currently playing/paused item from Tautulli (real-time data)
-    from ..utils import get_tautulli_current_activity
-
-    current_plex_event = None
-    s_username = user['plex_username'] if user['plex_username'] else user['username']
-
-    tautulli_session = get_tautulli_current_activity(username=s_username)
-
-    if tautulli_session:
-        # Convert Tautulli session data to our expected format
-        # Safely convert numeric values to int
-        parent_index = int(tautulli_session.get('parent_media_index', 0) or 0)
-        media_index = int(tautulli_session.get('media_index', 0) or 0)
-        view_offset = int(tautulli_session.get('view_offset', 0) or 0)
-        duration = int(tautulli_session.get('duration', 0) or 0)
-        progress_percent = int(tautulli_session.get('progress_percent', 0) or 0)
-
-        current_plex_event = {
-            'title': tautulli_session.get('full_title') or tautulli_session.get('title'),
-            'media_type': tautulli_session.get('media_type'),
-            'show_title': tautulli_session.get('grandparent_title'),
-            'season_episode': f"S{parent_index:02d}E{media_index:02d}" if tautulli_session.get('media_type') == 'episode' else None,
-            'view_offset_ms': view_offset * 1000,  # Tautulli returns seconds
-            'duration_ms': duration * 1000,  # Tautulli returns seconds
-            'state': tautulli_session.get('state'),  # playing, paused, buffering
-            'progress_percent': progress_percent,
-            'year': tautulli_session.get('year'),
-            'rating_key': tautulli_session.get('rating_key'),
-            'grandparent_rating_key': tautulli_session.get('grandparent_rating_key'),
-            'poster_url': tautulli_session.get('thumb'),
-        }
-
-        # Try to get TMDB ID from our database
-        if current_plex_event['media_type'] == 'movie':
-            movie = db.execute('SELECT tmdb_id FROM radarr_movies WHERE title = ?',
-                             (current_plex_event['title'],)).fetchone()
-            if movie:
-                current_plex_event['tmdb_id'] = movie['tmdb_id']
-                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
-        elif current_plex_event['media_type'] == 'episode' and current_plex_event['show_title']:
-            show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE LOWER(title) = ?',
-                            (current_plex_event['show_title'].lower(),)).fetchone()
-            if show:
-                current_plex_event['show_tmdb_id'] = show['tmdb_id']
-                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
-
-    # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
-
-    # Get watch history (recent 50 unique items)
-    # Group by unique episode/movie to show only one entry per item
-    # Filter out trailers (duration < 10 minutes = 600000ms)
-    watch_history = db.execute("""
-        SELECT
-            id, event_type, plex_username, media_type, title, show_title,
-            season_episode, view_offset_ms, duration_ms, event_timestamp,
-            tmdb_id, grandparent_rating_key,
-            MAX(event_timestamp) as latest_timestamp
-        FROM plex_activity_log
-        WHERE plex_username = ?
-        AND event_type IN ('media.stop', 'media.scrobble')
-        AND (duration_ms IS NULL OR duration_ms >= 600000)
-        GROUP BY
-            CASE
-                WHEN media_type = 'episode' THEN show_title || '-' || season_episode
-                WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
-                ELSE title
-            END
-        ORDER BY latest_timestamp DESC
-        LIMIT 50
-    """, (s_username,)).fetchall()
-    
-    # Enrich watch history with show/movie data
-    enriched_history = []
-    for item in watch_history:
-        item_dict = dict(item)
-        
-        # Try to get additional metadata
-        if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = db.execute(
-                'SELECT title, year, poster_url FROM radarr_movies WHERE tmdb_id = ?',
-                (item_dict['tmdb_id'],)
-            ).fetchone()
-            if movie:
-                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
-                item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
-                item_dict['year'] = movie['year']
-        
-        elif item_dict['media_type'] == 'episode':
-            # Try to find the show by TVDB ID or title
-            show = None
-            if item_dict.get('grandparent_rating_key'):
-                show = db.execute(
-                    'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE tvdb_id = ?',
-                    (item_dict['grandparent_rating_key'],)
-                ).fetchone()
-            
-            if not show and item_dict.get('show_title'):
-                show = db.execute(
-                    'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
-                    (item_dict['show_title'].lower(),)
-                ).fetchone()
-            
-            if show:
-                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
-                item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
-                
-                # Try to find episode detail link
-                if item_dict.get('season_episode'):
-                    match = re.match(r'S(\d+)E(\d+)', item_dict['season_episode'])
-                    if match:
-                        season_num = int(match.group(1))
-                        episode_num = int(match.group(2))
-                        item_dict['episode_detail_url'] = url_for('main.episode_detail',
-                                                                    tmdb_id=show['tmdb_id'],
-                                                                    season_number=season_num,
-                                                                    episode_number=episode_num)
-        
-        
-        # Keep raw timestamp for client-side timezone conversion
-        # JavaScript will handle displaying in user's local timezone
-        
-        enriched_history.append(item_dict)
-
-    return render_template('profile_history.html',
-                         user=user_dict,
-                         current_plex_event=current_plex_event,
-                         watch_history=enriched_history,
-                         **stats,
-                         active_tab='history')
+    """Redirect to homepage (backwards compatibility)"""
+    return redirect(url_for('main.home'))
 
 
 @main_bp.route('/profile/favorites')
