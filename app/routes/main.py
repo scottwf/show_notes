@@ -88,6 +88,74 @@ def check_onboarding():
             flash('Initial setup required. Please complete the onboarding process.', 'info')
             return redirect(url_for('main.onboarding'))
 
+@main_bp.before_app_request
+def update_session_profile_photo():
+    """
+    Update session with profile photo URL if missing.
+    This ensures users who logged in before we added profile_photo_url to session
+    will have it populated without needing to log out and back in.
+    """
+    if session.get('user_id') and not session.get('profile_photo_url'):
+        try:
+            db = database.get_db()
+            user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+            if user_record and user_record['profile_photo_url']:
+                session['profile_photo_url'] = user_record['profile_photo_url']
+        except Exception:
+            pass  # Silently fail to avoid breaking the request
+
+def _get_profile_stats(db, user_id=None):
+    """
+    Helper function to get consistent statistics for profile pages.
+    Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
+    favorite_count (if user_id provided), unread_notification_count (if user_id provided)
+    """
+    stats = {}
+
+    # Now Playing: count sessions with activity in last 15 minutes
+    fifteen_mins_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(minutes=15)).isoformat()
+    stats['now_playing_count'] = db.execute("""
+        WITH latest_events AS (
+            SELECT
+                session_key,
+                event_type,
+                MAX(event_timestamp) as last_event_time
+            FROM plex_activity_log
+            WHERE session_key IS NOT NULL AND session_key != ''
+              AND event_timestamp >= ?
+            GROUP BY session_key
+        )
+        SELECT COUNT(*)
+        FROM latest_events
+        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
+    """, (fifteen_mins_ago,)).fetchone()[0] or 0
+
+    # Total shows
+    stats['total_shows'] = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0] or 0
+
+    # Total episodes
+    stats['total_episodes'] = db.execute('SELECT COUNT(DISTINCT id) FROM sonarr_episodes').fetchone()[0] or 0
+
+    # Total movies
+    stats['total_movies'] = db.execute('SELECT COUNT(*) FROM radarr_movies').fetchone()[0] or 0
+
+    # User-specific stats
+    if user_id:
+        stats['favorite_count'] = db.execute(
+            'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+            (user_id,)
+        ).fetchone()[0] or 0
+
+        stats['unread_notification_count'] = db.execute(
+            'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
+            (user_id,)
+        ).fetchone()[0] or 0
+    else:
+        stats['favorite_count'] = 0
+        stats['unread_notification_count'] = 0
+
+    return stats
+
 def _get_plex_event_details(plex_event_row, db):
     """
     Enriches a Plex activity log record with detailed metadata and image URLs.
@@ -4453,23 +4521,34 @@ def jellyseer_upcoming():
 
 @main_bp.route('/api/announcements/active', methods=['GET'])
 def api_active_announcements():
-    """Get active announcements for display to users"""
+    """Get active announcements for current user (excluding dismissed ones)"""
     try:
         db = database.get_db()
+        user_id = session.get('user_id')
         now = datetime.datetime.now(timezone.utc).isoformat()
 
-        # Get announcements that are:
-        # 1. Active (is_active = 1)
-        # 2. Either no start_date OR start_date <= now
-        # 3. Either no end_date OR end_date >= now
-        announcements = db.execute('''
-            SELECT id, title, message, type, created_at
-            FROM announcements
-            WHERE is_active = 1
-              AND (start_date IS NULL OR start_date <= ?)
-              AND (end_date IS NULL OR end_date >= ?)
-            ORDER BY created_at DESC
-        ''', (now, now)).fetchall()
+        # Get announcements that are active and not dismissed by this user
+        if user_id:
+            announcements = db.execute('''
+                SELECT a.id, a.title, a.message, a.type, a.created_at
+                FROM announcements a
+                LEFT JOIN user_announcement_views uav ON a.id = uav.announcement_id AND uav.user_id = ?
+                WHERE a.is_active = 1
+                  AND (a.start_date IS NULL OR a.start_date <= ?)
+                  AND (a.end_date IS NULL OR a.end_date >= ?)
+                  AND uav.dismissed_at IS NULL
+                ORDER BY a.created_at DESC
+            ''', (user_id, now, now)).fetchall()
+        else:
+            # For non-logged-in users, show all active announcements
+            announcements = db.execute('''
+                SELECT id, title, message, type, created_at
+                FROM announcements
+                WHERE is_active = 1
+                  AND (start_date IS NULL OR start_date <= ?)
+                  AND (end_date IS NULL OR end_date >= ?)
+                ORDER BY created_at DESC
+            ''', (now, now)).fetchall()
 
         return jsonify({
             'success': True,
@@ -4478,6 +4557,45 @@ def api_active_announcements():
 
     except Exception as e:
         current_app.logger.error(f"Error fetching active announcements: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@main_bp.route('/api/announcements/<int:announcement_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_announcement(announcement_id):
+    """Mark an announcement as dismissed for the current user"""
+    try:
+        user_id = session.get('user_id')
+        db = database.get_db()
+
+        # Mark as dismissed
+        db.execute('''
+            INSERT INTO user_announcement_views (user_id, announcement_id, dismissed_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, announcement_id) DO UPDATE SET
+                dismissed_at = CURRENT_TIMESTAMP
+        ''', (user_id, announcement_id))
+
+        # Also create a notification so user can still see it in notifications
+        announcement = db.execute('''
+            SELECT title, message, type FROM announcements WHERE id = ?
+        ''', (announcement_id,)).fetchone()
+
+        if announcement:
+            db.execute('''
+                INSERT INTO user_notifications (user_id, type, title, message, is_read, created_at)
+                VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ''', (user_id, 'announcement', announcement['title'], announcement['message']))
+
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error dismissing announcement: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
