@@ -255,7 +255,41 @@ May need to add:
 
 ## Future Goals / Enhancement Ideas
 
-### LLM-Powered Recommendations
+### 1. Personal Recommendations System (HIGH PRIORITY)
+- **Goal**: Make recommendations a core social feature with personal targeting
+- **Features**:
+  - **Two Default Lists** (can't be deleted, auto-created):
+    1. "I Recommend" - Shows you've recommended
+    2. "Recommended to Me" - Shows others suggested for you
+  - **Recommend to Specific User**:
+    - When recommending, option to select a specific user
+    - If selected, that user gets a notification
+    - Shows up in their "Recommended to Me" list
+    - Can still do general recommendations (no specific user)
+  - **Plex Watchlist Integration**:
+    - Add "Add to Plex Watchlist" button on recommendations
+    - Uses Plex API to add show to user's watchlist
+    - One-click action from "Recommended to Me" list
+  - **Notifications**:
+    - "[User] recommended [Show] to you: [note]"
+    - Links to show detail page
+    - Shows in Section 3 of notifications tab
+- **Database Changes**:
+  - Add `recommended_to_user_id` to `user_recommendations` (NULL = general)
+  - Add `from_user_id` tracking (who made the recommendation)
+  - Migration to update existing schema
+- **UI Changes**:
+  - Update recommend modal with user dropdown
+  - Show recommender name on "Recommended to Me" list items
+  - Badge/icon to distinguish recommendation lists from custom lists
+  - "Add to Plex Watchlist" button with Plex icon
+- **Benefits**:
+  - Makes recommendations personal and actionable
+  - Encourages family/friend engagement
+  - Easy discovery of content others think you'd enjoy
+  - Direct integration with Plex for seamless watching
+
+### 2. LLM-Powered Recommendations
 - **Goal**: Use the previously configured LLM (Ollama/OpenAI) to provide intelligent show recommendations
 - **Features**:
   - Analyze user's watch history, favorites, and viewing patterns
@@ -273,6 +307,20 @@ May need to add:
   - Can explain connections between shows that aren't obvious
   - Personalizes the experience based on actual viewing behavior
   - Helps users discover content they'd enjoy from their library
+
+### 3. Release Management System
+- **Goal**: Support stable production deployments with safe upgrades
+- **Features**:
+  - Version tracking in database
+  - Migration status checker (shows applied vs pending)
+  - Upgrade script that runs pending migrations
+  - GitHub releases with changelogs
+  - Rollback capability for failed migrations
+- **Benefits**:
+  - Testing instance can run latest code
+  - Production instance runs stable releases
+  - Database preserved across upgrades
+  - Clear upgrade path for users
 
 ---
 
