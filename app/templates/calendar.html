@@ -1,0 +1,185 @@
+{% extends 'layout.html' %}
+
+{% block page_title %}TV Calendar{% endblock %}
+
+{% block page_content %}
+<div class="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">TV Calendar</h1>
+        <p class="text-slate-600 dark:text-slate-400">Upcoming episodes from your favorite and watched shows</p>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="mb-6 flex flex-wrap gap-3" x-data="{ filter: 'all' }">
+        <button @click="filter = 'all'" 
+                :class="filter === 'all' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                class="px-4 py-2 rounded-lg font-medium transition-colors">
+            All Episodes
+        </button>
+        <button @click="filter = 'premieres'" 
+                :class="filter === 'premieres' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                class="px-4 py-2 rounded-lg font-medium transition-colors">
+            Season Premieres
+        </button>
+        <button @click="filter = 'series'" 
+                :class="filter === 'series' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                class="px-4 py-2 rounded-lg font-medium transition-colors">
+            Series Premieres
+        </button>
+        <button @click="filter = 'favorites'" 
+                :class="filter === 'favorites' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                class="px-4 py-2 rounded-lg font-medium transition-colors">
+            Favorites Only
+        </button>
+
+        <!-- Content visibility logic -->
+        <template x-if="filter === 'all' || filter === 'premieres' || filter === 'favorites'">
+            <div class="hidden"></div>
+        </template>
+    </div>
+
+    <!-- Series Premieres Section -->
+    <div x-show="filter === 'all' || filter === 'series'" class="mb-12">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">
+            <svg class="inline-block w-6 h-6 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
+            </svg>
+            Upcoming Series Premieres
+        </h2>
+
+        {% if series_premieres %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for show in series_premieres %}
+            <div class="bg-slate-100 dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div class="flex gap-4 p-4">
+                    <a href="{{ show.show_url }}" class="flex-shrink-0">
+                        <img src="{{ show.cached_poster_url }}" 
+                             alt="{{ show.show_title }}"
+                             class="w-24 h-36 object-cover rounded-md"
+                             onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    </a>
+                    <div class="flex-1 min-w-0">
+                        <a href="{{ show.show_url }}" class="text-lg font-bold text-sky-600 dark:text-sky-400 hover:underline block truncate">
+                            {{ show.show_title }}
+                        </a>
+                        {% if show.year %}
+                        <p class="text-sm text-slate-500 dark:text-slate-400">({{ show.year }})</p>
+                        {% endif %}
+                        <div class="mt-2">
+                            <p class="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+                                </svg>
+                                Premieres: {{ show.premiere_date[:10] if show.premiere_date else 'TBA' }}
+                            </p>
+                        </div>
+                        {% if show.overview %}
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                            {{ show.overview }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-8 text-center">
+            <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p class="text-slate-600 dark:text-slate-400">No upcoming series premieres</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- TV Countdown Section -->
+    <div x-show="filter === 'all' || filter === 'premieres' || filter === 'favorites'">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">
+            <svg class="inline-block w-6 h-6 mr-2 text-sky-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+            </svg>
+            TV Countdown
+        </h2>
+
+        {% if upcoming_episodes %}
+        <div class="space-y-3">
+            {% for episode in upcoming_episodes %}
+            <div x-show="(filter === 'all') || 
+                         (filter === 'premieres' && {{ 'true' if episode.is_season_premiere else 'false' }}) ||
+                         (filter === 'favorites' && {{ 'true' if episode.is_favorited else 'false' }})"
+                 class="bg-slate-100 dark:bg-slate-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                <div class="flex gap-4 p-4">
+                    <a href="{{ episode.show_url }}" class="flex-shrink-0">
+                        <img src="{{ episode.cached_poster_url }}" 
+                             alt="{{ episode.show_title }}"
+                             class="w-20 h-30 object-cover rounded-md"
+                             onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    </a>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex-1 min-w-0">
+                                <a href="{{ episode.show_url }}" class="text-lg font-bold text-sky-600 dark:text-sky-400 hover:underline block truncate">
+                                    {{ episode.show_title }}
+                                </a>
+                                <a href="{{ episode.episode_url }}" class="text-md font-semibold text-slate-700 dark:text-slate-200 hover:underline block truncate">
+                                    S{{ '%02d' % episode.season_number }}E{{ '%02d' % episode.episode_number }}: {{ episode.episode_title }}
+                                </a>
+                            </div>
+                            <div class="flex-shrink-0 flex gap-2">
+                                {% if episode.is_season_premiere %}
+                                <span class="px-2 py-1 text-xs font-semibold bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded">
+                                    Season Premiere
+                                </span>
+                                {% endif %}
+                                {% if episode.is_favorited %}
+                                <span class="px-2 py-1 text-xs font-semibold bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                                    </svg>
+                                    Favorite
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-center gap-4 text-sm">
+                            <p class="text-slate-600 dark:text-slate-400 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+                                </svg>
+                                Airs: {{ episode.air_date_utc[:10] if episode.air_date_utc else 'TBA' }}
+                            </p>
+                            {% if episode.has_file %}
+                            <span class="px-2 py-1 text-xs font-semibold bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                                Available
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded">
+                                Not Yet Available
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% if episode.overview %}
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">
+                            {{ episode.overview }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-8 text-center">
+            <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p class="text-slate-600 dark:text-slate-400 mb-2">No upcoming episodes</p>
+            <p class="text-sm text-slate-500 dark:text-slate-500">
+                Favorite shows or watch episodes to see them here!
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

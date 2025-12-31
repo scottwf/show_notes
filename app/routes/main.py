@@ -3968,6 +3968,133 @@ def discover():
 
     return render_template('discover.html', jellyseer_url=jellyseer_url)
 
+@main_bp.route('/calendar')
+@login_required
+def calendar():
+    """
+    Display TV Countdown calendar showing:
+    - Upcoming episodes from favorited shows
+    - Upcoming episodes from watched shows
+    - Upcoming series premieres (shows in library but not yet available)
+    """
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view the calendar.', 'warning')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+    
+    # Get current date/time for filtering
+    now = datetime.datetime.now(timezone.utc).isoformat()
+    
+    # Get favorited show IDs
+    favorited_show_ids = db.execute("""
+        SELECT show_id FROM user_favorites
+        WHERE user_id = ? AND is_dropped = 0
+    """, (user_id,)).fetchall()
+    favorited_ids = [row['show_id'] for row in favorited_show_ids]
+    
+    # Get watched show IDs from plex_activity_log
+    watched_show_ids = db.execute("""
+        SELECT DISTINCT s.id
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON s.tvdb_id = CAST(pal.grandparent_rating_key AS INTEGER)
+        WHERE pal.plex_username = (SELECT plex_username FROM users WHERE id = ?)
+            AND pal.media_type = 'episode'
+    """, (user_id,)).fetchall()
+    watched_ids = [row['id'] for row in watched_show_ids]
+    
+    # Combine favorited and watched show IDs (unique)
+    tracked_show_ids = list(set(favorited_ids + watched_ids))
+    
+    # Get upcoming episodes for tracked shows
+    upcoming_episodes = []
+    if tracked_show_ids:
+        placeholders = ','.join('?' * len(tracked_show_ids))
+        upcoming_episodes = db.execute(f"""
+            SELECT 
+                e.id as episode_id,
+                e.episode_number,
+                e.title as episode_title,
+                e.air_date_utc,
+                e.has_file,
+                e.overview,
+                ss.season_number,
+                s.id as show_db_id,
+                s.tmdb_id,
+                s.title as show_title,
+                s.poster_url,
+                s.year
+            FROM sonarr_episodes e
+            JOIN sonarr_seasons ss ON e.season_id = ss.id
+            JOIN sonarr_shows s ON ss.show_id = s.id
+            WHERE s.id IN ({placeholders})
+                AND e.air_date_utc IS NOT NULL
+                AND e.air_date_utc >= ?
+                AND ss.season_number > 0
+            ORDER BY e.air_date_utc ASC
+            LIMIT 100
+        """, (*tracked_show_ids, now)).fetchall()
+    
+    # Get upcoming series premieres (shows in library with no available episodes yet)
+    series_premieres = db.execute("""
+        SELECT 
+            s.id as show_db_id,
+            s.tmdb_id,
+            s.title as show_title,
+            s.poster_url,
+            s.year,
+            s.overview,
+            MIN(e.air_date_utc) as premiere_date
+        FROM sonarr_shows s
+        JOIN sonarr_seasons ss ON ss.show_id = s.id
+        JOIN sonarr_episodes e ON e.season_id = ss.id
+        WHERE s.episode_file_count = 0
+            AND e.air_date_utc IS NOT NULL
+            AND e.air_date_utc >= ?
+            AND ss.season_number > 0
+        GROUP BY s.id
+        ORDER BY premiere_date ASC
+        LIMIT 50
+    """, (now,)).fetchall()
+    
+    # Format the data for template
+    formatted_upcoming = []
+    for ep in upcoming_episodes:
+        ep_dict = dict(ep)
+        ep_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=ep['tmdb_id'])
+        ep_dict['show_url'] = url_for('main.show_detail', tmdb_id=ep['tmdb_id'])
+        ep_dict['episode_url'] = url_for('main.episode_detail', 
+                                         tmdb_id=ep['tmdb_id'],
+                                         season_number=ep['season_number'],
+                                         episode_number=ep['episode_number'])
+        ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
+        ep_dict['is_watched'] = ep['show_db_id'] in watched_ids
+        
+        # Check if this is a season premiere
+        season_first_ep = db.execute("""
+            SELECT MIN(episode_number) as first_ep
+            FROM sonarr_episodes
+            WHERE season_id = (
+                SELECT id FROM sonarr_seasons 
+                WHERE show_id = ? AND season_number = ?
+            )
+        """, (ep['show_db_id'], ep['season_number'])).fetchone()
+        ep_dict['is_season_premiere'] = (ep['episode_number'] == season_first_ep['first_ep'])
+        
+        formatted_upcoming.append(ep_dict)
+    
+    formatted_premieres = []
+    for show in series_premieres:
+        show_dict = dict(show)
+        show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
+        show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+        formatted_premieres.append(show_dict)
+    
+    return render_template('calendar.html',
+                         upcoming_episodes=formatted_upcoming,
+                         series_premieres=formatted_premieres)
+
 @main_bp.route('/api/profile/settings', methods=['POST'])
 @login_required
 def update_profile_settings():

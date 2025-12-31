@@ -80,17 +80,20 @@
             <a href="{{ url_for('main.profile_history') }}"
               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
               role="menuitem" tabindex="-1" id="user-menu-item-0">Your Profile</a>
+            <a href="{{ url_for('main.calendar') }}"
+              class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+              role="menuitem" tabindex="-1" id="user-menu-item-1">TV Calendar</a>
             <a href="{{ url_for('main.help') }}"
               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              role="menuitem" tabindex="-1" id="user-menu-item-1">Help</a>
+              role="menuitem" tabindex="-1" id="user-menu-item-2">Help</a>
             {% if session.is_admin %}
             <a href="{{ url_for('admin.dashboard') }}"
               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              role="menuitem" tabindex="-1" id="user-menu-item-2">Admin Dashboard</a>
+              role="menuitem" tabindex="-1" id="user-menu-item-3">Admin Dashboard</a>
             {% endif %}
             <a href="{{ url_for('main.logout') }}"
               class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</a>
+              role="menuitem" tabindex="-1" id="user-menu-item-4">Sign out</a>
           </div>
         </div>
         {% else %}
