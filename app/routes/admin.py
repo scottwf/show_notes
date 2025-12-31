@@ -1596,7 +1596,7 @@ def announcements():
     """Admin page for managing announcements"""
     return render_template('admin_announcements.html')
 
-@admin_bp.route('/api/admin/announcements', methods=['GET'])
+@admin_bp.route('/api/announcements', methods=['GET'])
 @login_required
 @admin_required
 def api_get_announcements():
@@ -1621,7 +1621,7 @@ def api_get_announcements():
             'error': str(e)
         }), 500
 
-@admin_bp.route('/api/admin/announcements', methods=['POST'])
+@admin_bp.route('/api/announcements', methods=['POST'])
 @login_required
 @admin_required
 def api_create_announcement():
@@ -1629,8 +1629,10 @@ def api_create_announcement():
     db = None
     try:
         data = request.get_json()
+        current_app.logger.info(f"Announcement creation request data: {data}")
 
         if not data:
+            current_app.logger.error("No data provided in announcement creation request")
             return jsonify({
                 'success': False,
                 'error': 'No data provided'
@@ -1643,7 +1645,10 @@ def api_create_announcement():
         start_date = data.get('start_date') or None  # Convert empty string to None
         end_date = data.get('end_date') or None  # Convert empty string to None
 
+        current_app.logger.info(f"Processed values - title: '{title}', message: '{message}', type: '{type_}', is_active: {is_active}, start_date: {start_date}, end_date: {end_date}")
+
         if not title or not message:
+            current_app.logger.error(f"Missing required fields - title: '{title}', message: '{message}'")
             return jsonify({
                 'success': False,
                 'error': 'Title and message are required'
@@ -1651,6 +1656,7 @@ def api_create_announcement():
 
         db = get_db()
         user_id = session.get('user_id')
+        current_app.logger.info(f"Creating announcement for user_id: {user_id}")
 
         cur = db.execute('''
             INSERT INTO announcements (title, message, type, is_active, start_date, end_date, created_by)
@@ -1658,6 +1664,7 @@ def api_create_announcement():
         ''', (title, message, type_, is_active, start_date, end_date, user_id))
 
         db.commit()
+        current_app.logger.info(f"Announcement created successfully with id: {cur.lastrowid}")
 
         return jsonify({
             'success': True,
@@ -1673,7 +1680,7 @@ def api_create_announcement():
             'error': str(e)
         }), 500
 
-@admin_bp.route('/api/admin/announcements/<int:announcement_id>', methods=['PATCH'])
+@admin_bp.route('/api/announcements/<int:announcement_id>', methods=['PATCH'])
 @login_required
 @admin_required
 def api_update_announcement(announcement_id):
@@ -1723,7 +1730,7 @@ def api_update_announcement(announcement_id):
             'error': str(e)
         }), 500
 
-@admin_bp.route('/api/admin/announcements/<int:announcement_id>', methods=['DELETE'])
+@admin_bp.route('/api/announcements/<int:announcement_id>', methods=['DELETE'])
 @login_required
 @admin_required
 def api_delete_announcement(announcement_id):

@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadAnnouncements() {
     try {
-        const response = await fetch('/api/admin/announcements');
+        const response = await fetch('/admin/api/announcements');
         const data = await response.json();
 
         if (data.success) {
@@ -257,9 +257,13 @@ document.getElementById('announcement-form').addEventListener('submit', async (e
         end_date: document.getElementById('end-date').value || null
     };
 
+    console.log('Submitting announcement data:', data);
+
     try {
-        const url = id ? `/api/admin/announcements/${id}` : '/api/admin/announcements';
+        const url = id ? `/admin/api/announcements/${id}` : '/admin/api/announcements';
         const method = id ? 'PATCH' : 'POST';
+
+        console.log('Request:', method, url);
 
         const response = await fetch(url, {
             method: method,
@@ -267,7 +271,10 @@ document.getElementById('announcement-form').addEventListener('submit', async (e
             body: JSON.stringify(data)
         });
 
+        console.log('Response status:', response.status);
+
         const result = await response.json();
+        console.log('Response data:', result);
 
         if (result.success) {
             closeModal();
@@ -277,7 +284,7 @@ document.getElementById('announcement-form').addEventListener('submit', async (e
         }
     } catch (error) {
         console.error('Error saving announcement:', error);
-        alert('Error saving announcement');
+        alert('Error saving announcement: ' + error.message);
     }
 });
 
@@ -285,7 +292,7 @@ async function deleteAnnouncement(id) {
     if (!confirm('Delete this announcement?')) return;
 
     try {
-        const response = await fetch(`/api/admin/announcements/${id}`, {
+        const response = await fetch(`/admin/api/announcements/${id}`, {
             method: 'DELETE'
         });
 
