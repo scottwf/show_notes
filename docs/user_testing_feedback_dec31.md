@@ -253,6 +253,29 @@ May need to add:
 
 ---
 
+## Future Goals / Enhancement Ideas
+
+### LLM-Powered Recommendations
+- **Goal**: Use the previously configured LLM (Ollama/OpenAI) to provide intelligent show recommendations
+- **Features**:
+  - Analyze user's watch history, favorites, and viewing patterns
+  - Generate personalized "You might like..." suggestions
+  - Find related shows based on themes, genres, actors, directors
+  - Provide explanations for why a show is recommended
+  - Consider user's ratings and completion status
+- **Implementation Notes**:
+  - LLM integration was previously set up but character features were removed
+  - Can reuse existing LLM configuration from settings
+  - Could run as background task to pre-generate recommendations
+  - Show on profile page or dedicated "Discover" page
+- **Benefits**:
+  - More engaging than simple genre-based recommendations
+  - Can explain connections between shows that aren't obvious
+  - Personalizes the experience based on actual viewing behavior
+  - Helps users discover content they'd enjoy from their library
+
+---
+
 ## Next Steps
 
 1. Create detailed plan for each issue
