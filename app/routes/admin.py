@@ -1630,12 +1630,18 @@ def api_create_announcement():
     try:
         data = request.get_json()
 
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+
         title = data.get('title', '').strip()
         message = data.get('message', '').strip()
         type_ = data.get('type', 'info')
-        is_active = data.get('is_active', True)
-        start_date = data.get('start_date')
-        end_date = data.get('end_date')
+        is_active = 1 if data.get('is_active', True) else 0  # Convert to int for SQLite
+        start_date = data.get('start_date') or None  # Convert empty string to None
+        end_date = data.get('end_date') or None  # Convert empty string to None
 
         if not title or not message:
             return jsonify({
@@ -1672,15 +1678,22 @@ def api_create_announcement():
 @admin_required
 def api_update_announcement(announcement_id):
     """Update an announcement"""
+    db = None
     try:
         data = request.get_json()
+
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
 
         title = data.get('title', '').strip()
         message = data.get('message', '').strip()
         type_ = data.get('type', 'info')
-        is_active = data.get('is_active', True)
-        start_date = data.get('start_date')
-        end_date = data.get('end_date')
+        is_active = 1 if data.get('is_active', True) else 0  # Convert to int for SQLite
+        start_date = data.get('start_date') or None  # Convert empty string to None
+        end_date = data.get('end_date') or None  # Convert empty string to None
 
         if not title or not message:
             return jsonify({
@@ -1702,7 +1715,8 @@ def api_update_announcement(announcement_id):
         return jsonify({'success': True})
 
     except Exception as e:
-        db.rollback()
+        if db:
+            db.rollback()
         current_app.logger.error(f"Error updating announcement: {e}", exc_info=True)
         return jsonify({
             'success': False,
