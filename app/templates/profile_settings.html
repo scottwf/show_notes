@@ -12,8 +12,8 @@
             <div class="flex items-center gap-6">
                 <div class="relative">
                     <div id="profile-photo-preview" class="w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg overflow-hidden">
-                        <span id="profile-initials">{{ user.username[0].upper() }}</span>
-                        <img id="profile-photo-img" src="{{ user.profile_photo_url }}" alt="Profile" class="w-full h-full object-cover {% if not user.profile_photo_url %}hidden{% endif %}">
+                        <span id="profile-initials" class="{% if user.profile_photo_url %}hidden{% endif %}">{{ user.username[0].upper() }}</span>
+                        <img id="profile-photo-img" src="{{ user.profile_photo_url }}" alt="Profile" class="w-full h-full object-cover absolute inset-0 {% if not user.profile_photo_url %}hidden{% endif %}">
                     </div>
                 </div>
 
@@ -122,13 +122,13 @@ function previewPhoto(event) {
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
+        showNotification('File size must be less than 5MB', 'error', 'File too large');
         return;
     }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+        showNotification('Please upload an image file', 'error', 'Invalid file type');
         return;
     }
 
@@ -161,12 +161,12 @@ function removePhoto() {
             initials.classList.remove('hidden');
             photoFile = null;
         } else {
-            alert('Error removing photo: ' + data.error);
+            showNotification(data.error, 'error', 'Error removing photo');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error removing photo');
+        showNotification('Please try again', 'error', 'Error removing photo');
     });
 }
 
@@ -194,14 +194,14 @@ document.getElementById('profile-settings-form').addEventListener('submit', asyn
         const data = await response.json();
 
         if (data.success) {
-            alert('Profile updated successfully!');
+            showNotification('Profile updated successfully!', 'success');
             window.location.href = '{{ url_for('main.profile_history') }}';
         } else {
-            alert('Error updating profile: ' + data.error);
+            showNotification(data.error, 'error', 'Error updating profile');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('Error updating profile');
+        showNotification('Please try again', 'error', 'Error updating profile');
     }
 });
 </script>

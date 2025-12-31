@@ -1596,6 +1596,84 @@ def test_tautulli_connection_with_params(url, api_key):
         params=params
     )
 
+def get_tautulli_activity():
+    """
+    Get current activity (now playing) from Tautulli.
+
+    Returns:
+        int: Number of currently active streams, or 0 if unable to fetch
+    """
+    try:
+        tautulli_url = database.get_setting('tautulli_url')
+        tautulli_api_key = database.get_setting('tautulli_api_key')
+
+        if not tautulli_url or not tautulli_api_key:
+            return 0
+
+        # Call Tautulli API to get current activity
+        params = {
+            'apikey': tautulli_api_key,
+            'cmd': 'get_activity'
+        }
+
+        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('response', {}).get('result') == 'success':
+                # Get the stream_count from the response
+                stream_count = data.get('response', {}).get('data', {}).get('stream_count', 0)
+                return stream_count
+
+        return 0
+    except Exception as e:
+        # Silently fail and return 0 - don't break the page if Tautulli is down
+        return 0
+
+def get_tautulli_current_activity(username=None):
+    """
+    Get detailed current activity from Tautulli with real-time progress.
+
+    Args:
+        username (str, optional): Filter by Plex username
+
+    Returns:
+        dict or None: Session data with real-time progress, or None if no activity/error
+    """
+    try:
+        tautulli_url = database.get_setting('tautulli_url')
+        tautulli_api_key = database.get_setting('tautulli_api_key')
+
+        if not tautulli_url or not tautulli_api_key:
+            return None
+
+        params = {
+            'apikey': tautulli_api_key,
+            'cmd': 'get_activity'
+        }
+
+        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('response', {}).get('result') == 'success':
+                sessions = data.get('response', {}).get('data', {}).get('sessions', [])
+
+                # If username provided, filter for that user
+                if username and sessions:
+                    for session in sessions:
+                        if session.get('user') == username:
+                            return session
+                    return None
+
+                # Otherwise return first session if any
+                return sessions[0] if sessions else None
+
+        return None
+    except Exception as e:
+        # Silently fail - don't break the page if Tautulli is down
+        return None
+
 def parse_llm_markdown_sections(md):
     """
     Parse markdown output from LLM into a dict of sections.

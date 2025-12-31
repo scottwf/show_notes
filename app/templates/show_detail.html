@@ -622,11 +622,11 @@
                 // Update button title
                 btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
             } else {
-                alert('Failed to update favorite: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Failed to update favorite');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Failed to update favorite. Please try again.');
+            showNotification('Please try again.', 'error', 'Failed to update favorite');
         }
     }
 
@@ -678,7 +678,7 @@
             const data = await response.json();
 
             if (!data.success) {
-                alert('Failed to update episode: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Failed to update episode');
                 // Revert checkbox state on error
                 const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
                 if (checkbox) {
@@ -687,7 +687,7 @@
             }
         } catch (error) {
             console.error('Error toggling episode:', error);
-            alert('Failed to update episode. Please try again.');
+            showNotification('Please try again.', 'error', 'Failed to update episode');
             // Revert checkbox state on error
             const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
             if (checkbox) {
@@ -723,11 +723,11 @@
                     }
                 });
             } else {
-                alert('Failed to update season: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Failed to update season');
             }
         } catch (error) {
             console.error('Error marking season:', error);
-            alert('Failed to update season. Please try again.');
+            showNotification('Please try again.', 'error', 'Failed to update season');
         }
     }
 
@@ -812,7 +812,7 @@
                         if (data.success) {
                             await loadUserLists(); // Reload to update counts
                         } else {
-                            alert('Failed to remove from list: ' + (data.error || 'Unknown error'));
+                            showNotification(data.error || 'Unknown error', 'error', 'Failed to remove from list');
                         }
                     }
                 }
@@ -834,12 +834,12 @@
                 if (data.success) {
                     await loadUserLists(); // Reload to update counts
                 } else {
-                    alert('Failed to add to list: ' + (data.error || 'Unknown error'));
+                    showNotification(data.error || 'Unknown error', 'error', 'Failed to add to list');
                 }
             }
         } catch (error) {
             console.error('Error toggling list item:', error);
-            alert('Failed to update list. Please try again.');
+            showNotification('Please try again.', 'error', 'Failed to update list');
         }
     }
 
@@ -867,12 +867,12 @@
             if (data.success) {
                 loadUserLists();
             } else {
-                alert('Failed to create list: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Failed to create list');
             }
         })
         .catch(error => {
             console.error('Error creating list:', error);
-            alert('Failed to create list. Please try again.');
+            showNotification('Please try again.', 'error', 'Failed to create list');
         });
     }
 
@@ -907,13 +907,13 @@
             const data = await response.json();
 
             if (data.success) {
-                alert(data.message || `Season ${seasonNumber} requested successfully!`);
+                showNotification(data.message || `Season ${seasonNumber} requested successfully!`, 'success');
             } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Error requesting season');
             }
         } catch (error) {
             console.error('Error requesting season:', error);
-            alert('Error requesting season. Please try again.');
+            showNotification('Please try again.', 'error', 'Error requesting season');
         }
     }
 
@@ -957,15 +957,15 @@
             const data = await response.json();
 
             if (data.success) {
-                alert('Thanks for your recommendation!');
+                showNotification('Thanks for your recommendation!', 'success');
                 closeRecommendModal();
                 document.getElementById('recommend-note').value = '';
             } else {
-                alert('Error submitting recommendation: ' + (data.error || 'Unknown error'));
+                showNotification(data.error || 'Unknown error', 'error', 'Error submitting recommendation');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error submitting recommendation. Please try again.');
+            showNotification('Please try again.', 'error', 'Error submitting recommendation');
         }
     });
 

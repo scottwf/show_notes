@@ -8,14 +8,17 @@
     <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-4">
-                <div
-                    class="w-20 h-20 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg">
-                    {{ user.username[0].upper() }}
+                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg overflow-hidden">
+                    {% if user.profile_photo_url %}
+                        <img src="{{ user.profile_photo_url }}" alt="{{ user.username }}" class="w-full h-full object-cover">
+                    {% else %}
+                        {{ user.username[0].upper() }}
+                    {% endif %}
                 </div>
                 <div>
                     <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ user.username }}</h1>
-                    <p class="text-slate-600 dark:text-slate-400">Member since {{ user.created_at | format_datetime('%B %Y') if
-                        user.created_at else 'Unknown' }}</p>
+                    <p class="text-slate-600 dark:text-slate-400">Plex member since {{ user.plex_member_since | format_datetime('%B %Y') if
+                        user.plex_member_since else 'Unknown' }}</p>
                 </div>
             </div>
 

@@ -91,16 +91,20 @@ def check_onboarding():
 @main_bp.before_app_request
 def update_session_profile_photo():
     """
-    Update session with profile photo URL if missing.
-    This ensures users who logged in before we added profile_photo_url to session
-    will have it populated without needing to log out and back in.
+    Update session with profile photo URL if it has changed.
+    This ensures the session always reflects the current profile photo from the database,
+    even when users upload a new photo.
     """
-    if session.get('user_id') and not session.get('profile_photo_url'):
+    if session.get('user_id'):
         try:
             db = database.get_db()
             user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-            if user_record and user_record['profile_photo_url']:
-                session['profile_photo_url'] = user_record['profile_photo_url']
+            if user_record:
+                db_photo_url = user_record['profile_photo_url']
+                session_photo_url = session.get('profile_photo_url')
+                # Update session if database value is different
+                if db_photo_url != session_photo_url:
+                    session['profile_photo_url'] = db_photo_url
         except Exception:
             pass  # Silently fail to avoid breaking the request
 
@@ -110,25 +114,12 @@ def _get_profile_stats(db, user_id=None):
     Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
     favorite_count (if user_id provided), unread_notification_count (if user_id provided)
     """
+    from ..utils import get_tautulli_activity
+
     stats = {}
 
-    # Now Playing: count sessions with activity in last 15 minutes
-    fifteen_mins_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(minutes=15)).isoformat()
-    stats['now_playing_count'] = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                event_type,
-                MAX(event_timestamp) as last_event_time
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-              AND event_timestamp >= ?
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """, (fifteen_mins_ago,)).fetchone()[0] or 0
+    # Now Playing: get real-time activity from Tautulli
+    stats['now_playing_count'] = get_tautulli_activity()
 
     # Total shows
     stats['total_shows'] = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0] or 0
@@ -844,7 +835,7 @@ def login():
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
-                    session['profile_photo_url'] = user_record.get('profile_photo_url')
+                    session['profile_photo_url'] = user_record['profile_photo_url'] if user_record['profile_photo_url'] else None
                     db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
                     db.commit()
                     flash(f'Welcome back, {user_obj.username}!', 'success')
@@ -938,6 +929,12 @@ def plex_login_poll():
 
             plex_user_id = user_info.get('id')
             plex_username = user_info.get('username') or user_info.get('title')
+            plex_joined_at_timestamp = user_info.get('joinedAt')  # Get Plex account creation date (Unix timestamp)
+
+            # Convert Unix timestamp to ISO datetime string
+            plex_joined_at = None
+            if plex_joined_at_timestamp:
+                plex_joined_at = datetime.datetime.fromtimestamp(plex_joined_at_timestamp, tz=timezone.utc).isoformat()
 
             # Check if user exists in database
             db = database.get_db()
@@ -952,15 +949,26 @@ def plex_login_poll():
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
                     user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (user_obj.id,)).fetchone()
-                    session['profile_photo_url'] = user_record.get('profile_photo_url') if user_record else None
-                    db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?', (auth_token, user_obj.id,))
+                    session['profile_photo_url'] = user_record['profile_photo_url'] if user_record and user_record['profile_photo_url'] else None
+
+                    # Update plex token, last login, and Plex join date
+                    if plex_joined_at:
+                        db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP, plex_joined_at=? WHERE id=?',
+                                  (auth_token, plex_joined_at, user_obj.id))
+                    else:
+                        db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?',
+                                  (auth_token, user_obj.id))
                     db.commit()
                     return jsonify({'authorized': True, 'username': user_obj.username})
             else:
                 # If admin is already logged in, link their account to Plex
                 if current_user.is_authenticated and current_user.is_admin:
-                    db.execute('UPDATE users SET plex_user_id=?, plex_username=?, plex_token=? WHERE id=?',
-                              (plex_user_id, plex_username, auth_token, current_user.id))
+                    if plex_joined_at:
+                        db.execute('UPDATE users SET plex_user_id=?, plex_username=?, plex_token=?, plex_joined_at=? WHERE id=?',
+                                  (plex_user_id, plex_username, auth_token, plex_joined_at, current_user.id))
+                    else:
+                        db.execute('UPDATE users SET plex_user_id=?, plex_username=?, plex_token=? WHERE id=?',
+                                  (plex_user_id, plex_username, auth_token, current_user.id))
                     db.commit()
                     return jsonify({'authorized': True, 'username': current_user.username, 'linked': True})
                 else:
@@ -1022,7 +1030,13 @@ def callback():
     
     user_info = r.json()
     plex_user_id = user_info.get('id')
-    
+    plex_joined_at_timestamp = user_info.get('joinedAt')  # Get Plex account creation date (Unix timestamp)
+
+    # Convert Unix timestamp to ISO datetime string
+    plex_joined_at = None
+    if plex_joined_at_timestamp:
+        plex_joined_at = datetime.datetime.fromtimestamp(plex_joined_at_timestamp, tz=timezone.utc).isoformat()
+
     db = database.get_db()
     user_record = db.execute('SELECT * FROM users WHERE plex_user_id = ?', (plex_user_id,)).fetchone()
 
@@ -1038,8 +1052,14 @@ def callback():
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
         user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (user_obj.id,)).fetchone()
-        session['profile_photo_url'] = user_record.get('profile_photo_url') if user_record else None
-        db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
+        session['profile_photo_url'] = user_record['profile_photo_url'] if user_record and user_record['profile_photo_url'] else None
+
+        # Update last login and Plex join date
+        if plex_joined_at:
+            db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP, plex_joined_at=? WHERE id=?',
+                      (plex_joined_at, user_obj.id))
+        else:
+            db.execute('UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?', (user_obj.id,))
         db.commit()
         flash(f'Welcome back, {user_obj.username}!', 'success')
     else:
@@ -2054,24 +2074,56 @@ def profile_history():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    # Get currently playing/paused item
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
+    # Get currently playing/paused item from Tautulli (real-time data)
+    from ..utils import get_tautulli_current_activity
+
     current_plex_event = None
-    # Use plex_username if available, otherwise fall back to username
     s_username = user['plex_username'] if user['plex_username'] else user['username']
 
-    current_event_row = db.execute(
-        """
-        SELECT * FROM plex_activity_log
-        WHERE plex_username = ?
-          AND event_type IN ('media.play', 'media.resume', 'media.pause')
-        ORDER BY event_timestamp DESC, id DESC
-        LIMIT 1
-        """, (s_username,)
-    ).fetchone()
+    tautulli_session = get_tautulli_current_activity(username=s_username)
 
-    if current_event_row:
-        current_plex_event = _get_plex_event_details(current_event_row, db)
-        current_app.logger.debug(f"Current Plex event for {s_username}: {current_plex_event}")
+    if tautulli_session:
+        # Convert Tautulli session data to our expected format
+        # Safely convert numeric values to int
+        parent_index = int(tautulli_session.get('parent_media_index', 0) or 0)
+        media_index = int(tautulli_session.get('media_index', 0) or 0)
+        view_offset = int(tautulli_session.get('view_offset', 0) or 0)
+        duration = int(tautulli_session.get('duration', 0) or 0)
+        progress_percent = int(tautulli_session.get('progress_percent', 0) or 0)
+
+        current_plex_event = {
+            'title': tautulli_session.get('full_title') or tautulli_session.get('title'),
+            'media_type': tautulli_session.get('media_type'),
+            'show_title': tautulli_session.get('grandparent_title'),
+            'season_episode': f"S{parent_index:02d}E{media_index:02d}" if tautulli_session.get('media_type') == 'episode' else None,
+            'view_offset_ms': view_offset * 1000,  # Tautulli returns seconds
+            'duration_ms': duration * 1000,  # Tautulli returns seconds
+            'state': tautulli_session.get('state'),  # playing, paused, buffering
+            'progress_percent': progress_percent,
+            'year': tautulli_session.get('year'),
+            'rating_key': tautulli_session.get('rating_key'),
+            'grandparent_rating_key': tautulli_session.get('grandparent_rating_key'),
+            'poster_url': tautulli_session.get('thumb'),
+        }
+
+        # Try to get TMDB ID from our database
+        if current_plex_event['media_type'] == 'movie':
+            movie = db.execute('SELECT tmdb_id FROM radarr_movies WHERE title = ?',
+                             (current_plex_event['title'],)).fetchone()
+            if movie:
+                current_plex_event['tmdb_id'] = movie['tmdb_id']
+                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
+        elif current_plex_event['media_type'] == 'episode' and current_plex_event['show_title']:
+            show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE LOWER(title) = ?',
+                            (current_plex_event['show_title'].lower(),)).fetchone()
+            if show:
+                current_plex_event['show_tmdb_id'] = show['tmdb_id']
+                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
 
     # Get profile statistics using helper function
     stats = _get_profile_stats(db, user_id)
@@ -2152,7 +2204,7 @@ def profile_history():
         enriched_history.append(item_dict)
 
     return render_template('profile_history.html',
-                         user=user,
+                         user=user_dict,
                          current_plex_event=current_plex_event,
                          watch_history=enriched_history,
                          **stats,
@@ -2172,7 +2224,12 @@ def profile_favorites():
     
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-    
+
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
     # Get favorited shows
     favorites = db.execute("""
         SELECT 
@@ -2207,54 +2264,14 @@ def profile_favorites():
                 fav_dict['formatted_added_date'] = 'Unknown'
         
         enriched_favorites.append(fav_dict)
-    
-    # Get watch statistics
-    total_episodes = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'episode'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-    
-    total_movies = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'movie'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-    
-    # Get unread notification count
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0]
 
-    # Count total active sessions across all users
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0]
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_favorites.html',
-                         user=user,
+                         user=user_dict,
                          favorites=enriched_favorites,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=len(enriched_favorites),
-                         unread_notification_count=unread_notification_count,
-                         now_playing_count=now_playing_count,
+                         **stats,
                          active_tab='favorites')
 
 
@@ -2272,6 +2289,11 @@ def profile_notifications():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
     # Get notifications (recent 50)
     notifications = db.execute("""
         SELECT
@@ -2286,40 +2308,13 @@ def profile_notifications():
         LIMIT 50
     """, (user_id,)).fetchall()
 
-    # Get unread count
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0]
-
-    # Get watch statistics
-    total_episodes = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id || '-' || season_episode)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'episode'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-
-    total_movies = db.execute("""
-        SELECT COUNT(DISTINCT tmdb_id)
-        FROM plex_activity_log
-        WHERE plex_username = ? AND media_type = 'movie'
-        AND event_type IN ('media.stop', 'media.scrobble')
-    """, (user['username'],)).fetchone()[0]
-
-    # Get favorite count
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0]
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_notifications.html',
-                         user=user,
+                         user=user_dict,
                          notifications=notifications,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         **stats,
                          active_tab='notifications')
 
 
@@ -3102,49 +3097,17 @@ def profile_statistics():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    # Count total active sessions across all users
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0] or 0
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    total_episodes = db.execute(
-        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
-    ).fetchone()[0] or 0
-
-    total_movies = db.execute(
-        'SELECT COUNT(*) FROM radarr_movies'
-    ).fetchone()[0] or 0
-
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
-
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_statistics.html',
-                         user=user,
-                         now_playing_count=now_playing_count,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         user=user_dict,
+                         **stats,
                          active_tab='statistics')
 
 
@@ -3596,49 +3559,17 @@ def profile_lists():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    # Count total active sessions
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0] or 0
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    total_episodes = db.execute(
-        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
-    ).fetchone()[0] or 0
-
-    total_movies = db.execute(
-        'SELECT COUNT(*) FROM radarr_movies'
-    ).fetchone()[0] or 0
-
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
-
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_lists.html',
-                         user=user,
-                         now_playing_count=now_playing_count,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         user=user_dict,
+                         **stats,
                          active_tab='lists')
 
 
@@ -3656,6 +3587,11 @@ def profile_list_detail(list_id):
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
     # Get list info and verify ownership
     lst = db.execute('''
         SELECT id, name, description, item_count, created_at, updated_at
@@ -3667,50 +3603,13 @@ def profile_list_detail(list_id):
         flash('List not found.', 'error')
         return redirect(url_for('main.profile_lists'))
 
-    # Count total active sessions
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0] or 0
-
-    total_episodes = db.execute(
-        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
-    ).fetchone()[0] or 0
-
-    total_movies = db.execute(
-        'SELECT COUNT(*) FROM radarr_movies'
-    ).fetchone()[0] or 0
-
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
-
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_list_detail.html',
-                         user=user,
+                         user=user_dict,
                          list=lst,
-                         now_playing_count=now_playing_count,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         **stats,
                          active_tab='lists')
 
 
@@ -3893,14 +3792,14 @@ def api_toggle_episode_watched(episode_id):
         # Insert or update episode progress
         db.execute('''
             INSERT INTO user_episode_progress
-            (user_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
-            VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            (user_id, show_id, episode_id, season_number, episode_number, is_watched, marked_manually, last_watched_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
             ON CONFLICT (user_id, episode_id) DO UPDATE SET
                 is_watched = excluded.is_watched,
                 marked_manually = 1,
                 last_watched_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, episode_id, episode['season_number'], episode['episode_number'], is_watched))
+        ''', (user_id, episode['show_id'], episode_id, episode['season_number'], episode['episode_number'], is_watched))
 
         db.commit()
 
@@ -4010,49 +3909,17 @@ def profile_progress():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    # Count total active sessions
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0] or 0
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    total_episodes = db.execute(
-        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
-    ).fetchone()[0] or 0
-
-    total_movies = db.execute(
-        'SELECT COUNT(*) FROM radarr_movies'
-    ).fetchone()[0] or 0
-
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
-
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_progress.html',
-                         user=user,
-                         now_playing_count=now_playing_count,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         user=user_dict,
+                         **stats,
                          active_tab='progress')
 
 @main_bp.route('/profile/settings')
@@ -4069,49 +3936,17 @@ def profile_settings():
     # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
 
-    # Count total active sessions
-    now_playing_count = db.execute("""
-        WITH latest_events AS (
-            SELECT
-                session_key,
-                plex_username,
-                event_type,
-                MAX(event_timestamp) as last_event_time,
-                MAX(id) as last_event_id
-            FROM plex_activity_log
-            WHERE session_key IS NOT NULL AND session_key != ''
-            GROUP BY session_key
-        )
-        SELECT COUNT(*)
-        FROM latest_events
-        WHERE event_type IN ('media.play', 'media.resume', 'media.pause')
-    """).fetchone()[0] or 0
+    # Convert user row to dict so we can add the plex_member_since field
+    user_dict = dict(user)
+    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    total_episodes = db.execute(
-        'SELECT COUNT(DISTINCT id) FROM sonarr_episodes'
-    ).fetchone()[0] or 0
-
-    total_movies = db.execute(
-        'SELECT COUNT(*) FROM radarr_movies'
-    ).fetchone()[0] or 0
-
-    favorite_count = db.execute(
-        'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
-
-    unread_notification_count = db.execute(
-        'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    ).fetchone()[0] or 0
+    # Get profile statistics using helper function
+    stats = _get_profile_stats(db, user_id)
 
     return render_template('profile_settings.html',
-                         user=user,
-                         now_playing_count=now_playing_count,
-                         total_episodes=total_episodes,
-                         total_movies=total_movies,
-                         favorite_count=favorite_count,
-                         unread_notification_count=unread_notification_count,
+                         user=user_dict,
+                         **stats,
                          active_tab='settings')
 
 @main_bp.route('/help')
