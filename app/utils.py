@@ -703,7 +703,8 @@ def sync_sonarr_library():
                 }
 
                 # Filter out None values to avoid inserting NULL for non-nullable or for cleaner updates
-                show_values_filtered = {k: v for k, v in show_values.items() if v is not None}
+                # BUT keep sonarr_id since it's required for ON CONFLICT clause
+                show_values_filtered = {k: v for k, v in show_values.items() if v is not None or k == 'sonarr_id'}
 
                 # Insert/Update Sonarr Show
                 sql = """
