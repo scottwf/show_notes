@@ -168,6 +168,7 @@ def upgrade(conn):
                 show_tvmaze_id INTEGER,
                 person_id INTEGER,
                 person_name TEXT,
+                character_id INTEGER,
                 actor_name TEXT,
                 character_name TEXT,
                 image_url TEXT,
