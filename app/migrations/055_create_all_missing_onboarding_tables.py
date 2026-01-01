@@ -184,6 +184,7 @@ def upgrade(conn):
                 message TEXT NOT NULL,
                 type TEXT DEFAULT 'info',
                 active BOOLEAN DEFAULT 1,
+                is_active BOOLEAN DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME
             )
@@ -203,6 +204,7 @@ def upgrade(conn):
                 duration_ms INTEGER,
                 event_timestamp DATETIME,
                 grandparent_rating_key TEXT,
+                player_title TEXT,
                 tmdb_id INTEGER,
                 tvdb_id INTEGER,
                 season INTEGER,
@@ -221,6 +223,28 @@ def upgrade(conn):
                 unique_shows_count INTEGER DEFAULT 0,
                 UNIQUE(user_id, stat_date),
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ''',
+        'webhook_activity': '''
+            CREATE TABLE IF NOT EXISTS webhook_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source TEXT,
+                service_name TEXT,
+                event_type TEXT,
+                payload TEXT,
+                payload_summary TEXT,
+                received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''',
+        'system_logs': '''
+            CREATE TABLE IF NOT EXISTS system_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                level TEXT,
+                message TEXT,
+                source TEXT,
+                details TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''',
     }
