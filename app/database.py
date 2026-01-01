@@ -45,20 +45,21 @@ def init_db():
 
     logger.info(f"Executing init_db on database: {current_app.config['DATABASE']}. Attempting to drop and recreate all tables.")
     try:
-        # Ensure DROP TABLE statements are definitely present for tables being modified
+        # NOTE: This init_db creates a minimal base schema. Many additional tables
+        # (episode_characters, show_cast, user_favorites, etc.) are created via migrations.
+        # See DATABASE_ANALYSIS.md for complete schema documentation.
+        # Migration 056 removed unused columns identified in the schema audit.
+        
+        # Deprecated tables (commented out - DO NOT recreate):
+        # - character_summaries, character_chats (LLM features removed)
+        # - shows, season_metadata (replaced by sonarr_shows/seasons)
+        # - top_characters, current_watch (replaced by user tracking tables)
+        # - webhook_log (replaced by webhook_activity)
+        # - autocomplete_logs (feature removed)
+        
         db.executescript("""
             DROP TABLE IF EXISTS settings;
             DROP TABLE IF EXISTS api_usage;
-
-            -- DROP TABLE IF EXISTS character_summaries;
-            -- DROP TABLE IF EXISTS character_chats;
-            -- api_usage is dropped above
-            -- DROP TABLE IF EXISTS shows;
-            -- DROP TABLE IF EXISTS season_metadata;
-            -- DROP TABLE IF EXISTS top_characters;
-            -- DROP TABLE IF EXISTS current_watch;
-            -- DROP TABLE IF EXISTS webhook_log;
-            -- DROP TABLE IF EXISTS autocomplete_logs;
             DROP TABLE IF EXISTS users;
             DROP TABLE IF EXISTS settings;
             DROP TABLE IF EXISTS sonarr_shows;
@@ -75,15 +76,7 @@ def init_db():
             DROP TABLE IF EXISTS schema_version;
             DROP TABLE IF EXISTS subtitles;
 
-            -- CREATE TABLE character_summaries ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, season_limit INTEGER, episode_limit INTEGER, raw_summary TEXT, parsed_traits TEXT, parsed_events TEXT, parsed_relationships TEXT, parsed_importance TEXT, parsed_quote TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
-            -- CREATE TABLE character_chats ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, user_message TEXT NOT NULL, character_reply TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
             CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL );
-            -- CREATE TABLE shows ( id INTEGER PRIMARY KEY AUTOINCREMENT, tmdb_id INTEGER UNIQUE, title TEXT NOT NULL, description TEXT, poster_path TEXT, backdrop_path TEXT );
-            -- CREATE TABLE season_metadata ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, season_number INTEGER NOT NULL, name TEXT, overview TEXT, poster_path TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (show_id, season_number) );
-            -- CREATE TABLE top_characters ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, character_name TEXT NOT NULL, actor_name TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id) );
-            -- CREATE TABLE current_watch ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, show_id INTEGER NOT NULL, season_number INTEGER, episode_number INTEGER, last_watched_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (user_id, show_id) );
-            -- CREATE TABLE webhook_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, received_at DATETIME DEFAULT CURRENT_TIMESTAMP, payload TEXT NOT NULL, processed BOOLEAN DEFAULT 0 );
-            -- CREATE TABLE autocomplete_logs ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, search_term TEXT NOT NULL, selected_item TEXT, item_type TEXT );
             CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, plex_user_id TEXT UNIQUE, plex_username TEXT, plex_token TEXT, is_admin INTEGER DEFAULT 0 );
             CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, sonarr_url TEXT, sonarr_api_key TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, openai_api_key TEXT, preferred_llm_provider TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT, timezone TEXT DEFAULT 'UTC' );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
@@ -151,15 +144,13 @@ def init_db():
                 monitored BOOLEAN,
                 last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 rating_value REAL,
-                rating_votes INTEGER,
-                rating_type TEXT,
                 genres TEXT,
                 certification TEXT,
                 runtime INTEGER
             );
 
             CREATE TABLE plex_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, metadata TEXT, processed BOOLEAN DEFAULT 0, client_ip TEXT );
-            CREATE TABLE plex_activity_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, plex_username TEXT, player_title TEXT, player_uuid TEXT, session_key TEXT, rating_key TEXT, parent_rating_key TEXT, grandparent_rating_key TEXT, media_type TEXT, title TEXT, show_title TEXT, season_episode TEXT, view_offset_ms INTEGER, duration_ms INTEGER, event_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, tmdb_id INTEGER, raw_payload TEXT );
+            CREATE TABLE plex_activity_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, plex_username TEXT, player_title TEXT, session_key TEXT, rating_key TEXT, parent_rating_key TEXT, grandparent_rating_key TEXT, media_type TEXT, title TEXT, show_title TEXT, season_episode TEXT, view_offset_ms INTEGER, duration_ms INTEGER, event_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, tmdb_id INTEGER, raw_payload TEXT );
             
             CREATE TABLE image_cache_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,10 +198,6 @@ def init_db():
             CREATE TABLE user_show_preferences (
                 user_id INTEGER,
                 show_id INTEGER,
-                notify_new_episode INTEGER DEFAULT 1,
-                notify_season_finale INTEGER DEFAULT 1,
-                notify_series_finale INTEGER DEFAULT 1,
-                notify_time TEXT DEFAULT 'immediate',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (user_id, show_id)
             );
@@ -221,8 +208,7 @@ def init_db():
                 show_id INTEGER,
                 type TEXT,
                 message TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                seen INTEGER DEFAULT 0
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE issue_reports (
