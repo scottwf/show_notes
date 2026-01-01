@@ -296,15 +296,16 @@ def upgrade(conn):
         ('plex_token', 'TEXT'),
         ('plex_client_id', 'TEXT'),
         ('openai_api_key', 'TEXT'),
-        ('openai_model', 'TEXT'),
-        ('ollama_model', 'TEXT'),
+        ('openai_model_name', 'TEXT'),
+        ('ollama_model_name', 'TEXT'),
         ('timezone', 'TEXT'),
-        ('llm_provider', 'TEXT'),
+        ('preferred_llm_provider', 'TEXT'),
         ('pushover_key', 'TEXT'),
         ('pushover_token', 'TEXT'),
         ('jellyseer_url', 'TEXT'),
         ('jellyseer_api_key', 'TEXT'),
         ('jellyseer_remote_url', 'TEXT'),
+        ('thetvdb_api_key', 'TEXT'),
     ]
     
     for col_name, col_type in settings_columns:
