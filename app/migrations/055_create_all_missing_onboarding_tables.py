@@ -98,11 +98,20 @@ def upgrade(conn):
             CREATE TABLE IF NOT EXISTS user_notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
+                show_id INTEGER,
+                movie_id INTEGER,
+                notification_type TEXT,
                 title TEXT,
                 message TEXT,
+                episode_id INTEGER,
+                season_number INTEGER,
+                episode_number INTEGER,
                 type TEXT DEFAULT 'info',
                 read BOOLEAN DEFAULT 0,
                 is_read BOOLEAN DEFAULT 0,
+                read_at DATETIME,
+                issue_report_id INTEGER,
+                service_url TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
@@ -156,8 +165,12 @@ def upgrade(conn):
             CREATE TABLE IF NOT EXISTS show_cast (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 show_id INTEGER,
+                show_tvmaze_id INTEGER,
+                person_id INTEGER,
+                person_name TEXT,
                 actor_name TEXT,
                 character_name TEXT,
+                image_url TEXT,
                 tmdb_person_id INTEGER,
                 FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
             )
