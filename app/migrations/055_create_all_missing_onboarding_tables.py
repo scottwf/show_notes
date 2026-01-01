@@ -358,6 +358,15 @@ def upgrade(conn):
         ('metacritic_id', 'TEXT'),
         ('last_synced_at', 'DATETIME'),
         ('tvmaze_id', 'INTEGER'),
+        ('premiered', 'TEXT'),
+        ('ended', 'TEXT'),
+        ('tvmaze_summary', 'TEXT'),
+        ('genres', 'TEXT'),
+        ('network_name', 'TEXT'),
+        ('network_country', 'TEXT'),
+        ('runtime', 'INTEGER'),
+        ('tvmaze_rating', 'REAL'),
+        ('tvmaze_enriched_at', 'DATETIME'),
     ]
     for col_name, col_type in sonarr_columns:
         try:
