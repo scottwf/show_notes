@@ -423,6 +423,8 @@ def upgrade(conn):
         ('ratings_tmdb_value', 'REAL'),
         ('ratings_tmdb_votes', 'INTEGER'),
         ('ratings_metacritic_value', 'INTEGER'),
+        ('ratings_rottenTomatoes_value', 'INTEGER'),
+        ('ratings_rottenTomatoes_votes', 'INTEGER'),
         ('metacritic_id', 'TEXT'),
         ('last_synced_at', 'DATETIME'),
         ('runtime', 'INTEGER'),
@@ -430,6 +432,9 @@ def upgrade(conn):
         ('genres', 'TEXT'),
         ('release_date', 'TEXT'),
         ('original_language_name', 'TEXT'),
+        ('original_title', 'TEXT'),
+        ('studio', 'TEXT'),
+        ('popularity', 'REAL'),
     ]
     for col_name, col_type in radarr_columns:
         try:
