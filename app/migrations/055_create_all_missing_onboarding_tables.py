@@ -25,6 +25,7 @@ def upgrade(conn):
         'sonarr_episodes': '''
             CREATE TABLE IF NOT EXISTS sonarr_episodes (
                 id INTEGER PRIMARY KEY,
+                sonarr_episode_id INTEGER UNIQUE,
                 show_id INTEGER,
                 season_number INTEGER,
                 episode_number INTEGER,
@@ -41,6 +42,7 @@ def upgrade(conn):
         'sonarr_seasons': '''
             CREATE TABLE IF NOT EXISTS sonarr_seasons (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sonarr_season_id INTEGER UNIQUE,
                 show_id INTEGER,
                 season_number INTEGER,
                 monitored BOOLEAN DEFAULT 1,
