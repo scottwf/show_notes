@@ -854,7 +854,7 @@ def sync_sonarr_library():
                         "episode_file_count": season_episode_file_count,
                         "statistics": json.dumps(stats_api if stats_api else {"episodeFileCount": season_episode_file_count, "totalEpisodeCount": season_episode_count})
                     }
-                    season_values_filtered = {k: v for k, v in season_values.items() if v is not None}
+                    season_values_filtered = {k: v for k, v in season_values.items() if v is not None or k in ['show_id', 'season_number']}
 
                     sql_season = """
                         INSERT INTO sonarr_seasons ({columns})
@@ -902,7 +902,7 @@ def sync_sonarr_library():
                             "ratings_tmdb_value": ep_tmdb_rating.get("value"),
                             "ratings_tmdb_votes": ep_tmdb_rating.get("votes"),
                         }
-                        episode_values_filtered = {k: v for k, v in episode_values.items() if v is not None}
+                        episode_values_filtered = {k: v for k, v in episode_values.items() if v is not None or k == 'sonarr_episode_id'}
 
                         if not episode_values_filtered.get("sonarr_episode_id"):
                             current_app.logger.warning(f"sync_sonarr_library: Skipping episode due to missing sonarr_episode_id. Data: {episode_data}")
@@ -954,7 +954,7 @@ def sync_sonarr_library():
                         "episode_file_count": s_episode_file_count,
                         "statistics": json.dumps({"episodeFileCount": s_episode_file_count, "totalEpisodeCount": s_episode_count})
                     }
-                    season_values_fb_filtered = {k: v for k, v in season_values_fb.items() if v is not None}
+                    season_values_fb_filtered = {k: v for k, v in season_values_fb.items() if v is not None or k in ['show_id', 'season_number']}
 
                     sql_season_fb = """
                         INSERT INTO sonarr_seasons ({columns})
@@ -990,7 +990,7 @@ def sync_sonarr_library():
                             "has_file": bool(episode_data.get("hasFile", False)),
                             # "monitored": bool(episode_data.get("monitored", False)), # Removed
                         }
-                        episode_values_fb_filtered = {k: v for k, v in episode_values_fb.items() if v is not None}
+                        episode_values_fb_filtered = {k: v for k, v in episode_values_fb.items() if v is not None or k == 'sonarr_episode_id'}
                         sql_episode_fb = """
                             INSERT INTO sonarr_episodes ({columns})
                             VALUES ({placeholders})
