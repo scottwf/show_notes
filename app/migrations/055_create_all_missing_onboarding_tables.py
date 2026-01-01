@@ -429,6 +429,7 @@ def upgrade(conn):
         ('certification', 'TEXT'),
         ('genres', 'TEXT'),
         ('release_date', 'TEXT'),
+        ('original_language_name', 'TEXT'),
     ]
     for col_name, col_type in radarr_columns:
         try:
