@@ -275,6 +275,19 @@ def upgrade(conn):
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''',
+        'service_sync_status': '''
+            CREATE TABLE IF NOT EXISTS service_sync_status (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                service_name TEXT NOT NULL,
+                last_attempted_sync_at DATETIME,
+                last_successful_sync_at DATETIME,
+                last_sync_status TEXT,
+                last_sync_message TEXT,
+                items_synced INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''',
     }
     
     for table_name, create_sql in tables.items():
