@@ -1504,16 +1504,15 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
 
                 db_conn.execute(
                     """INSERT INTO plex_activity_log (
-                           event_type, plex_username, player_title, player_uuid, session_key,
+                           event_type, plex_username, player_title, session_key,
                            rating_key, parent_rating_key, grandparent_rating_key, media_type,
                            title, show_title, season_episode, view_offset_ms, duration_ms, event_timestamp,
                            tmdb_id, raw_payload)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         item.get('event') or 'watched',
                         item.get('friendly_name'),
                         item.get('player'),
-                        None,
                         item.get('session_id'),
                         item.get('rating_key'),
                         item.get('parent_rating_key'),

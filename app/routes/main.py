@@ -465,13 +465,13 @@ def plex_webhook():
 
             sql_insert = """
                 INSERT INTO plex_activity_log (
-                    event_type, plex_username, player_title, player_uuid, session_key,
+                    event_type, plex_username, player_title, session_key,
                     rating_key, parent_rating_key, grandparent_rating_key, media_type,
                     title, show_title, season_episode, view_offset_ms, duration_ms, tmdb_id, raw_payload
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = (
-                event_type, account.get('title'), player.get('title'), player.get('uuid'), metadata.get('sessionKey'),
+                event_type, account.get('title'), player.get('title'), metadata.get('sessionKey'),
                 metadata.get('ratingKey'), metadata.get('parentRatingKey'), metadata.get('grandparentRatingKey'), metadata.get('type'),
                 metadata.get('title'), metadata.get('grandparentTitle'), season_episode_str, metadata.get('viewOffset'),
                 metadata.get('duration'), show_tmdb_id, json.dumps(payload)
