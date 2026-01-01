@@ -274,6 +274,9 @@ def upgrade(conn):
         ('llm_provider', 'TEXT'),
         ('pushover_key', 'TEXT'),
         ('pushover_token', 'TEXT'),
+        ('jellyseer_url', 'TEXT'),
+        ('jellyseer_api_key', 'TEXT'),
+        ('jellyseer_remote_url', 'TEXT'),
     ]
     
     for col_name, col_type in settings_columns:
