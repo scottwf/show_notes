@@ -86,8 +86,18 @@ Key tables:
 - `api_usage`: LLM API call tracking for cost monitoring
 - `image_cache_queue`: Background image caching queue
 - `user_favorites`, `user_watch_history`: User profile features for tracking favorites and watch history
+- `episode_characters`, `show_cast`: Character and actor information
+- `user_notifications`, `webhook_activity`: System notifications and event tracking
 
 The schema is managed via numbered migration files in `app/migrations/`.
+
+**Important:** The `init_db()` function in `database.py` creates only core tables. Many feature tables
+(user profiles, watch tracking, custom lists, etc.) are created via migrations. See `DATABASE_ANALYSIS.md`
+for complete schema documentation, including:
+- Full table inventory and status
+- Analysis of unused columns (removed in migration 056)
+- Deprecated tables from removed features
+- Tables missing from init_db() vs migration-only tables
 
 ### External Service Integration
 
