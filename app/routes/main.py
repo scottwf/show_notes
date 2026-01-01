@@ -3420,6 +3420,15 @@ def api_add_list_item(list_id):
             INSERT INTO user_list_items (list_id, media_type, show_id, movie_id, notes, sort_order)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (list_id, media_type, show_id, movie_id, notes, next_sort))
+        
+        # Update item_count on the list
+        db.execute('''
+            UPDATE user_lists 
+            SET item_count = (SELECT COUNT(*) FROM user_list_items WHERE list_id = ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (list_id, list_id))
+        
         db.commit()
 
         return jsonify({'success': True})
@@ -3453,6 +3462,15 @@ def api_remove_list_item(list_id, item_id):
             DELETE FROM user_list_items
             WHERE id = ? AND list_id = ?
         ''', (item_id, list_id))
+        
+        # Update item_count on the list
+        db.execute('''
+            UPDATE user_lists 
+            SET item_count = (SELECT COUNT(*) FROM user_list_items WHERE list_id = ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (list_id, list_id))
+        
         db.commit()
 
         return jsonify({'success': True})

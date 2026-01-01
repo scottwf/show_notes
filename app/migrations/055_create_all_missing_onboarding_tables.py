@@ -31,6 +31,7 @@ def upgrade(conn):
                 title TEXT,
                 overview TEXT,
                 air_date TEXT,
+                air_date_utc DATETIME,
                 runtime INTEGER,
                 has_file BOOLEAN DEFAULT 0,
                 file_path TEXT,
@@ -121,6 +122,10 @@ def upgrade(conn):
                 list_id INTEGER,
                 media_type TEXT,
                 media_id INTEGER,
+                show_id INTEGER,
+                movie_id INTEGER,
+                notes TEXT,
+                sort_order INTEGER,
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (list_id) REFERENCES user_lists(id)
             )
@@ -322,6 +327,12 @@ def upgrade(conn):
     except sqlite3.OperationalError:
         pass
     
+    try:
+        cursor.execute("ALTER TABLE user_lists ADD COLUMN updated_at DATETIME")
+        print("  ✅ user_lists.updated_at")
+    except sqlite3.OperationalError:
+        pass
+    
     print("\nAdding missing columns to user_notifications table...")
     notifications_columns = [
         ('show_id', 'INTEGER'),
@@ -436,6 +447,45 @@ def upgrade(conn):
     try:
         cursor.execute("ALTER TABLE plex_activity_log ADD COLUMN player_uuid TEXT")
         print("  ✅ plex_activity_log.player_uuid")
+    except sqlite3.OperationalError:
+        pass
+    
+    print("\nAdding missing columns to user_announcement_views table...")
+    try:
+        cursor.execute("ALTER TABLE user_announcement_views ADD COLUMN dismissed_at DATETIME")
+        print("  ✅ user_announcement_views.dismissed_at")
+    except sqlite3.OperationalError:
+        pass
+    
+    print("\nAdding missing columns to sonarr_seasons table...")
+    seasons_columns = [
+        ('episode_count', 'INTEGER'),
+        ('episode_file_count', 'INTEGER'),
+    ]
+    for col_name, col_type in seasons_columns:
+        try:
+            cursor.execute(f"ALTER TABLE sonarr_seasons ADD COLUMN {col_name} {col_type}")
+            print(f"  ✅ sonarr_seasons.{col_name}")
+        except sqlite3.OperationalError:
+            pass
+    
+    print("\nAdding missing columns to show_cast table...")
+    try:
+        cursor.execute("ALTER TABLE show_cast ADD COLUMN show_tvmaze_id INTEGER")
+        print("  ✅ show_cast.show_tvmaze_id")
+    except sqlite3.OperationalError:
+        pass
+    
+    try:
+        cursor.execute("ALTER TABLE show_cast ADD COLUMN person_id INTEGER")
+        print("  ✅ show_cast.person_id")
+    except sqlite3.OperationalError:
+        pass
+    
+    print("\nAdding statistics column to sonarr_seasons...")
+    try:
+        cursor.execute("ALTER TABLE sonarr_seasons ADD COLUMN statistics TEXT")
+        print("  ✅ sonarr_seasons.statistics")
     except sqlite3.OperationalError:
         pass
     
