@@ -1292,14 +1292,17 @@ def onboarding_services():
 
     if request.method == 'POST':
         try:
+            # Get timezone from form, or use browser-detected timezone if available
+            timezone = request.form.get('timezone', '')
+            
             # Create settings record with service configurations
             db.execute(
                 '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url,
                    sonarr_url, sonarr_api_key, sonarr_remote_url,
                    bazarr_url, bazarr_api_key, ollama_url,
                    pushover_key, pushover_token, plex_client_id,
-                   tautulli_url, tautulli_api_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   tautulli_url, tautulli_api_key, timezone)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     request.form.get('radarr_url', ''),
                     request.form.get('radarr_api_key', ''),
@@ -1314,7 +1317,8 @@ def onboarding_services():
                     request.form.get('pushover_token', ''),
                     request.form.get('plex_client_id', ''),
                     request.form.get('tautulli_url', ''),
-                    request.form.get('tautulli_api_key', '')
+                    request.form.get('tautulli_api_key', ''),
+                    timezone
                 )
             )
             db.commit()

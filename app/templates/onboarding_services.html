@@ -157,6 +157,54 @@
         </div>
       </fieldset>
 
+      <!-- Timezone Selection -->
+      <fieldset class="border border-slate-300 dark:border-slate-700 rounded-lg p-4 pt-2">
+        <legend class="text-sm font-medium text-slate-600 dark:text-slate-300 px-2">Timezone</legend>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="timezone">Your Timezone</label>
+            <select id="timezone" name="timezone" class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2.5 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <option value="">Auto-detect from browser</option>
+              <optgroup label="North America">
+                <option value="America/New_York">Eastern Time (ET)</option>
+                <option value="America/Chicago">Central Time (CT)</option>
+                <option value="America/Denver">Mountain Time (MT)</option>
+                <option value="America/Phoenix">Arizona (MST)</option>
+                <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                <option value="America/Anchorage">Alaska Time (AKT)</option>
+                <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+              </optgroup>
+              <optgroup label="Europe">
+                <option value="Europe/London">London (GMT/BST)</option>
+                <option value="Europe/Paris">Paris (CET/CEST)</option>
+                <option value="Europe/Berlin">Berlin (CET/CEST)</option>
+                <option value="Europe/Rome">Rome (CET/CEST)</option>
+                <option value="Europe/Athens">Athens (EET/EEST)</option>
+                <option value="Europe/Moscow">Moscow (MSK)</option>
+              </optgroup>
+              <optgroup label="Asia">
+                <option value="Asia/Dubai">Dubai (GST)</option>
+                <option value="Asia/Kolkata">India (IST)</option>
+                <option value="Asia/Singapore">Singapore (SGT)</option>
+                <option value="Asia/Tokyo">Tokyo (JST)</option>
+                <option value="Asia/Shanghai">China (CST)</option>
+                <option value="Asia/Seoul">Seoul (KST)</option>
+              </optgroup>
+              <optgroup label="Australia">
+                <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+                <option value="Australia/Melbourne">Melbourne (AEDT/AEST)</option>
+                <option value="Australia/Brisbane">Brisbane (AEST)</option>
+                <option value="Australia/Perth">Perth (AWST)</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="UTC">UTC</option>
+              </optgroup>
+            </select>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Used for displaying air times and activity timestamps</p>
+          </div>
+        </div>
+      </fieldset>
+
       <!-- Info box about what happens next -->
       <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-6">
         <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">📝 What happens next:</h3>

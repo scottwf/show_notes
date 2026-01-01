@@ -243,7 +243,10 @@ def upgrade(conn):
                 level TEXT,
                 message TEXT,
                 source TEXT,
+                component TEXT,
                 details TEXT,
+                user_id INTEGER,
+                ip_address TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''',
