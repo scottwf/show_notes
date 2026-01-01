@@ -168,10 +168,14 @@ def upgrade(conn):
                 show_tvmaze_id INTEGER,
                 person_id INTEGER,
                 person_name TEXT,
+                person_image_url TEXT,
                 character_id INTEGER,
-                actor_name TEXT,
                 character_name TEXT,
+                character_image_url TEXT,
+                actor_name TEXT,
                 image_url TEXT,
+                cast_order INTEGER,
+                is_voice BOOLEAN DEFAULT 0,
                 tmdb_person_id INTEGER,
                 FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
             )
