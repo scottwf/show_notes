@@ -334,6 +334,102 @@ def upgrade(conn):
         except sqlite3.OperationalError:
             pass
     
+    print("\nAdding missing columns to media tables...")
+    # Add service IDs to media tables
+    try:
+        cursor.execute("ALTER TABLE sonarr_shows ADD COLUMN sonarr_id INTEGER")
+        print("  ✅ sonarr_shows.sonarr_id")
+    except sqlite3.OperationalError:
+        pass
+    
+    # Add all columns needed for sonarr sync
+    sonarr_columns = [
+        ('season_count', 'INTEGER'),
+        ('episode_count', 'INTEGER'),
+        ('episode_file_count', 'INTEGER'),
+        ('poster_url', 'TEXT'),
+        ('fanart_url', 'TEXT'),
+        ('path_on_disk', 'TEXT'),
+        ('ratings_imdb_value', 'REAL'),
+        ('ratings_imdb_votes', 'INTEGER'),
+        ('ratings_tmdb_value', 'REAL'),
+        ('ratings_tmdb_votes', 'INTEGER'),
+        ('ratings_metacritic_value', 'INTEGER'),
+        ('metacritic_id', 'TEXT'),
+        ('last_synced_at', 'DATETIME'),
+        ('tvmaze_id', 'INTEGER'),
+    ]
+    for col_name, col_type in sonarr_columns:
+        try:
+            cursor.execute(f"ALTER TABLE sonarr_shows ADD COLUMN {col_name} {col_type}")
+            print(f"  ✅ sonarr_shows.{col_name}")
+        except sqlite3.OperationalError:
+            pass
+    
+    try:
+        cursor.execute("ALTER TABLE radarr_movies ADD COLUMN radarr_id INTEGER")
+        print("  ✅ radarr_movies.radarr_id")
+    except sqlite3.OperationalError:
+        pass
+    
+    # Add all columns needed for radarr sync
+    radarr_columns = [
+        ('poster_url', 'TEXT'),
+        ('fanart_url', 'TEXT'),
+        ('path_on_disk', 'TEXT'),
+        ('ratings_imdb_value', 'REAL'),
+        ('ratings_imdb_votes', 'INTEGER'),
+        ('ratings_tmdb_value', 'REAL'),
+        ('ratings_tmdb_votes', 'INTEGER'),
+        ('ratings_metacritic_value', 'INTEGER'),
+        ('metacritic_id', 'TEXT'),
+        ('last_synced_at', 'DATETIME'),
+        ('runtime', 'INTEGER'),
+        ('certification', 'TEXT'),
+        ('genres', 'TEXT'),
+        ('release_date', 'TEXT'),
+    ]
+    for col_name, col_type in radarr_columns:
+        try:
+            cursor.execute(f"ALTER TABLE radarr_movies ADD COLUMN {col_name} {col_type}")
+            print(f"  ✅ radarr_movies.{col_name}")
+        except sqlite3.OperationalError:
+            pass
+    
+    # Create unique indexes for ON CONFLICT clauses
+    print("\nCreating unique indexes for media sync...")
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sonarr_shows_sonarr_id ON sonarr_shows(sonarr_id)")
+        print("  ✅ UNIQUE index on sonarr_shows.sonarr_id")
+    except sqlite3.OperationalError as e:
+        print(f"  ⚠️  sonarr index: {e}")
+    
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_radarr_movies_radarr_id ON radarr_movies(radarr_id)")
+        print("  ✅ UNIQUE index on radarr_movies.radarr_id")
+    except sqlite3.OperationalError as e:
+        print(f"  ⚠️  radarr index: {e}")
+    
+    print("\nAdding missing columns to announcements table...")
+    announcements_columns = [
+        ('start_date', 'DATETIME'),
+        ('end_date', 'DATETIME'),
+        ('created_by', 'INTEGER'),
+    ]
+    for col_name, col_type in announcements_columns:
+        try:
+            cursor.execute(f"ALTER TABLE announcements ADD COLUMN {col_name} {col_type}")
+            print(f"  ✅ announcements.{col_name}")
+        except sqlite3.OperationalError:
+            pass
+    
+    print("\nAdding missing columns to plex_activity_log table...")
+    try:
+        cursor.execute("ALTER TABLE plex_activity_log ADD COLUMN player_uuid TEXT")
+        print("  ✅ plex_activity_log.player_uuid")
+    except sqlite3.OperationalError:
+        pass
+    
     conn.commit()
     print("\n✅ Migration 055 complete!")
 
