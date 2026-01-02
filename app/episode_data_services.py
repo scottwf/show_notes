@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from sqlite3 import Row
 from app.database import get_db
+from flask import has_app_context
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class EpisodeDataService:
         self.last_request_time = 0
         self.request_count = 0
         self.rate_limit_window = 60  # seconds
+        self.use_cache = True  # Enable caching by default
     
     def _rate_limit_check(self):
         """Ensure we don't exceed rate limits"""
@@ -45,6 +47,45 @@ class EpisodeDataService:
                 self.last_request_time = time.time()
         
         self.request_count += 1
+    
+    def _get_from_cache(self, request_type: str, request_key: str) -> Optional[Dict]:
+        """Get cached response if available"""
+        if not self.use_cache or not has_app_context():
+            return None
+            
+        try:
+            db = get_db()
+            result = db.execute(
+                "SELECT response_data FROM tvmaze_cache WHERE request_type = ? AND request_key = ?",
+                (request_type, request_key)
+            ).fetchone()
+            
+            if result:
+                logger.debug(f"Cache HIT: {request_type}:{request_key}")
+                return json.loads(result['response_data'])
+        except Exception as e:
+            logger.warning(f"Cache read error: {e}")
+        
+        return None
+    
+    def _save_to_cache(self, request_type: str, request_key: str, response_data: Dict):
+        """Save response to cache"""
+        if not self.use_cache or not has_app_context():
+            return
+            
+        try:
+            db = get_db()
+            db.execute("""
+                INSERT INTO tvmaze_cache (request_type, request_key, response_data)
+                VALUES (?, ?, ?)
+                ON CONFLICT(request_type, request_key) DO UPDATE SET
+                    response_data = excluded.response_data,
+                    cached_at = CURRENT_TIMESTAMP
+            """, (request_type, request_key, json.dumps(response_data)))
+            db.commit()
+            logger.debug(f"Cache SAVE: {request_type}:{request_key}")
+        except Exception as e:
+            logger.warning(f"Cache write error: {e}")
     
     def _make_request(self, url: str, params: Dict = None) -> Optional[Dict]:
         """Make a rate-limited request"""
@@ -107,17 +148,41 @@ class TVMazeService(EpisodeDataService):
 
     def lookup_show_by_tvdb_id(self, tvdb_id: int) -> Optional[Dict]:
         """Look up show on TVMaze using TVDB ID"""
+        request_key = str(tvdb_id)
+        
+        # Check cache first
+        cached = self._get_from_cache("tvdb_lookup", request_key)
+        if cached:
+            return cached
+        
+        # Fetch from API
         url = f"{self.base_url}/lookup/shows"
         params = {"thetvdb": tvdb_id}
         data = self._make_request(url, params)
+        
         if data:
             logger.info(f"TVMaze lookup: TVDB {tvdb_id} -> TVMaze ID {data.get('id')}")
+            self._save_to_cache("tvdb_lookup", request_key, data)
+        
         return data
-
+    
     def get_show_details(self, tvmaze_id: int) -> Optional[Dict]:
         """Get full show details from TVMaze by ID"""
+        request_key = str(tvmaze_id)
+        
+        # Check cache first
+        cached = self._get_from_cache("show_details", request_key)
+        if cached:
+            return cached
+        
+        # Fetch from API
         url = f"{self.base_url}/shows/{tvmaze_id}"
-        return self._make_request(url)
+        data = self._make_request(url)
+        
+        if data:
+            self._save_to_cache("show_details", request_key, data)
+        
+        return data
 
     def get_show_cast(self, tvmaze_id: int) -> List[Dict]:
         """Get cast information for a show"""

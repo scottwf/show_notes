@@ -297,6 +297,16 @@ def upgrade(conn):
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''',
+        'tvmaze_cache': '''
+            CREATE TABLE IF NOT EXISTS tvmaze_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_type TEXT NOT NULL,
+                request_key TEXT NOT NULL,
+                response_data TEXT NOT NULL,
+                cached_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(request_type, request_key)
+            )
+        ''',
     }
     
     for table_name, create_sql in tables.items():
@@ -305,6 +315,17 @@ def upgrade(conn):
             print(f"  ✅ {table_name}")
         except sqlite3.OperationalError as e:
             print(f"  ⚠️  {table_name}: {e}")
+    
+    # Create indexes for performance
+    print("\nCreating indexes...")
+    try:
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tvmaze_cache_lookup 
+            ON tvmaze_cache(request_type, request_key)
+        """)
+        print("  ✅ idx_tvmaze_cache_lookup")
+    except sqlite3.OperationalError as e:
+        print(f"  ⚠️  idx_tvmaze_cache_lookup: {e}")
     
     # Add missing columns to existing tables
     print("\nAdding missing columns to settings table...")
