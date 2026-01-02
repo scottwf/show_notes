@@ -46,7 +46,8 @@ def upgrade(conn):
                 show_id INTEGER,
                 season_number INTEGER,
                 monitored BOOLEAN DEFAULT 1,
-                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id),
+                UNIQUE(show_id, season_number)
             )
         ''',
         'user_favorites': '''
