@@ -27,8 +27,10 @@ def upgrade(conn):
                 id INTEGER PRIMARY KEY,
                 sonarr_episode_id INTEGER UNIQUE,
                 show_id INTEGER,
+                season_id INTEGER,
                 season_number INTEGER,
                 episode_number INTEGER,
+                sonarr_show_id INTEGER,
                 title TEXT,
                 overview TEXT,
                 air_date TEXT,
@@ -36,7 +38,13 @@ def upgrade(conn):
                 runtime INTEGER,
                 has_file BOOLEAN DEFAULT 0,
                 file_path TEXT,
-                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
+                imdb_id TEXT,
+                ratings_imdb_value REAL,
+                ratings_imdb_votes INTEGER,
+                ratings_tmdb_value REAL,
+                ratings_tmdb_votes INTEGER,
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id),
+                FOREIGN KEY (season_id) REFERENCES sonarr_seasons(id)
             )
         ''',
         'sonarr_seasons': '''
