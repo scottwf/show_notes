@@ -85,7 +85,7 @@ def init_db():
             -- CREATE TABLE webhook_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, received_at DATETIME DEFAULT CURRENT_TIMESTAMP, payload TEXT NOT NULL, processed BOOLEAN DEFAULT 0 );
             -- CREATE TABLE autocomplete_logs ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, search_term TEXT NOT NULL, selected_item TEXT, item_type TEXT );
             CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, plex_user_id TEXT UNIQUE, plex_username TEXT, plex_token TEXT, is_admin INTEGER DEFAULT 0 );
-            CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, sonarr_url TEXT, sonarr_api_key TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, openai_api_key TEXT, preferred_llm_provider TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT, timezone TEXT DEFAULT 'UTC' );
+            CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, radarr_remote_url TEXT, sonarr_url TEXT, sonarr_api_key TEXT, sonarr_remote_url TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, openai_api_key TEXT, preferred_llm_provider TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT, jellyseerr_url TEXT, jellyseerr_api_key TEXT, jellyseerr_remote_url TEXT, timezone TEXT DEFAULT 'UTC' );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
             
@@ -327,3 +327,26 @@ def update_sync_status(conn, service_name, status, message=None):
 def init_app(app):
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+    
+    # Ensure database tables exist on first request
+    @app.before_request
+    def ensure_tables_exist():
+        """
+        Automatically create database tables if they don't exist.
+        This runs before the first request to ensure the database is ready for onboarding.
+        """
+        # Only run once by removing this before_request handler after first execution
+        app.before_request_funcs[None].remove(ensure_tables_exist)
+        
+        try:
+            db = get_db()
+            # Check if any tables exist
+            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            
+            if not tables:
+                # No tables exist, run init_db to create them
+                app.logger.info("No database tables found. Creating initial schema...")
+                init_db()
+                app.logger.info("Database tables created successfully")
+        except Exception as e:
+            app.logger.error(f"Error ensuring tables exist: {e}", exc_info=True)

@@ -156,6 +156,8 @@ def upgrade(conn):
                 user_id INTEGER,
                 announcement_id INTEGER,
                 viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                dismissed_at DATETIME,
+                UNIQUE(user_id, announcement_id),
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (announcement_id) REFERENCES announcements(id)
             )
@@ -217,10 +219,13 @@ def upgrade(conn):
                 title TEXT NOT NULL,
                 message TEXT NOT NULL,
                 type TEXT DEFAULT 'info',
-                active BOOLEAN DEFAULT 1,
                 is_active BOOLEAN DEFAULT 1,
+                start_date DATETIME,
+                end_date DATETIME,
+                created_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                expires_at DATETIME
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES users(id)
             )
         ''',
         'plex_activity_log': '''
