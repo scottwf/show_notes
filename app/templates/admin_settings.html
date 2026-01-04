@@ -4,547 +4,380 @@
 
 {% block admin_extra_js %}
 <script src="{{ url_for('static', filename='admin_settings.js') }}?v=3"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Tab switching
+  const tabButtons = document.querySelectorAll('[data-tab]');
+  const tabPanels = document.querySelectorAll('[data-panel]');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetPanel = button.dataset.tab;
+      
+      // Update button states
+      tabButtons.forEach(btn => {
+        btn.classList.remove('border-sky-500', 'text-sky-600', 'dark:text-sky-400', 'dark:border-sky-400');
+        btn.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+      });
+      button.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+      button.classList.add('border-sky-500', 'text-sky-600', 'dark:text-sky-400', 'dark:border-sky-400');
+      
+      // Update panel visibility
+      tabPanels.forEach(panel => {
+        panel.classList.add('hidden');
+      });
+      document.querySelector(`[data-panel="${targetPanel}"]`).classList.remove('hidden');
+    });
+  });
+});
+</script>
 {% endblock %}
 
 {% block admin_page_header %}Service Configuration{% endblock %}
 
 {% block admin_page_content %}
-<h2 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-6 sm:mb-8 text-center">Admin & Service
-  Settings</h2>
-<form method="post" class="space-y-8 max-w-2xl mx-auto">
-  <!-- Service Settings Group -->
-  <!-- LLM Configuration -->
-
-
-  <!-- Plex OAuth Settings -->
-  <details
-    class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600 shadow-lg rounded-lg p-4 sm:p-6 mb-8">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
-        <img src="{{ url_for('static', filename='logos/plex-light.png') }}" alt="Plex logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/plex-dark.png') }}" alt="Plex logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <h3 class="text-xl font-bold text-yellow-700 dark:text-yellow-400">Plex OAuth Authentication</h3>
-    </summary>
-    <div class="mt-4">
-      <div class="text-sm text-yellow-800 dark:text-yellow-300 mb-4">
-        <p>Set up Plex OAuth to enable user authentication with Plex accounts. You do <strong>not</strong> need to
-          register your app with Plex—just use a unique Client ID for your app. See <a
-            href="https://forums.plex.tv/t/authenticating-with-plex/609370"
-            class="text-sky-600 dark:text-sky-400 underline" target="_blank">Plex OAuth Guide</a> for details.</p>
-      </div>
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="plex_client_id">
-            Plex Client ID
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400"
-              title="Use any unique string (e.g. 'shownotes-app-1234'). This identifies your app to Plex.">(?)</span>
-          </label>
-          <input type="text" id="plex_client_id" name="plex_client_id" value="{{ settings.plex_client_id or '' }}"
-            class="border-yellow-400 dark:border-yellow-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
-        </div>
-      </div>
-
-      <!-- Plex Webhook Integration -->
-      <div
-        class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-400 dark:border-amber-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
-        <div class="flex items-center mb-3">
-          <svg class="w-6 h-6 text-amber-500 dark:text-amber-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z" />
-          </svg>
-          <h3 class="font-semibold text-xl text-amber-800 dark:text-amber-200">Plex Webhook Integration</h3>
-        </div>
-        <p class="text-amber-700 dark:text-amber-300 mb-4 text-sm">To enable Plex events in this app, you need to add a
-          webhook in your Plex server settings. Follow these steps:</p>
-        <ol class="list-decimal list-inside mb-4 text-amber-800 dark:text-amber-200 space-y-1 text-sm">
-          <li>Open your <span class="font-semibold">Plex Web App</span> and sign in as an admin.</li>
-          <li>Click the <span class="font-semibold">Settings</span> (wrench icon) in the top right.</li>
-          <li>In the left sidebar, under <span class="font-semibold">Settings</span>, click <span
-              class="font-semibold">Webhooks</span> (you may need to expand <span class="font-semibold">Advanced</span>
-            to find it).</li>
-          <li>Click <span class="font-semibold">Add Webhook</span>.</li>
-          <li>Paste the following URL into the webhook URL field:</li>
-        </ol>
-        <div
-          class="bg-slate-100 dark:bg-slate-800 border border-amber-300 dark:border-amber-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-          <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{ site_url }}/plex/webhook</span>
-        </div>
-        <p class="text-amber-700 dark:text-amber-300 text-sm">Click <span class="font-semibold">Save</span>. Plex will
-          now send event notifications to this app.</p>
-        <p class="text-xs text-amber-600 dark:text-amber-400 mt-3">You can test the webhook by playing or pausing media
-          in Plex and checking this app for activity.</p>
-      </div>
-      <script>
-        document.addEventListener('DOMContentLoaded', function () {
-          var btn = document.getElementById('gen-plex-secret');
-          if (btn) {
-            btn.addEventListener('click', function () {
-              fetch('/admin/gen_plex_secret', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => {
-                  document.getElementById('plex_client_secret').value = data.secret;
-                });
-            });
-          }
-        });
-      </script>
+<div class="max-w-7xl mx-auto px-4">
+  <!-- Quick Actions Bar -->
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 mb-6">
+    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Quick Sync Actions</h3>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" onclick="syncService('sonarr')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Sync Sonarr
+      </button>
+      <button type="button" onclick="syncService('radarr')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Sync Radarr
+      </button>
+      <button type="button" onclick="syncService('tautulli')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Sync Tautulli
+      </button>
     </div>
-  </details>
+  </div>
 
-  <!-- Pushover -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
-        <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Pushover</span>
-      <span id="pushover_status" class="ml-auto text-sm text-slate-600 dark:text-slate-300"></span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Pushover sends notifications to your device when
-        important events occur.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="pushover_token">API
-            Token</label>
-          <input type="text" id="pushover_token" name="pushover_token" value="{{ settings.pushover_token }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="pushover_key">User
-              Key</label>
-            <a href="https://pushover.net/" target="_blank"
-              class="text-sky-500 dark:text-sky-400 text-xs hover:underline">Get your key</a>
+  <!-- Tabs -->
+  <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
+    <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
+      <button type="button" data-tab="plex" class="border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 dark:border-sky-400 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        Plex
+      </button>
+      <button type="button" data-tab="notifications" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        Notifications
+      </button>
+      <button type="button" data-tab="media" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        Media Services
+      </button>
+      <button type="button" data-tab="requests" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        Requests
+      </button>
+      <button type="button" data-tab="subtitles" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        Subtitles
+      </button>
+      <button type="button" data-tab="ai" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        AI/LLM
+      </button>
+      <button type="button" data-tab="general" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
+        General
+      </button>
+    </nav>
+  </div>
+
+  <form method="post" class="space-y-6">
+    <!-- Plex Panel -->
+    <div data-panel="plex">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Plex OAuth -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <img src="{{ url_for('static', filename='logos/plex-light.png') }}" alt="Plex" class="w-8 h-8 mr-3 dark:hidden">
+            <img src="{{ url_for('static', filename='logos/plex-dark.png') }}" alt="Plex" class="w-8 h-8 mr-3 hidden dark:inline">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">OAuth Authentication</h3>
           </div>
-          <input type="text" id="pushover_key" name="pushover_key" value="{{ settings.pushover_key }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-      </div>
-      <button type="button" id="pushover-test-btn"
-        class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Send Test
-        Notification</button>
-    </div>
-  </details>
-
-  <!-- Tautulli -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-12 h-12 sm:w-14 sm:h-14">
-        {# Placeholder for Tautulli logo - assuming a tautulli.png might exist or be added later #}
-        <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Tautulli</span>
-      <span id="tautulli_status_dot"
-        class="ml-2 {% if tautulli_status %}text-green-500{% else %}text-red-500{% endif %}"
-        title="{% if tautulli_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Tautulli provides detailed Plex media server statistics
-        and watch history.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1"
-            for="tautulli_url">URL</label>
-          <input type="text" id="tautulli_url" name="tautulli_url" value="{{ settings.tautulli_url or '' }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="tautulli_api_key">API
-            Key</label>
-          <input type="text" id="tautulli_api_key" name="tautulli_api_key" value="{{ settings.tautulli_api_key or '' }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-      </div>
-      <button type="button" data-service="tautulli"
-        class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
-    </div>
-  </details>
-
-  <!-- Sonarr -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12"> <!-- Adjusted size -->
-        <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">Sonarr</span>
-      <!-- Adjusted size -->
-      <span id="sonarr_status_dot" class="ml-2 {% if sonarr_status %}text-green-500{% else %}text-red-500{% endif %}"
-        title="{% if sonarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages TV show downloads and keeps your TV library up
-        to date automatically.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_url">Local URL
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for API access)</span>
-          </label>
-          <input type="text" id="sonarr_url" name="sonarr_url" value="{{ settings.sonarr_url }}"
-            placeholder="http://192.168.1.10:8989"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="sonarr_remote_url">Remote URL
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for clickable links)</span>
-          </label>
-          <input type="text" id="sonarr_remote_url" name="sonarr_remote_url" value="{{ settings.sonarr_remote_url or '' }}"
-            placeholder="https://admin.chitekmedia.club/sonarr"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional: External URL for accessing Sonarr from anywhere (used in notifications)</p>
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="sonarr_api_key">API
-              Key</label>
-            <a id="sonarr_key_link"
-              href="{{ settings.sonarr_url.rstrip('/') if settings.sonarr_url else '#' }}/settings/general"
-              target="_blank" class="text-sky-500 dark:text-sky-400 text-xs hover:underline">Get API Key</a>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+            Use a unique Client ID for your app. No Plex registration required. 
+            <a href="https://forums.plex.tv/t/authenticating-with-plex/609370" class="text-sky-600 dark:text-sky-400 underline" target="_blank">Learn more</a>
+          </p>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Client ID</label>
+            <input type="text" name="plex_client_id" value="{{ settings.plex_client_id or '' }}" 
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
-          <input type="text" id="sonarr_api_key" name="sonarr_api_key" value="{{ settings.sonarr_api_key }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
         </div>
-      </div>
-      <button type="button" data-service="sonarr"
-        class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
 
-      <!-- Sonarr Webhook Integration -->
-      <div
-        class="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-400 dark:border-blue-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
-        <div class="flex items-center mb-3">
-          <svg class="w-6 h-6 text-blue-500 dark:text-blue-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z" />
-          </svg>
-          <h3 class="font-semibold text-xl text-blue-800 dark:text-blue-200">Sonarr Webhook Integration</h3>
-        </div>
-        <p class="text-blue-700 dark:text-blue-300 mb-4 text-sm">To enable automatic library syncing when Sonarr adds or
-          updates content, add a webhook in your Sonarr settings:</p>
-        <ol class="list-decimal list-inside mb-4 text-blue-800 dark:text-blue-200 space-y-1 text-sm">
-          <li>Open your <span class="font-semibold">Sonarr Web Interface</span>.</li>
-          <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
-          <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
-          <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
-          <li>Set the following configuration:</li>
-        </ol>
-        <div
-          class="bg-slate-100 dark:bg-slate-800 border border-blue-300 dark:border-blue-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-          <strong>Name:</strong> ShowNotes<br>
-          <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{
-            sonarr_webhook_url }}</span><br>
-          <strong>Method:</strong> POST (not PUT)<br>
-          <strong>Username:</strong> (leave empty)<br>
-          <strong>Password:</strong> (leave empty)<br>
-          <strong>On Download:</strong> ✓<br>
-          <strong>On Series Delete:</strong> ✓<br>
-          <strong>On Episode File Delete:</strong> ✓<br>
-          <strong>On Episode File Delete For Upgrade:</strong> ✓<br>
-          <strong>On Rename:</strong> ✓<br>
-          <strong>On Health:</strong> ✓ (optional, for periodic syncs)
-        </div>
-        <p class="text-blue-700 dark:text-blue-300 text-sm">Click <span class="font-semibold">Save</span>. Sonarr will
-          now automatically sync your library when content changes.</p>
-        <p class="text-xs text-blue-600 dark:text-blue-400 mt-3">This eliminates the need for manual library syncing
-          from the Tasks page.</p>
-      </div>
-    </div>
-  </details>
-
-  <!-- Radarr -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12"> <!-- Adjusted size -->
-        <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">Radarr</span>
-      <!-- Adjusted size -->
-      <span id="radarr_status_dot" class="ml-2 {% if radarr_status %}text-green-500{% else %}text-red-500{% endif %}"
-        title="{% if radarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Manages movie downloads and organizes your movie
-        library automatically.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_url">Local URL
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for API access)</span>
-          </label>
-          <input type="text" id="radarr_url" name="radarr_url" value="{{ settings.radarr_url }}"
-            placeholder="http://192.168.1.10:7878"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="radarr_remote_url">Remote URL
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for clickable links)</span>
-          </label>
-          <input type="text" id="radarr_remote_url" name="radarr_remote_url" value="{{ settings.radarr_remote_url or '' }}"
-            placeholder="https://admin.chitekmedia.club/radarr"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional: External URL for accessing Radarr from anywhere (used in notifications)</p>
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="radarr_api_key">API
-              Key</label>
-            <a id="radarr_key_link"
-              href="{{ settings.radarr_url.rstrip('/') if settings.radarr_url else '#' }}/settings/general"
-              target="_blank" class="text-sky-500 dark:text-sky-400 text-xs hover:underline">Get API Key</a>
+        <!-- Plex Webhook -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <svg class="w-8 h-8 mr-3 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Webhook Integration</h3>
           </div>
-          <input type="text" id="radarr_api_key" name="radarr_api_key" value="{{ settings.radarr_api_key }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-      </div>
-      <button type="button" data-service="radarr"
-        class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
-
-      <!-- Radarr Webhook Integration -->
-      <div
-        class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 dark:border-green-500 p-4 sm:p-6 mt-6 rounded-r-lg shadow-md">
-        <div class="flex items-center mb-3">
-          <svg class="w-6 h-6 text-green-500 dark:text-green-400 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24"
-            stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M12 20h.01M21.75 12a9.75 9.75 0 11-19.5 0 9.75 9.75 0 0119.5 0z" />
-          </svg>
-          <h3 class="font-semibold text-xl text-green-800 dark:text-green-200">Radarr Webhook Integration</h3>
-        </div>
-        <p class="text-green-700 dark:text-green-300 mb-4 text-sm">To enable automatic library syncing when Radarr adds
-          or updates content, add a webhook in your Radarr settings:</p>
-        <ol class="list-decimal list-inside mb-4 text-green-800 dark:text-green-200 space-y-1 text-sm">
-          <li>Open your <span class="font-semibold">Radarr Web Interface</span>.</li>
-          <li>Go to <span class="font-semibold">Settings</span> → <span class="font-semibold">Connect</span>.</li>
-          <li>Click the <span class="font-semibold">+</span> button to add a new connection.</li>
-          <li>Select <span class="font-semibold">Webhook</span> from the list.</li>
-          <li>Set the following configuration:</li>
-        </ol>
-        <div
-          class="bg-slate-100 dark:bg-slate-800 border border-green-300 dark:border-green-600 rounded px-4 py-3 mb-4 text-sm font-mono text-slate-800 dark:text-slate-100 break-all">
-          <strong>Name:</strong> ShowNotes<br>
-          <strong>URL:</strong> <span class="select-all bg-yellow-100 dark:bg-yellow-900/30 px-1 rounded">{{
-            radarr_webhook_url }}</span><br>
-          <strong>Method:</strong> POST (not PUT)<br>
-          <strong>Username:</strong> (leave empty)<br>
-          <strong>Password:</strong> (leave empty)<br>
-          <strong>On Download:</strong> ✓<br>
-          <strong>On Movie Delete:</strong> ✓<br>
-          <strong>On Movie File Delete:</strong> ✓<br>
-          <strong>On Movie File Delete For Upgrade:</strong> ✓<br>
-          <strong>On Rename:</strong> ✓<br>
-          <strong>On Health:</strong> ✓ (optional, for periodic syncs)
-        </div>
-        <p class="text-green-700 dark:text-green-300 text-sm">Click <span class="font-semibold">Save</span>. Radarr will
-          now automatically sync your library when content changes.</p>
-        <p class="text-xs text-green-600 dark:text-green-400 mt-3">This eliminates the need for manual library syncing
-          from the Tasks page.</p>
-      </div>
-    </div>
-  </details>
-
-  <!-- Bazarr -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12"> <!-- Adjusted size -->
-        <img src="{{ url_for('static', filename='logos/bazarr-light.png') }}" alt="Bazarr logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/bazarr-dark.png') }}" alt="Bazarr logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">Bazarr</span>
-      <!-- Adjusted size -->
-      <span id="bazarr_status_dot" class="ml-2 {% if bazarr_status %}text-green-500{% else %}text-red-500{% endif %}"
-        title="{% if bazarr_status %}Connected{% else %}Not Connected/Error{% endif %}">●</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Adds and manages subtitles for your movies and TV shows
-        automatically.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="bazarr_url">URL</label>
-          <input type="text" id="bazarr_url" name="bazarr_url" value="{{ settings.bazarr_url }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200" for="bazarr_api_key">API
-              Key</label>
-            <a id="bazarr_key_link"
-              href="{{ settings.bazarr_url.rstrip('/') if settings.bazarr_url else '#' }}/settings" target="_blank"
-              class="text-sky-500 dark:text-sky-400 text-xs hover:underline">Get API Key</a>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">Add this webhook URL to your Plex server settings:</p>
+          <div class="bg-slate-100 dark:bg-slate-700 rounded p-3 mb-3 font-mono text-sm break-all border border-slate-200 dark:border-slate-600">
+            {{ site_url }}/plex/webhook
           </div>
-          <input type="text" id="bazarr_api_key" name="bazarr_api_key" value="{{ settings.bazarr_api_key }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-        </div>
-      </div>
-      <button type="button" data-service="bazarr"
-        class="test-btn bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md shadow-sm mt-4 text-sm font-medium">Test</button>
-    </div>
-  </details>
-
-  <!-- Jellyseerr -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12">
-        <svg class="w-full h-full text-purple-500 dark:text-purple-400" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-        </svg>
-      </span>
-      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">Jellyseerr</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Jellyseerr (or Overseerr) allows users to request new content for your media library.</p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="jellyseer_url">
-            URL
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(e.g., http://localhost:5055)</span>
-          </label>
-          <input type="text" id="jellyseer_url" name="jellyseer_url" value="{{ settings.jellyseer_url or '' }}"
-            placeholder="http://localhost:5055"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This URL will be used for "Request on Jellyseerr" links on show and movie detail pages</p>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="jellyseer_api_key">
-            API Key
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400">(for season request integration)</span>
-          </label>
-          <input type="text" id="jellyseer_api_key" name="jellyseer_api_key" value="{{ settings.jellyseer_api_key or '' }}"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Required for "Request Season" buttons. Find this in Jellyseerr Settings → General</p>
-        </div>
-      </div>
-    </div>
-  </details>
-
-  <!-- TheTVDB -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-10 h-10 sm:w-12 sm:h-12">
-        <img src="{{ url_for('static', filename='logos/tvdb-light.png') }}" alt="TheTVDB logo"
-          class="w-full h-full object-contain dark:hidden">
-        <img src="{{ url_for('static', filename='logos/tvdb-dark.png') }}" alt="TheTVDB logo dark"
-          class="w-full h-full object-contain hidden dark:inline">
-      </span>
-      <span class="font-semibold text-lg sm:text-xl text-slate-800 dark:text-slate-100">TheTVDB</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-3">Fetches cast, role-specific images, and episode
-        metadata from <a href='https://thetvdb.com/' target='_blank'
-          class='text-sky-500 dark:text-sky-400 underline'>TheTVDB</a>. <a href='https://thetvdb.github.io/v4-api/'
-          target='_blank' class='text-sky-500 dark:text-sky-400 underline'>API Docs</a></p>
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="thetvdb_api_key">API
-            Key</label>
-          <div class="relative flex items-center">
-            <input type="password" id="thetvdb_api_key" name="thetvdb_api_key"
-              value="{{ settings.thetvdb_api_key or '' }}" autocomplete="off"
-              class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-16">
-            <button type="button"
-              onclick="const inp = document.getElementById('thetvdb_api_key'); inp.type = inp.type === 'password' ? 'text' : 'password'; this.innerText = inp.type === 'password' ? 'Show' : 'Hide';"
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-sky-600 dark:text-sky-400 focus:outline-none">Show</button>
-          </div>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your API key for TheTVDB v4 API. <a
-              href='https://thetvdb.com/api-information' target='_blank'
-              class='text-sky-500 dark:text-sky-400 underline'>Get your key</a>.</p>
-        </div>
-      </div>
-    </div>
-  </details>
-
-  <!-- Application Settings -->
-  <details class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg p-4 sm:p-6">
-    <summary class="flex items-center gap-x-3 cursor-pointer">
-      <span class="inline-block w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center">
-        <svg class="w-8 h-8 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-      </span>
-      <span class="font-semibold text-xl text-slate-800 dark:text-slate-100">Application Settings</span>
-    </summary>
-    <div class="mt-4">
-      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Configure general application preferences.</p>
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" for="timezone">
-            Timezone
-            <span class="ml-1 text-xs text-slate-500 dark:text-slate-400"
-              title="Select your local timezone for displaying watch history timestamps">(?)</span>
-          </label>
-          <select id="timezone" name="timezone"
-            class="border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-lg p-2 w-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
-            <option value="UTC" {% if settings.timezone == 'UTC' %}selected{% endif %}>UTC</option>
-            <optgroup label="North America">
-              <option value="America/St_Johns" {% if settings.timezone == 'America/St_Johns' %}selected{% endif %}>Newfoundland Time (NST/NDT)</option>
-              <option value="America/Halifax" {% if settings.timezone == 'America/Halifax' %}selected{% endif %}>Atlantic Time (AST/ADT)</option>
-              <option value="America/New_York" {% if settings.timezone == 'America/New_York' %}selected{% endif %}>Eastern Time (EST/EDT)</option>
-              <option value="America/Chicago" {% if settings.timezone == 'America/Chicago' %}selected{% endif %}>Central Time (CST/CDT)</option>
-              <option value="America/Denver" {% if settings.timezone == 'America/Denver' %}selected{% endif %}>Mountain Time (MST/MDT)</option>
-              <option value="America/Phoenix" {% if settings.timezone == 'America/Phoenix' %}selected{% endif %}>Arizona (MST - no DST)</option>
-              <option value="America/Regina" {% if settings.timezone == 'America/Regina' %}selected{% endif %}>Saskatchewan (CST - no DST)</option>
-              <option value="America/Los_Angeles" {% if settings.timezone == 'America/Los_Angeles' %}selected{% endif %}>Pacific Time (PST/PDT)</option>
-              <option value="America/Anchorage" {% if settings.timezone == 'America/Anchorage' %}selected{% endif %}>Alaska Time (AKST/AKDT)</option>
-              <option value="Pacific/Honolulu" {% if settings.timezone == 'Pacific/Honolulu' %}selected{% endif %}>Hawaii Time (HST - no DST)</option>
-            </optgroup>
-            <optgroup label="Europe">
-              <option value="Europe/London" {% if settings.timezone == 'Europe/London' %}selected{% endif %}>London (GMT/BST)</option>
-              <option value="Europe/Paris" {% if settings.timezone == 'Europe/Paris' %}selected{% endif %}>Paris (CET/CEST)</option>
-              <option value="Europe/Berlin" {% if settings.timezone == 'Europe/Berlin' %}selected{% endif %}>Berlin (CET/CEST)</option>
-              <option value="Europe/Athens" {% if settings.timezone == 'Europe/Athens' %}selected{% endif %}>Athens (EET/EEST)</option>
-              <option value="Europe/Moscow" {% if settings.timezone == 'Europe/Moscow' %}selected{% endif %}>Moscow (MSK)</option>
-            </optgroup>
-            <optgroup label="Asia">
-              <option value="Asia/Dubai" {% if settings.timezone == 'Asia/Dubai' %}selected{% endif %}>Dubai (GST)</option>
-              <option value="Asia/Kolkata" {% if settings.timezone == 'Asia/Kolkata' %}selected{% endif %}>India (IST)</option>
-              <option value="Asia/Shanghai" {% if settings.timezone == 'Asia/Shanghai' %}selected{% endif %}>China (CST)</option>
-              <option value="Asia/Tokyo" {% if settings.timezone == 'Asia/Tokyo' %}selected{% endif %}>Japan (JST)</option>
-              <option value="Asia/Seoul" {% if settings.timezone == 'Asia/Seoul' %}selected{% endif %}>South Korea (KST)</option>
-            </optgroup>
-            <optgroup label="Australia">
-              <option value="Australia/Perth" {% if settings.timezone == 'Australia/Perth' %}selected{% endif %}>Perth (AWST)</option>
-              <option value="Australia/Adelaide" {% if settings.timezone == 'Australia/Adelaide' %}selected{% endif %}>Adelaide (ACST/ACDT)</option>
-              <option value="Australia/Brisbane" {% if settings.timezone == 'Australia/Brisbane' %}selected{% endif %}>Brisbane (AEST - no DST)</option>
-              <option value="Australia/Sydney" {% if settings.timezone == 'Australia/Sydney' %}selected{% endif %}>Sydney (AEST/AEDT)</option>
-            </optgroup>
-            <optgroup label="Other">
-              <option value="Pacific/Auckland" {% if settings.timezone == 'Pacific/Auckland' %}selected{% endif %}>Auckland (NZST/NZDT)</option>
-              <option value="America/Sao_Paulo" {% if settings.timezone == 'America/Sao_Paulo' %}selected{% endif %}>São Paulo (BRT/BRST)</option>
-              <option value="Africa/Johannesburg" {% if settings.timezone == 'Africa/Johannesburg' %}selected{% endif %}>Johannesburg (SAST)</option>
-            </optgroup>
-          </select>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Watch history timestamps will be displayed in this timezone. 
-            <strong>Note for Saskatchewan users:</strong> Select "Saskatchewan (CST - no DST)" to avoid daylight saving time adjustments.
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Settings → Webhooks → Add Webhook in your Plex Web App
           </p>
         </div>
       </div>
     </div>
-  </details>
 
-  <button type="submit"
-    class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-all duration-150 ease-in-out text-base font-semibold mt-8 flex items-center justify-center">Save
-    Changes</button>
-</form>
+    <!-- Notifications Panel -->
+    <div data-panel="notifications" class="hidden">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+          <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover" class="w-8 h-8 mr-3 dark:hidden">
+          <img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover" class="w-8 h-8 mr-3 hidden dark:inline">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Pushover Notifications</h3>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Send notifications to your devices when events occur.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Token</label>
+            <input type="text" name="pushover_token" value="{{ settings.pushover_token or '' }}"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">User Key</label>
+              <a href="https://pushover.net/" target="_blank" class="text-xs text-sky-600 dark:text-sky-400 hover:underline">Get key</a>
+            </div>
+            <input type="text" name="pushover_key" value="{{ settings.pushover_key or '' }}"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+        </div>
+        <button type="button" id="pushover-test-btn" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+          Send Test Notification
+        </button>
+      </div>
+    </div>
 
-<!-- Library Synchronization Section has been moved to Admin > Tasks -->
+    <!-- Media Services Panel -->
+    <div data-panel="media" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Tautulli -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli" class="w-8 h-8 mr-3 dark:hidden">
+            <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli" class="w-8 h-8 mr-3 hidden dark:inline">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Tautulli</h3>
+            <span id="tautulli_status_dot" class="ml-auto {% if tautulli_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if tautulli_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Plex media server statistics and watch history.</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">URL</label>
+              <input type="text" name="tautulli_url" value="{{ settings.tautulli_url or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+              <input type="text" name="tautulli_api_key" value="{{ settings.tautulli_api_key or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" data-service="tautulli" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Test Connection
+          </button>
+        </div>
 
-<script src="{{ url_for('static', filename='admin_settings.js') }}" defer></script>
+        <!-- Sonarr -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr" class="w-8 h-8 mr-3 dark:hidden">
+            <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr" class="w-8 h-8 mr-3 hidden dark:inline">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Sonarr</h3>
+            <span id="sonarr_status_dot" class="ml-auto {% if sonarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if sonarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">TV series library management.</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Local URL</label>
+              <input type="text" name="sonarr_url" value="{{ settings.sonarr_url or '' }}"
+                placeholder="http://192.168.1.x:8989"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Public URL</label>
+              <input type="text" name="sonarr_remote_url" value="{{ settings.sonarr_remote_url or '' }}"
+                placeholder="https://sonarr.example.com"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+              <input type="text" name="sonarr_api_key" value="{{ settings.sonarr_api_key or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" data-service="sonarr" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Test Connection
+          </button>
+        </div>
+
+        <!-- Radarr -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr" class="w-8 h-8 mr-3 dark:hidden">
+            <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr" class="w-8 h-8 mr-3 hidden dark:inline">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Radarr</h3>
+            <span id="radarr_status_dot" class="ml-auto {% if radarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if radarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Movie library management.</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Local URL</label>
+              <input type="text" name="radarr_url" value="{{ settings.radarr_url or '' }}"
+                placeholder="http://192.168.1.x:7878"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Public URL</label>
+              <input type="text" name="radarr_remote_url" value="{{ settings.radarr_remote_url or '' }}"
+                placeholder="https://radarr.example.com"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+              <input type="text" name="radarr_api_key" value="{{ settings.radarr_api_key or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" data-service="radarr" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Test Connection
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Requests Panel -->
+    <div data-panel="requests" class="hidden">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+          <img src="{{ url_for('static', filename='logos/jellyseerr-light.png') }}" alt="Jellyseerr" class="w-8 h-8 mr-3 dark:hidden">
+          <img src="{{ url_for('static', filename='logos/jellyseerr-dark.png') }}" alt="Jellyseerr" class="w-8 h-8 mr-3 hidden dark:inline">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Jellyseerr</h3>
+          <span id="jellyseerr_status_dot" class="ml-auto {% if jellyseerr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if jellyseerr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Media request management system.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Local URL</label>
+            <input type="text" name="jellyseerr_url" value="{{ settings.jellyseerr_url or '' }}"
+              placeholder="http://192.168.1.x:5055"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Public URL</label>
+            <input type="text" name="jellyseerr_web_url" value="{{ settings.jellyseerr_web_url or '' }}"
+              placeholder="https://requests.example.com"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+            <input type="text" name="jellyseerr_api_key" value="{{ settings.jellyseerr_api_key or '' }}"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+        </div>
+        <button type="button" data-service="jellyseerr" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+          Test Connection
+        </button>
+      </div>
+    </div>
+
+    <!-- Subtitles Panel -->
+    <div data-panel="subtitles" class="hidden">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+          <img src="{{ url_for('static', filename='logos/bazarr-light.png') }}" alt="Bazarr" class="w-8 h-8 mr-3 dark:hidden">
+          <img src="{{ url_for('static', filename='logos/bazarr-dark.png') }}" alt="Bazarr" class="w-8 h-8 mr-3 hidden dark:inline">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Bazarr</h3>
+          <span id="bazarr_status_dot" class="ml-auto {% if bazarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if bazarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Subtitle management for Sonarr and Radarr.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">URL</label>
+            <input type="text" name="bazarr_url" value="{{ settings.bazarr_url or '' }}"
+              placeholder="http://192.168.1.x:6767"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+            <input type="text" name="bazarr_api_key" value="{{ settings.bazarr_api_key or '' }}"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+        </div>
+        <button type="button" data-service="bazarr" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+          Test Connection
+        </button>
+      </div>
+    </div>
+
+    <!-- AI/LLM Panel -->
+    <div data-panel="ai" class="hidden">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <div class="flex items-center mb-4">
+          <svg class="w-8 h-8 mr-3 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Ollama (LLM)</h3>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Local AI models for enhanced features.</p>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API URL</label>
+          <input type="text" name="ollama_api_url" value="{{ settings.ollama_api_url or '' }}"
+            placeholder="http://192.168.1.x:11434"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+        </div>
+        <button type="button" data-service="ollama" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+          Test Connection
+        </button>
+      </div>
+    </div>
+
+    <!-- General Panel -->
+    <div data-panel="general" class="hidden">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">General Settings</h3>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Timezone</label>
+            <select name="timezone" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <option value="">Select timezone...</option>
+              {% for tz in timezones %}
+              <option value="{{ tz }}" {% if settings.timezone == tz %}selected{% endif %}>{{ tz }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="flex justify-end pt-6 border-t border-slate-200 dark:border-slate-700">
+      <button type="submit" class="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white font-medium rounded-md shadow-sm transition-colors">
+        Save All Settings
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function syncService(service) {
+  const button = event.target;
+  button.disabled = true;
+  button.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Syncing...';
+  
+  fetch(`/admin/sync_${service}_library`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message || `${service} sync started`);
+      button.disabled = false;
+      button.innerHTML = button.innerHTML.replace('Syncing...', `Sync ${service.charAt(0).toUpperCase() + service.slice(1)}`);
+    })
+    .catch(err => {
+      alert(`Error: ${err.message}`);
+      button.disabled = false;
+      button.innerHTML = button.innerHTML.replace('Syncing...', `Sync ${service.charAt(0).toUpperCase() + service.slice(1)}`);
+    });
+}
+</script>
 {% endblock %}

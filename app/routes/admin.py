@@ -645,7 +645,7 @@ def settings():
             ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
-            thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=? WHERE id=?''', (
+            thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=? WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('radarr_remote_url'),
@@ -668,6 +668,7 @@ def settings():
             request.form.get('timezone', 'UTC'),
             request.form.get('jellyseer_url'),
             request.form.get('jellyseer_api_key'),
+            request.form.get('jellyseer_remote_url'),
             settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
         ))
         db.commit()

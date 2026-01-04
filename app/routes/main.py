@@ -1292,14 +1292,17 @@ def onboarding_services():
 
     if request.method == 'POST':
         try:
+            # Get timezone from form, or use browser-detected timezone if available
+            timezone = request.form.get('timezone', '')
+            
             # Create settings record with service configurations
             db.execute(
                 '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url,
                    sonarr_url, sonarr_api_key, sonarr_remote_url,
                    bazarr_url, bazarr_api_key, ollama_url,
                    pushover_key, pushover_token, plex_client_id,
-                   tautulli_url, tautulli_api_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   tautulli_url, tautulli_api_key, timezone)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     request.form.get('radarr_url', ''),
                     request.form.get('radarr_api_key', ''),
@@ -1314,7 +1317,8 @@ def onboarding_services():
                     request.form.get('pushover_token', ''),
                     request.form.get('plex_client_id', ''),
                     request.form.get('tautulli_url', ''),
-                    request.form.get('tautulli_api_key', '')
+                    request.form.get('tautulli_api_key', ''),
+                    timezone
                 )
             )
             db.commit()
@@ -3416,6 +3420,15 @@ def api_add_list_item(list_id):
             INSERT INTO user_list_items (list_id, media_type, show_id, movie_id, notes, sort_order)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (list_id, media_type, show_id, movie_id, notes, next_sort))
+        
+        # Update item_count on the list
+        db.execute('''
+            UPDATE user_lists 
+            SET item_count = (SELECT COUNT(*) FROM user_list_items WHERE list_id = ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (list_id, list_id))
+        
         db.commit()
 
         return jsonify({'success': True})
@@ -3449,6 +3462,15 @@ def api_remove_list_item(list_id, item_id):
             DELETE FROM user_list_items
             WHERE id = ? AND list_id = ?
         ''', (item_id, list_id))
+        
+        # Update item_count on the list
+        db.execute('''
+            UPDATE user_lists 
+            SET item_count = (SELECT COUNT(*) FROM user_list_items WHERE list_id = ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (list_id, list_id))
+        
         db.commit()
 
         return jsonify({'success': True})
