@@ -1,119 +1,64 @@
-# Project Roadmap
+# ShowNotes Roadmap
 
-This document outlines the planned features and development stages for the ShowNotes application.
+## Project Vision
 
-## Completed
-- [x] **Search Navigation Highlighting:** Added visual highlight for keyboard-selected search items.
-- [x] **Local Image Caching & Loading:** Switched movie/show images to load from local cache (`/static/poster/`, `/static/background/`) and updated Sonarr/Radarr sync jobs to queue images with TMDB ID based filenames.
-- [x] **Show Detail Page Overhaul:** Redesigned show detail page with background image, poster, full metadata (first air date, status, next episode, IMDb link), collapsible seasons/episodes list, and 'currently watched' status display.
-- [x] **Homepage Layout Update:** Implemented new homepage design with prominent 'current' item (playing/paused) and a grid of 'previously watched' items, based on detailed Plex activity history.
-- [x] **Dynamic Service Status Indicators:** Added visual connection status indicators (green/red dots) for configured services that update in real-time via JavaScript.
-- [x] Plex OAuth login (PIN-based, DB-stored credentials), logout, session management, and onboarding fixes.
-- [x] **Enhanced Plex Event Handling & Homepage Display (Initial):** Implemented detailed logging of Plex webhook events (play, pause, resume, stop, scrobble) into a new `plex_activity_log` table. Initial homepage update to display "Now Playing" or "Recently Played" information. (Further enhanced by the new layout update).
-- [x] **Search Image Display Fix:** Corrected image display in search results by ensuring absolute URLs and proper API key usage for Sonarr/Radarr images, with on-demand caching.
-- [x] Integrate Sonarr/Radarr APIs for reliable poster/metadata display.
-- [x] Admin settings UI for service URLs and API keys (initial version).
-- [x] Separated Sonarr and Radarr library sync functionalities with dedicated admin actions.
-- [x] Foundational Admin Panel UI: Responsive sidebar, dashboard page (`/admin/dashboard`), and integration of service settings into the new layout.
-- [x] Basic Flask application structure.
-- [x] Database setup (SQLite).
-- [x] Tailwind CSS integration & Dark Mode.
-- [x] Basic HTML templates and routes.
-- [x] Initial documentation setup.
-- [x] **Admin Tasks Page:** Created a dedicated page (`/admin/tasks`) for managing Sonarr and Radarr library synchronization.
-- [x] **Sync Operation Feedback:** Implemented flash messages to inform users of the number of items processed after Sonarr/Radarr sync.
-- [x] **Admin UI Consistency:** Standardized styling for sidebar navigation links (e.g., 'Tasks' link) to match other admin links.
-- [x] **Task Button Styling:** Restyled Sonarr/Radarr sync buttons on the `/admin/tasks` page for better visual consistency.
-- [x] **Logo Display Fixes:** Corrected display of Sonarr and Radarr logos on the `/admin/tasks` page for proper visibility in both light and dark modes.
-- [x] **Flask Route Modularization:** Refactored application routes into Admin (`/admin`) and Main blueprints for improved organization and maintainability.
-- [x] **Interactive Service Connection Testing:** Enhanced the Admin Services page to allow manual testing of service connections (Sonarr, Radarr, Bazarr, Ollama, Pushover) using current form values, with immediate visual feedback and resolution of related `url_for` and JavaScript issues.
-- [x] **Tautulli Integration:** Watch history synchronization via Tautulli API with connection testing.
-- [x] **Admin Logbook & User List:** Added logbook page and basic Plex user listing.
-- [x] **Episode Detail Pages:** Added standalone episode pages with air date and availability label. (Further enhanced - see below)
-- [x] **Episode List Cleanup:** Season 0 hidden by default; episodes show "Available" when files exist. (Further enhanced - see below)
-- [x] **Header Consistency and Layout (Main and Admin):** Standardized header appearance; admin header now full-width.
-- [x] **Search Bar Responsiveness (Mobile):** Main site search results now use a modal display on mobile.
-- [x] **Image Caching and Display:** Ensured consistent use of locally cached static images with proper fallbacks.
-- [x] **Episodes List Improvements (Show Detail Page):**
-    - [x] Confirmed Season 0 ("Specials") hidden.
-    - [x] Added "Most Recently Watched" / "Currently Watching" card.
-    - [x] "Available" label for episodes confirmed.
-- [x] **Episode Detail Pages (Content and Links):** Revamped with comprehensive information (poster, air date, summary, availability, runtime, rating) and "Back to Show" link.
-- [x] **Admin Search Functionality:** Implemented unified search in the admin panel for shows, movies, and admin routes.
-- [x] **README and Roadmap updates:** Documentation updated to reflect recent changes (this item).
-- [x] **Descriptive comments:** Added docstrings and inline comments to key Python files (this item).
-- [x] **LLM Integration & Management UI:**
-    - [x] Added admin pages to view and test LLM prompt templates.
-    - [x] Implemented API usage logging with a dedicated page to view provider, token counts, cost, and processing time.
-    - [x] Enhanced the settings page to allow selection between LLM providers (e.g., Ollama, OpenAI) and configure model names.
-- [x] **Core LLM Features:**
-    - [x] Spoiler-aware character summaries (Ollama/OpenAI integration).
-    - [x] Relationship mapping and actor overlap via LLM generation.
-    - [x] "Currently Watching" tracking via Plex webhook integration.
-- [x] **Subtitle Integration (Bazarr):** Foundational support for parsing subtitles via an admin task.
-- [x] **Movie Detail Page Enhancements:**
-    - [x] Fixed broken rating logos (IMDb, TMDB, Rotten Tomatoes) by using local SVGs.
-    - [x] Added links from ratings to respective external sites.
-    - [x] Removed "Popularity Score" from details.
-    - [x] Formatted "Release Date" to show only the date.
-    - [x] Changed "Status" label from "Released" to "Available".
-- [x] **Show & Episode Detail Page Ratings:**
-    - [x] Added IMDb, TMDB, and Metacritic (shows only) ratings and links to show detail pages.
-    - [x] Added IMDb and TMDB ratings and links to episode detail pages.
-    - [x] Updated database schema and migration scripts to support new rating fields.
-- [x] **Webhook Activity Tracking & Dashboard Monitoring:**
-    - [x] Added `webhook_activity` table to track Radarr and Sonarr webhook events with timestamps.
-    - [x] Enhanced webhook endpoints to record activity with event types and payload summaries.
-    - [x] Updated admin dashboard to display "Last Updated" timestamps for each service.
-    - [x] Added visual indicators (green for recent activity, amber for no activity) on service cards.
-    - [x] Implemented automatic library syncing triggered by webhook events (Download, Series, Movie).
-    - [x] Created comprehensive webhook setup guide with troubleshooting instructions.
-- [x] **Notification & Issue Reporting Foundation:** Added tables for user preferences, notifications, and issue reports with an admin review UI.
-- [x] **Next Episode Display Restoration:** Fixed missing "Next Episode" section on show detail pages with proper styling and readability.
-- [x] **Character Detail System Fixes:** Resolved character page routing issues by transitioning from `actor_id` to `character_id` (primary key) for accurate character identification.
-- [x] **LLM Character Summary Enhancements:** Added comprehensive context (show overview, episode details, actor names, other characters) to LLM prompts to reduce hallucinations and improve accuracy.
-- [x] **LLM Testing Tools:** Implemented cache clearing functionality and refresh buttons for character pages to facilitate prompt development and testing.
-- [x] **UI Readability Improvements:** Fixed transparency issues in show detail page cards, ensuring optimal text readability in both light and dark modes.
-- [x] **Targeted Sonarr Sync:** Implemented episode-specific metadata updates via Sonarr webhooks for better data freshness.
-- [x] **Episode Recap Scraping System:** Built a comprehensive system to scrape detailed episode summaries from recap sites (Vulture, Showbiz Junkies) with user-driven show selection, automatic episode info extraction, database storage, and integration with grounded LLM prompts to improve character and show summary accuracy.
+ShowNotes is a Plex companion app providing spoiler-aware summaries, character information, and media management tools.
+
+## Recently Completed
+
+### 2025 Q1
+- User profiles with favorites, watch history, and custom lists
+- Profile photos and personalization
+- Toast notification system
+- Real-time "Now Playing" tracking via Tautulli
+- Plex member since date integration
+- Profile statistics consistency improvements
+
+### 2024 Q4
+- Plex OAuth authentication
+- Admin panel with service management
+- Webhook integration (Plex, Sonarr, Radarr)
+- Image caching system
+- Show/episode detail pages with ratings
+- Dark mode support
+- Mobile-responsive design
+
+## Current Development
+
+### In Progress
+- Multi-user profile support (planned)
+- Enhanced statistics visualization
+- Timezone handling improvements
 
 ## Next Steps
 
-### **Immediate Priorities**
-- [ ] **LLM Test Page Character Fetching:** Complete the character autocomplete functionality for the LLM test page to dynamically load characters based on selected show.
-- [ ] **Character Data Consistency:** Address TMDB ID mismatches in character data that can cause characters to appear in wrong episodes/shows.
-- [x] **Admin Prompt Management:** Allow users to edit prompts from the admin panel, with testing capabilities.
-- [ ] **Prompt Version History:** Implement version tracking for prompt templates with ability to view and restore previous versions.
-- [ ] **Dynamic Recap Site Management:** Create an admin interface to add new recap sites with LLM-powered rule generation. Allow admins to provide a site domain and sample episode recap URLs, then use an LLM to analyze the site structure and generate scraping rules (regex patterns, content selectors, etc.) that are stored in the database for future-proofing the scraping system.
+### Short Term (Next 2-3 months)
+- [ ] Admin dashboard redesign (social metrics focus)
+- [ ] Comprehensive timezone support
+- [ ] Statistics backfill from activity log
+- [ ] Enhanced notification preferences
+- [ ] Watch progress analytics
 
-### **UI/UX Improvements**
-- [ ] **Enhanced Character Detail Page:** Redesign the character detail page to present LLM-generated content in a more organized and visually appealing manner (e.g., using a card-based or tabbed layout).
-- [ ] **Interactive Character Chat:** Develop the LLM-powered summary feature into a fully interactive, in-character chat experience.
-- [ ] **Loading States:** Add loading indicators for LLM requests, image fetches, and other async operations.
+### Medium Term (3-6 months)
+- [ ] Multi-user sub-profiles per account
+- [ ] Advanced filtering and search
+- [ ] Export watch history
+- [ ] Jellyseerr integration
+- [ ] Enhanced mobile experience
 
-### **System Reliability**
-- [ ] **Refine "Next Up" Feature:** Improve the logic for determining the next unwatched episode and display it more prominently on the show detail page and homepage.
-- [ ] **Improve Plex User Detection:** Increase the robustness of Plex user detection at login to handle edge cases and ensure more reliable username/ID capture.
-- [ ] **Data Validation:** Implement better validation for character and episode data to prevent ID mismatches and missing content.
+### Long Term (6+ months)
+- [ ] API for third-party integrations
+- [ ] Advanced analytics and charts
+- [ ] Social features (shared lists, recommendations)
+- [ ] Plugin system for extensibility
 
-### **Analytics & Monitoring**
-- [ ] **Webhook Activity Analytics:** Expand webhook tracking to include more detailed analytics (frequency, event patterns, sync success rates).
-- [ ] **Real-time Dashboard Updates:** Implement live updates for webhook activity timestamps without page refresh.
-- [ ] **LLM Usage Analytics:** Add detailed tracking of LLM performance, accuracy metrics, and cost optimization.
+## Feature Requests
 
-## Future Enhancements
+Submit feature requests at: https://github.com/scottwf/show_notes/issues
 
-- [ ] **Advanced Admin Dashboard:**
-    - [ ] Display real-time usage statistics (e.g., active users, Plex events processed).
-    - [ ] Show recent user logins and a more detailed history of events per user.
-    - [ ] Implement a notification system for important alerts or errors.
-- [ ] **Advanced Search & Filtering:** Implement more powerful search capabilities with filters for genre, year, actors, etc.
-- [ ] **Interactive Character Chat:** Develop the LLM-powered summary feature into a fully interactive, in-character chat experience.
-- [ ] **User-Specific Features:**
-    - [ ] Create dedicated user watch history and recommendations pages.
-    - [ ] Allow for customizable user dashboards.
-- [ ] **Documentation:**
-    - [ ] Create in-app help and documentation for administrators and users.
-    - [ ] Document the setup and troubleshooting process for multi-user environments.
-- [ ] **Testing:** Implement a comprehensive suite of unit and integration tests to ensure application stability.
-- [ ] **Notifications:** Fully integrate Pushover for notifications about file issues or other system events.
+## Contributing
+
+Contributions welcome! Check the GitHub repository for:
+- Open issues
+- Good first issues
+- Development guidelines
