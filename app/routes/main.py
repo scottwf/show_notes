@@ -1284,7 +1284,12 @@ def onboarding_services():
         'bazarr_api_key': os.getenv('BAZARR_API_KEY', ''),
         'tautulli_url': os.getenv('TAUTULLI_URL', ''),
         'tautulli_api_key': os.getenv('TAUTULLI_API_KEY', ''),
-        'ollama_url': os.getenv('OLLAMA_API_URL', 'http://localhost:11434'),
+        'jellyseer_url': os.getenv('JELLYSEER_URL', ''),
+        'jellyseer_api_key': os.getenv('JELLYSEER_API_KEY', ''),
+        'ollama_url': os.getenv('OLLAMA_URL', 'http://localhost:11434'),
+        'ollama_model': os.getenv('OLLAMA_MODEL', ''),
+        'openai_api_key': os.getenv('OPENAI_API_KEY', ''),
+        'openai_model': os.getenv('OPENAI_MODEL', ''),
         'pushover_key': os.getenv('PUSHOVER_USER_KEY', ''),
         'pushover_token': os.getenv('PUSHOVER_API_TOKEN', ''),
         'plex_client_id': os.getenv('PLEX_CLIENT_ID', '')
@@ -1299,10 +1304,14 @@ def onboarding_services():
             db.execute(
                 '''INSERT INTO settings (radarr_url, radarr_api_key, radarr_remote_url,
                    sonarr_url, sonarr_api_key, sonarr_remote_url,
-                   bazarr_url, bazarr_api_key, ollama_url,
+                   bazarr_url, bazarr_api_key,
+                   tautulli_url, tautulli_api_key,
+                   jellyseer_url, jellyseer_api_key,
+                   ollama_url, ollama_model_name,
+                   openai_api_key, openai_model_name,
                    pushover_key, pushover_token, plex_client_id,
-                   tautulli_url, tautulli_api_key, timezone)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   timezone)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     request.form.get('radarr_url', ''),
                     request.form.get('radarr_api_key', ''),
@@ -1312,12 +1321,17 @@ def onboarding_services():
                     request.form.get('sonarr_remote_url', ''),
                     request.form.get('bazarr_url', ''),
                     request.form.get('bazarr_api_key', ''),
+                    request.form.get('tautulli_url', ''),
+                    request.form.get('tautulli_api_key', ''),
+                    request.form.get('jellyseer_url', ''),
+                    request.form.get('jellyseer_api_key', ''),
                     request.form.get('ollama_url', ''),
+                    request.form.get('ollama_model', ''),
+                    request.form.get('openai_api_key', ''),
+                    request.form.get('openai_model', ''),
                     request.form.get('pushover_key', ''),
                     request.form.get('pushover_token', ''),
                     request.form.get('plex_client_id', ''),
-                    request.form.get('tautulli_url', ''),
-                    request.form.get('tautulli_api_key', ''),
                     timezone
                 )
             )
