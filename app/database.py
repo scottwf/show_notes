@@ -130,9 +130,9 @@ def init_db():
                 webhook_secret TEXT,
                 tautulli_url TEXT,
                 tautulli_api_key TEXT,
-                jellyseerr_url TEXT,
-                jellyseerr_api_key TEXT,
-                jellyseerr_remote_url TEXT,
+                jellyseer_url TEXT,
+                jellyseer_api_key TEXT,
+                jellyseer_remote_url TEXT,
                 thetvdb_api_key TEXT,
                 timezone TEXT DEFAULT 'UTC'
             );
