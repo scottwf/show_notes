@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli" class="w-8 h-8 mr-3 dark:hidden">
             <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli" class="w-8 h-8 mr-3 hidden dark:inline">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Tautulli</h3>
-            <span id="tautulli_status_dot" class="ml-auto {% if tautulli_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if tautulli_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+            <span id="tautulli_status_dot" class="ml-auto {% if tautulli_status and tautulli_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if tautulli_status and tautulli_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
           </div>
           <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Plex media server statistics and watch history.</p>
           <div class="space-y-3">
@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr" class="w-8 h-8 mr-3 dark:hidden">
             <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr" class="w-8 h-8 mr-3 hidden dark:inline">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Sonarr</h3>
-            <span id="sonarr_status_dot" class="ml-auto {% if sonarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if sonarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+            <span id="sonarr_status_dot" class="ml-auto {% if sonarr_status and sonarr_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if sonarr_status and sonarr_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
           </div>
           <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">TV series library management.</p>
           <div class="space-y-3">
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr" class="w-8 h-8 mr-3 dark:hidden">
             <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr" class="w-8 h-8 mr-3 hidden dark:inline">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Radarr</h3>
-            <span id="radarr_status_dot" class="ml-auto {% if radarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if radarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+            <span id="radarr_status_dot" class="ml-auto {% if radarr_status and radarr_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if radarr_status and radarr_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
           </div>
           <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Movie library management.</p>
           <div class="space-y-3">
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <img src="{{ url_for('static', filename='logos/jellyseerr-light.png') }}" alt="Jellyseerr" class="w-8 h-8 mr-3 dark:hidden">
           <img src="{{ url_for('static', filename='logos/jellyseerr-dark.png') }}" alt="Jellyseerr" class="w-8 h-8 mr-3 hidden dark:inline">
           <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Jellyseerr</h3>
-          <span id="jellyseerr_status_dot" class="ml-auto {% if jellyseerr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if jellyseerr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+          <span id="jellyseerr_status_dot" class="ml-auto {% if jellyseerr_status and jellyseerr_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if jellyseerr_status and jellyseerr_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
         </div>
         <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Media request management system.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <img src="{{ url_for('static', filename='logos/bazarr-light.png') }}" alt="Bazarr" class="w-8 h-8 mr-3 dark:hidden">
           <img src="{{ url_for('static', filename='logos/bazarr-dark.png') }}" alt="Bazarr" class="w-8 h-8 mr-3 hidden dark:inline">
           <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Bazarr</h3>
-          <span id="bazarr_status_dot" class="ml-auto {% if bazarr_status %}text-green-500{% else %}text-red-500{% endif %}" title="{% if bazarr_status %}Connected{% else %}Not Connected{% endif %}">●</span>
+          <span id="bazarr_status_dot" class="ml-auto {% if bazarr_status and bazarr_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if bazarr_status and bazarr_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
         </div>
         <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Subtitle management for Sonarr and Radarr.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
