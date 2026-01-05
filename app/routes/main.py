@@ -1389,6 +1389,7 @@ def onboarding_test_service():
         test_bazarr_connection_with_params,
         test_ollama_connection_with_params,
         test_tautulli_connection_with_params,
+        test_jellyseer_connection_with_params,
         test_pushover_notification_with_params
     )
 
@@ -1413,6 +1414,8 @@ def onboarding_test_service():
             success, error_message = test_ollama_connection_with_params(url)
         elif service == 'tautulli':
             success, error_message = test_tautulli_connection_with_params(url, api_key)
+        elif service == 'jellyseer':
+            success, error_message = test_jellyseer_connection_with_params(url, api_key)
         elif service == 'pushover':
             # For pushover, 'url' is user_key and 'key' is token
             success, error_message = test_pushover_notification_with_params(api_key, url)

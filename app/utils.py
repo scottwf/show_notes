@@ -1597,6 +1597,34 @@ def test_tautulli_connection_with_params(url, api_key):
         params=params
     )
 
+def test_jellyseer_connection():
+    """Tests the connection to the configured Jellyseer/Overseerr service."""
+    jellyseer_url = database.get_setting('jellyseer_url')
+    jellyseer_api_key = database.get_setting('jellyseer_api_key')
+
+    if not jellyseer_url:
+        return False, "Jellyseer URL not configured."
+
+    return test_jellyseer_connection_with_params(jellyseer_url, jellyseer_api_key)
+
+def test_jellyseer_connection_with_params(url, api_key):
+    """
+    Tests the Jellyseer/Overseerr connection using a provided URL and API key.
+
+    Args:
+        url (str): The Jellyseer URL to test.
+        api_key (str): The Jellyseer API key to test.
+
+    Returns:
+        tuple: (bool, str) indicating success and a result message.
+    """
+    return _test_service_connection_with_params(
+        "Jellyseer",
+        url,
+        api_key=api_key,
+        endpoint='/api/v1/settings/main'
+    )
+
 def get_tautulli_activity():
     """
     Get current activity (now playing) from Tautulli.

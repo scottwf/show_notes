@@ -47,11 +47,12 @@ from ..database import get_db, close_db, get_setting, set_setting, update_sync_s
 from ..utils import (
     sync_sonarr_library, sync_radarr_library,
     test_sonarr_connection, test_radarr_connection, test_bazarr_connection, test_ollama_connection,
-    test_sonarr_connection_with_params, test_radarr_connection_with_params, 
+    test_sonarr_connection_with_params, test_radarr_connection_with_params,
     test_bazarr_connection_with_params, test_ollama_connection_with_params,
     test_pushover_notification_with_params,
     sync_tautulli_watch_history,
-    test_tautulli_connection, test_tautulli_connection_with_params
+    test_tautulli_connection, test_tautulli_connection_with_params,
+    test_jellyseer_connection, test_jellyseer_connection_with_params
 )
 from ..parse_subtitles import process_all_subtitles
 
@@ -710,7 +711,8 @@ def settings():
     radarr_status = test_radarr_connection()
     bazarr_status = test_bazarr_connection()
     ollama_status = test_ollama_connection()
-    tautulli_status = test_tautulli_connection() # Added Tautulli status
+    tautulli_status = test_tautulli_connection()
+    jellyseerr_status = test_jellyseer_connection()
 
     # Fetch available Ollama models for dropdown
     ollama_models = []
@@ -734,7 +736,8 @@ def settings():
         radarr_status=radarr_status,
         bazarr_status=bazarr_status,
         ollama_status=ollama_status,
-        tautulli_status=tautulli_status, # Added Tautulli status
+        tautulli_status=tautulli_status,
+        jellyseerr_status=jellyseerr_status,
         ollama_models=ollama_models,
         saved_ollama_model=saved_model,
         openai_models=openai_models
