@@ -243,6 +243,11 @@
     <div class="container mx-auto">
       <div class="flex items-center justify-center gap-4 flex-wrap">
         <span class="text-sm">&copy; {{ current_year }} ShowNotes</span>
+        {% if config.ENVIRONMENT == 'development' %}
+        <span class="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border border-yellow-500/30 font-mono">DEV</span>
+        {% elif config.ENVIRONMENT == 'production' %}
+        <span class="text-xs px-2 py-1 rounded bg-green-500/20 text-green-700 dark:text-green-300 border border-green-500/30 font-mono">PROD</span>
+        {% endif %}
         <a href="https://github.com/scottwf/show_notes" target="_blank" rel="noopener noreferrer"
            class="text-sm inline-flex items-center gap-1 hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

@@ -177,19 +177,69 @@ All service connections can be tested via the admin panel at `/admin/settings`. 
 - Environment variables loaded from `.env` file (see `.env.example`)
 - Application settings stored in `settings` table (database-driven configuration)
 - Plex OAuth credentials stored securely in database (not in environment)
-- Default Flask port: 5001
+- Default Flask port: 5003
 - Default session lifetime: 30 days
 
-## Production Considerations
+## Production Deployment
 
-- Change `SECRET_KEY` in `app/__init__.py` (currently set to 'dev')
+### Docker Deployment (Recommended)
+
+The recommended production deployment uses Docker with the following structure:
+
+```bash
+# Directory structure
+/home/docker/appdata/shownotes/    # App data (database, logs, static files)
+/home/docker/compose/shownotes/    # Docker compose files and .env
+/home/scott/projects/show_notes_dev # Development directory (git repo)
+```
+
+**Setup Steps:**
+
+1. **Create required directories:**
+   ```bash
+   mkdir -p /home/docker/appdata/shownotes/{logs,static}
+   mkdir -p /home/docker/compose/shownotes
+   ```
+
+2. **Copy compose files to production directory:**
+   ```bash
+   cp docker-compose.yml /home/docker/compose/shownotes/
+   cp .env.example /home/docker/compose/shownotes/.env
+   ```
+
+3. **Configure environment:**
+   ```bash
+   cd /home/docker/compose/shownotes
+   nano .env  # Edit: Set ENVIRONMENT=production, SECRET_KEY, etc.
+   ```
+
+4. **Build and start:**
+   ```bash
+   docker-compose up -d
+   ```
+
+5. **View logs:**
+   ```bash
+   docker-compose logs -f
+   ```
+
+**Environment Badge:**
+The footer displays a "DEV" (yellow) or "PROD" (green) badge based on the `ENVIRONMENT` variable to help distinguish between development and production instances.
+
+### Traditional Deployment
+
+- Change `SECRET_KEY` in `app/__init__.py` or via environment variable
+- Set `ENVIRONMENT=production` in `.env`
 - Set `SESSION_COOKIE_SECURE=True` when running with HTTPS
 - The app includes a `shownotes.service` systemd service file for automatic restart
 - Advanced development setup with systemd, tmux, and watchdog available (see `docs/dev-server-watchdog.md`)
 
 ## Recent Changes
 
+- **Database Schema Consolidation**: All migrations have been consolidated into `init_db()` for clean, single-step fresh installations. Migrations are archived in `app/migrations_archive/` for reference. Fresh installations get the complete schema automatically without needing to run migrations.
+- **Docker Deployment**: Added Dockerfile and docker-compose.yml for production deployment with proper volume mappings for data persistence
+- **Environment Badges**: Footer now displays "DEV" or "PROD" badge based on `ENVIRONMENT` variable to distinguish between development and production instances
 - **LLM Features Removed**: Character summary and chat features using LLMs (Ollama/OpenAI) have been completely removed. Character detail pages now focus on actor information and cross-show appearances
-- **User Profile Features**: Migration 024 added user favorites and watch history tables
+- **User Profile Features**: User favorites, watch history, statistics, and notification preferences are now included in the initial schema
 - **Removed Components**: Recap scrapers (`recap_scrapers.py`), Wikipedia scraper (`wikipedia_scraper.py`), LLM-powered character summaries, and multiple admin prompt management pages have been removed
 - **Streamlined Admin**: Admin panel has been simplified, removing redundant API usage logs and prompt viewing pages

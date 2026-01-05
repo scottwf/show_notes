@@ -84,58 +84,8 @@ def init_db():
             -- CREATE TABLE current_watch ( id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, show_id INTEGER NOT NULL, season_number INTEGER, episode_number INTEGER, last_watched_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (user_id, show_id) );
             -- CREATE TABLE webhook_log ( id INTEGER PRIMARY KEY AUTOINCREMENT, received_at DATETIME DEFAULT CURRENT_TIMESTAMP, payload TEXT NOT NULL, processed BOOLEAN DEFAULT 0 );
             -- CREATE TABLE autocomplete_logs ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, search_term TEXT NOT NULL, selected_item TEXT, item_type TEXT );
-            CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE,
-                password_hash TEXT,
-                plex_user_id TEXT UNIQUE,
-                plex_username TEXT,
-                plex_token TEXT,
-                is_admin INTEGER DEFAULT 0,
-                email TEXT,
-                profile_photo_url TEXT,
-                bio TEXT,
-                favorite_genres TEXT,
-                joined_at DATETIME,
-                last_login_at DATETIME,
-                profile_show_profile BOOLEAN DEFAULT 1,
-                profile_show_lists BOOLEAN DEFAULT 1,
-                profile_show_favorites BOOLEAN DEFAULT 1,
-                profile_show_stats BOOLEAN DEFAULT 1,
-                profile_show_activity BOOLEAN DEFAULT 1,
-                profile_show_history BOOLEAN DEFAULT 1,
-                profile_show_progress BOOLEAN DEFAULT 1
-            );
-            CREATE TABLE settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                radarr_url TEXT,
-                radarr_api_key TEXT,
-                radarr_remote_url TEXT,
-                sonarr_url TEXT,
-                sonarr_api_key TEXT,
-                sonarr_remote_url TEXT,
-                bazarr_url TEXT,
-                bazarr_api_key TEXT,
-                bazarr_remote_url TEXT,
-                ollama_url TEXT,
-                openai_api_key TEXT,
-                openai_model_name TEXT,
-                ollama_model_name TEXT,
-                preferred_llm_provider TEXT,
-                pushover_key TEXT,
-                pushover_token TEXT,
-                plex_url TEXT,
-                plex_client_id TEXT,
-                plex_token TEXT,
-                webhook_secret TEXT,
-                tautulli_url TEXT,
-                tautulli_api_key TEXT,
-                jellyseerr_url TEXT,
-                jellyseerr_api_key TEXT,
-                jellyseerr_remote_url TEXT,
-                thetvdb_api_key TEXT,
-                timezone TEXT DEFAULT 'UTC'
-            );
+            CREATE TABLE users ( id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, plex_user_id TEXT UNIQUE, plex_username TEXT, plex_token TEXT, is_admin INTEGER DEFAULT 0 );
+            CREATE TABLE settings ( id INTEGER PRIMARY KEY AUTOINCREMENT, radarr_url TEXT, radarr_api_key TEXT, radarr_remote_url TEXT, sonarr_url TEXT, sonarr_api_key TEXT, sonarr_remote_url TEXT, bazarr_url TEXT, bazarr_api_key TEXT, ollama_url TEXT, openai_api_key TEXT, preferred_llm_provider TEXT, pushover_key TEXT, pushover_token TEXT, plex_client_id TEXT, plex_token TEXT, webhook_secret TEXT, tautulli_url TEXT, tautulli_api_key TEXT, jellyseerr_url TEXT, jellyseerr_api_key TEXT, jellyseerr_remote_url TEXT, timezone TEXT DEFAULT 'UTC' );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
             
@@ -162,41 +112,26 @@ def init_db():
                 ratings_tmdb_value REAL,
                 ratings_tmdb_votes INTEGER,
                 ratings_metacritic_value REAL,
-                metacritic_id TEXT,
-                tvmaze_id INTEGER,
-                premiered TEXT,
-                tvmaze_summary TEXT,
-                genres TEXT,
-                network_name TEXT,
-                network_country TEXT,
-                runtime INTEGER,
-                tvmaze_rating REAL,
-                tvmaze_enriched_at DATETIME
+                metacritic_id TEXT
             );
 
             CREATE TABLE sonarr_seasons ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, sonarr_season_id INTEGER, season_number INTEGER NOT NULL, episode_count INTEGER, episode_file_count INTEGER, statistics TEXT, FOREIGN KEY (show_id) REFERENCES sonarr_shows (id), UNIQUE (show_id, season_number) );
             CREATE TABLE sonarr_episodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sonarr_episode_id INTEGER UNIQUE NOT NULL,
-                show_id INTEGER,
                 season_id INTEGER NOT NULL,
-                season_number INTEGER,
-                episode_number INTEGER NOT NULL,
                 sonarr_show_id INTEGER NOT NULL,
+                sonarr_episode_id INTEGER UNIQUE NOT NULL,
+                episode_number INTEGER NOT NULL,
                 title TEXT,
                 overview TEXT,
-                air_date TEXT,
                 air_date_utc TEXT,
-                runtime INTEGER,
                 has_file BOOLEAN,
-                file_path TEXT,
                 monitored BOOLEAN,
                 ratings_imdb_value REAL,
                 ratings_imdb_votes INTEGER,
                 ratings_tmdb_value REAL,
                 ratings_tmdb_votes INTEGER,
                 imdb_id TEXT,
-                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id),
                 FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id)
             );
             
@@ -218,22 +153,9 @@ def init_db():
                 rating_value REAL,
                 rating_votes INTEGER,
                 rating_type TEXT,
-                ratings_imdb_value REAL,
-                ratings_imdb_votes INTEGER,
-                ratings_tmdb_value REAL,
-                ratings_tmdb_votes INTEGER,
-                ratings_metacritic_value INTEGER,
-                ratings_rottenTomatoes_value INTEGER,
-                ratings_rottenTomatoes_votes INTEGER,
-                metacritic_id TEXT,
                 genres TEXT,
                 certification TEXT,
-                runtime INTEGER,
-                release_date TEXT,
-                original_language_name TEXT,
-                original_title TEXT,
-                studio TEXT,
-                popularity REAL
+                runtime INTEGER
             );
 
             CREATE TABLE plex_events ( id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, metadata TEXT, processed BOOLEAN DEFAULT 0, client_ip TEXT );
@@ -318,199 +240,6 @@ def init_db():
                 resolved_at DATETIME,
                 resolution_notes TEXT
             );
-
-            CREATE TABLE user_favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                media_type TEXT,
-                media_id INTEGER,
-                show_id INTEGER,
-                is_dropped BOOLEAN DEFAULT 0,
-                added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_watch_statistics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                total_time_watched INTEGER DEFAULT 0,
-                movies_watched INTEGER DEFAULT 0,
-                episodes_watched INTEGER DEFAULT 0,
-                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_show_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                show_id INTEGER,
-                last_watched_season INTEGER,
-                last_watched_episode INTEGER,
-                last_watched_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_episode_progress (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                episode_id INTEGER,
-                watched BOOLEAN DEFAULT 0,
-                watch_count INTEGER DEFAULT 0,
-                last_watched_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                show_id INTEGER,
-                movie_id INTEGER,
-                notification_type TEXT,
-                title TEXT,
-                message TEXT,
-                episode_id INTEGER,
-                season_number INTEGER,
-                episode_number INTEGER,
-                type TEXT DEFAULT 'info',
-                read BOOLEAN DEFAULT 0,
-                is_read BOOLEAN DEFAULT 0,
-                read_at DATETIME,
-                issue_report_id INTEGER,
-                service_url TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_lists (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                name TEXT,
-                description TEXT,
-                is_public BOOLEAN DEFAULT 0,
-                item_count INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_list_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                list_id INTEGER,
-                media_type TEXT,
-                media_id INTEGER,
-                show_id INTEGER,
-                movie_id INTEGER,
-                notes TEXT,
-                sort_order INTEGER,
-                added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (list_id) REFERENCES user_lists(id)
-            );
-
-            CREATE TABLE user_watch_streaks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                current_streak INTEGER DEFAULT 0,
-                longest_streak INTEGER DEFAULT 0,
-                last_watched_date DATE,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE show_cast (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                show_id INTEGER,
-                show_tvmaze_id INTEGER,
-                person_id INTEGER,
-                person_name TEXT,
-                person_image_url TEXT,
-                character_id INTEGER,
-                character_name TEXT,
-                character_image_url TEXT,
-                actor_name TEXT,
-                image_url TEXT,
-                cast_order INTEGER,
-                is_voice BOOLEAN DEFAULT 0,
-                tmdb_person_id INTEGER,
-                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
-            );
-
-            CREATE TABLE episode_characters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                episode_id INTEGER,
-                character_name TEXT,
-                actor_name TEXT,
-                FOREIGN KEY (episode_id) REFERENCES sonarr_episodes(id)
-            );
-
-            CREATE TABLE announcements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                message TEXT NOT NULL,
-                type TEXT DEFAULT 'info',
-                is_active BOOLEAN DEFAULT 1,
-                start_date DATETIME,
-                end_date DATETIME,
-                created_by INTEGER,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (created_by) REFERENCES users(id)
-            );
-
-            CREATE TABLE user_announcement_views (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                announcement_id INTEGER,
-                viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                dismissed_at DATETIME,
-                UNIQUE(user_id, announcement_id),
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (announcement_id) REFERENCES announcements(id)
-            );
-
-            CREATE TABLE user_daily_watch_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                stat_date DATE,
-                total_watch_time_ms INTEGER DEFAULT 0,
-                episode_count INTEGER DEFAULT 0,
-                movie_count INTEGER DEFAULT 0,
-                unique_shows_count INTEGER DEFAULT 0,
-                UNIQUE(user_id, stat_date),
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE webhook_activity (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT,
-                service_name TEXT,
-                event_type TEXT,
-                payload TEXT,
-                payload_summary TEXT,
-                received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE system_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                level TEXT,
-                message TEXT,
-                source TEXT,
-                component TEXT,
-                details TEXT,
-                user_id INTEGER,
-                ip_address TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE tvmaze_cache (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_type TEXT NOT NULL,
-                request_key TEXT NOT NULL,
-                response_data TEXT NOT NULL,
-                cached_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(request_type, request_key)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_tvmaze_cache_lookup ON tvmaze_cache(request_type, request_key);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))

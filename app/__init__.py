@@ -18,6 +18,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='dev',  # IMPORTANT: Change this for production!
         DATABASE=os.path.join(app.instance_path, 'shownotes.sqlite3'),
+        ENVIRONMENT=os.environ.get('ENVIRONMENT', 'development'),  # 'development' or 'production'
         # Session configuration for persistent login
         SESSION_PERMANENT=True,
         PERMANENT_SESSION_LIFETIME=timedelta(days=30),  # Sessions last 30 days
