@@ -724,6 +724,10 @@ def settings():
         {"name": "gpt-4-turbo", "price": "$0.01 / 1K"},
     ]
 
+    # Get list of timezones
+    import pytz
+    timezones = pytz.common_timezones
+
     return render_template(
         'admin_settings.html',
         user=user,
@@ -740,7 +744,8 @@ def settings():
         jellyseerr_status=jellyseerr_status,
         ollama_models=ollama_models,
         saved_ollama_model=saved_model,
-        openai_models=openai_models
+        openai_models=openai_models,
+        timezones=timezones
     )
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
