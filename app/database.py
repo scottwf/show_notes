@@ -438,9 +438,16 @@ def init_db():
 
             CREATE TABLE episode_characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                episode_id INTEGER,
+                show_tmdb_id INTEGER,
+                show_tvdb_id INTEGER,
+                season_number INTEGER,
+                episode_number INTEGER,
+                episode_rating_key TEXT,
                 character_name TEXT,
                 actor_name TEXT,
+                actor_id TEXT,
+                actor_thumb TEXT,
+                episode_id INTEGER,
                 FOREIGN KEY (episode_id) REFERENCES sonarr_episodes(id)
             );
 
