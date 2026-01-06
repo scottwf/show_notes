@@ -1243,8 +1243,10 @@ def test_api_connection():
         success, error_message = test_bazarr_connection_with_params(url, api_key)
     elif service == 'ollama':
         success, error_message = test_ollama_connection_with_params(url)
-    elif service == 'tautulli': # Added Tautulli service
+    elif service == 'tautulli':
         success, error_message = test_tautulli_connection_with_params(url, api_key)
+    elif service == 'jellyseer' or service == 'jellyseerr':  # Support both spellings
+        success, error_message = test_jellyseer_connection_with_params(url, api_key)
     
     if success:
         return jsonify({'success': True})

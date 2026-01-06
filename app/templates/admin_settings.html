@@ -262,23 +262,23 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Local URL</label>
-            <input type="text" name="jellyseer_url" value="{{ settings.jellyseer_url or '' }}"
+            <input type="text" id="jellyseer_url" name="jellyseer_url" value="{{ settings.jellyseer_url or '' }}"
               placeholder="http://192.168.1.x:5055"
               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Public URL</label>
-            <input type="text" name="jellyseer_remote_url" value="{{ settings.jellyseer_remote_url or '' }}"
+            <input type="text" id="jellyseer_remote_url" name="jellyseer_remote_url" value="{{ settings.jellyseer_remote_url or '' }}"
               placeholder="https://requests.example.com"
               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
           <div class="md:col-span-2">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
-            <input type="text" name="jellyseer_api_key" value="{{ settings.jellyseer_api_key or '' }}"
+            <input type="text" id="jellyseer_api_key" name="jellyseer_api_key" value="{{ settings.jellyseer_api_key or '' }}"
               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
           </div>
         </div>
-        <button type="button" data-service="jellyseerr" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+        <button type="button" data-service="jellyseer" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
           Test Connection
         </button>
       </div>
