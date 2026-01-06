@@ -52,7 +52,8 @@ from ..utils import (
     test_pushover_notification_with_params,
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params,
-    test_jellyseer_connection, test_jellyseer_connection_with_params
+    test_jellyseer_connection, test_jellyseer_connection_with_params,
+    get_ollama_models
 )
 from ..parse_subtitles import process_all_subtitles
 
@@ -715,7 +716,7 @@ def settings():
     jellyseerr_status = test_jellyseer_connection()
 
     # Fetch available Ollama models for dropdown
-    ollama_models = []
+    ollama_models = get_ollama_models()
     saved_model = merged_settings.get('ollama_model_name')
 
     openai_models = [
@@ -747,6 +748,41 @@ def settings():
         openai_models=openai_models,
         timezones=timezones
     )
+
+@admin_bp.route('/api/ollama-models')
+@login_required
+@admin_required
+def ollama_models_api():
+    """API endpoint to fetch available Ollama models"""
+    import requests
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"error": "URL parameter required"}), 400
+
+    try:
+        response = requests.get(f"{url.rstrip('/')}/api/tags", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            models = data.get('models', [])
+            model_names = [model.get('name') for model in models if model.get('name')]
+            return jsonify({"models": model_names})
+        else:
+            return jsonify({"error": f"Ollama server returned status {response.status_code}"}), 500
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Connection timeout"}), 500
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "Could not connect to Ollama server"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Ollama models: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@admin_bp.route('/test-ollama-models')
+@login_required
+@admin_required
+def test_ollama_models_route():
+    """Debug route to test Ollama model fetching"""
+    models = get_ollama_models()
+    return jsonify({"models": models, "count": len(models)})
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
 @login_required

@@ -5,12 +5,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- API Key Helper Links ---
     function setApiKeyLinks() {
-        const radarrUrl = document.getElementById('radarr_url').value;
-        const sonarrUrl = document.getElementById('sonarr_url').value;
-        const bazarrUrl = document.getElementById('bazarr_url').value;
+        const radarrUrlEl = document.getElementById('radarr_url');
+        const sonarrUrlEl = document.getElementById('sonarr_url');
+        const bazarrUrlEl = document.getElementById('bazarr_url');
         const radarrKeyLink = document.getElementById('radarr_key_link');
         const sonarrKeyLink = document.getElementById('sonarr_key_link');
         const bazarrKeyLink = document.getElementById('bazarr_key_link');
+
+        const radarrUrl = radarrUrlEl ? radarrUrlEl.value : '';
+        const sonarrUrl = sonarrUrlEl ? sonarrUrlEl.value : '';
+        const bazarrUrl = bazarrUrlEl ? bazarrUrlEl.value : '';
 
         if (radarrKeyLink) radarrKeyLink.href = radarrUrl ? radarrUrl.replace(/\/$/, '') + '/settings/security/apikey' : '#';
         if (sonarrKeyLink) sonarrKeyLink.href = sonarrUrl ? sonarrUrl.replace(/\/$/, '') + '/settings/general' : '#';
@@ -103,11 +107,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const ollamaModelWarning = document.getElementById('ollama-model-warning');
 
     async function fetchOllamaModels(url, savedModel) {
+        console.log('fetchOllamaModels called with url:', url, 'savedModel:', savedModel);
         if (!url || !ollamaModelSelect) {
             if (ollamaModelSelect) ollamaModelSelect.innerHTML = '<option value="">-- Enter Ollama URL first --</option>';
             return;
         }
-        
+
         if (ollamaModelWarning) {
             ollamaModelWarning.textContent = 'Fetching models...';
             ollamaModelWarning.className = 'text-xs text-slate-500 dark:text-slate-400 mt-1';
@@ -115,8 +120,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         try {
-            const response = await fetch(`/admin/api/ollama-models?url=${encodeURIComponent(url)}`);
+            const apiUrl = `/admin/api/ollama-models?url=${encodeURIComponent(url)}`;
+            console.log('Fetching from:', apiUrl);
+            const response = await fetch(apiUrl);
+            console.log('Response status:', response.status, response.statusText);
             const data = await response.json();
+            console.log('Response data:', data);
 
             ollamaModelSelect.innerHTML = '<option value="">-- Select a model --</option>';
 
@@ -203,10 +212,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (ollamaUrlInput) {
         const savedModelName = ollamaModelSelect ? ollamaModelSelect.dataset.savedModel : null;
-        if (ollamaUrlInput.value && savedModelName) {
+        console.log('Ollama URL:', ollamaUrlInput.value);
+        console.log('Saved model:', savedModelName);
+        if (ollamaUrlInput.value) {
+            console.log('Fetching Ollama models on page load...');
             fetchOllamaModels(ollamaUrlInput.value, savedModelName);
         }
         ollamaUrlInput.addEventListener('change', function() {
+            console.log('Ollama URL changed, fetching models...');
             fetchOllamaModels(this.value, null);
         });
     }

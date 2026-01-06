@@ -186,12 +186,40 @@ def test_bazarr_connection():
 def test_ollama_connection():
     """
     Tests the connection to the configured Ollama service.
-    
+
     Ollama doesn't require an API key for its standard status endpoints.
     """
     # Ollama usually doesn't require an API key for basic checks like listing tags or root ping.
     # A GET to the root or /api/tags should work if the server is up.
     return _test_service_connection("Ollama", 'ollama_url', endpoint='/api/tags') # /api/ps or just / might also work
+
+def get_ollama_models():
+    """
+    Fetches the list of available Ollama models.
+
+    Returns:
+        list: A list of model names (strings), or an empty list if unable to fetch.
+    """
+    ollama_url = database.get_setting('ollama_url')
+    if not ollama_url:
+        current_app.logger.info("get_ollama_models: No Ollama URL configured")
+        return []
+
+    try:
+        response = requests.get(f"{ollama_url.rstrip('/')}/api/tags", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            # The /api/tags endpoint returns {"models": [{"name": "..."}, ...]}
+            models = data.get('models', [])
+            model_names = [model.get('name') for model in models if model.get('name')]
+            current_app.logger.info(f"get_ollama_models: Found {len(model_names)} models: {model_names}")
+            return model_names
+        else:
+            current_app.logger.warning(f"Failed to fetch Ollama models: status {response.status_code}")
+            return []
+    except Exception as e:
+        current_app.logger.error(f"Error fetching Ollama models: {e}")
+        return []
 
 # --- End Connection Test Functions ---
 
@@ -229,7 +257,7 @@ def _test_service_connection_with_params(service_name, service_url, api_key=None
         current_app.logger.info(f"_test_service_connection_with_params: {msg}")
         return False, msg
     
-    required_key_services = ["Sonarr", "Radarr", "Bazarr"]
+    required_key_services = ["Sonarr", "Radarr", "Bazarr", "Jellyseer"]
     if service_name in required_key_services and not api_key:
         current_app.logger.info(f"_test_service_connection_with_params: {service_name} API key not provided, but required for this service test.")
         return False, f"{service_name} API key not provided."
