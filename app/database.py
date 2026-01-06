@@ -98,6 +98,7 @@ def init_db():
                 favorite_genres TEXT,
                 joined_at DATETIME,
                 last_login_at DATETIME,
+                plex_joined_at DATETIME,
                 profile_show_profile BOOLEAN DEFAULT 1,
                 profile_show_lists BOOLEAN DEFAULT 1,
                 profile_show_favorites BOOLEAN DEFAULT 1,
