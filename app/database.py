@@ -434,6 +434,18 @@ def init_db():
                 FOREIGN KEY (list_id) REFERENCES user_lists(id)
             );
 
+            CREATE TABLE user_recommendations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                media_type TEXT NOT NULL,
+                media_id INTEGER NOT NULL,
+                title TEXT,
+                note TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE (user_id, media_type, media_id)
+            );
+
             CREATE TABLE user_watch_streaks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -448,6 +460,10 @@ def init_db():
             -- User progress table indexes
             CREATE UNIQUE INDEX IF NOT EXISTS idx_user_episode_progress_unique ON user_episode_progress(user_id, episode_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_user_show_progress_unique ON user_show_progress(user_id, show_id);
+
+            -- User recommendations indexes
+            CREATE INDEX IF NOT EXISTS idx_user_recommendations_user ON user_recommendations(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_recommendations_media ON user_recommendations(media_type, media_id);
 
             CREATE TABLE show_cast (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
