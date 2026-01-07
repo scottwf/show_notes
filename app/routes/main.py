@@ -2558,6 +2558,10 @@ def _calculate_watch_statistics(user_id, start_date, end_date):
     """
     Calculate watch statistics from plex_activity_log for a date range.
 
+    Note: Only processes 'media.stop' and 'media.scrobble' events from Plex webhooks,
+    which have duration_ms in actual milliseconds. Does NOT process 'watched' events
+    from Tautulli imports, as those store duration_ms in seconds despite the column name.
+
     Args:
         user_id: User ID
         start_date: Start date (datetime.date)
