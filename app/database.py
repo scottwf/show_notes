@@ -266,6 +266,13 @@ def init_db():
             CREATE INDEX idx_sonarr_shows_sonarr_id ON sonarr_shows (sonarr_id);
             CREATE INDEX idx_sonarr_shows_title ON sonarr_shows (title);
             CREATE INDEX idx_radarr_movies_radarr_id ON radarr_movies (radarr_id);
+            CREATE INDEX idx_sonarr_episodes_show ON sonarr_episodes(show_id);
+            CREATE INDEX idx_sonarr_episodes_season ON sonarr_episodes(season_id);
+            CREATE INDEX idx_sonarr_seasons_show ON sonarr_seasons(show_id);
+            CREATE INDEX idx_plex_activity_plex_username ON plex_activity_log(plex_username);
+            CREATE INDEX idx_plex_activity_rating_key ON plex_activity_log(rating_key);
+            CREATE INDEX idx_plex_activity_tmdb ON plex_activity_log(tmdb_id);
+            CREATE INDEX idx_plex_activity_timestamp ON plex_activity_log(event_timestamp);
 
             CREATE TABLE subtitles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,6 +358,11 @@ def init_db():
                 last_watched_season INTEGER,
                 last_watched_episode INTEGER,
                 last_watched_at DATETIME,
+                total_episodes INTEGER DEFAULT 0,
+                watched_episodes INTEGER DEFAULT 0,
+                completion_percentage REAL DEFAULT 0,
+                status TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 
@@ -358,10 +370,19 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 episode_id INTEGER,
-                watched BOOLEAN DEFAULT 0,
+                show_id INTEGER,
+                season_number INTEGER,
+                episode_number INTEGER,
+                is_watched BOOLEAN DEFAULT 0,
+                marked_manually BOOLEAN DEFAULT 0,
                 watch_count INTEGER DEFAULT 0,
+                view_offset_ms INTEGER,
+                duration_ms INTEGER,
                 last_watched_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (episode_id) REFERENCES sonarr_episodes(id),
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
             );
 
             CREATE TABLE user_notifications (
@@ -418,6 +439,10 @@ def init_db():
                 last_watched_date DATE,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+
+            -- User progress table indexes
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_user_episode_progress_unique ON user_episode_progress(user_id, episode_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_user_show_progress_unique ON user_show_progress(user_id, show_id);
 
             CREATE TABLE show_cast (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
