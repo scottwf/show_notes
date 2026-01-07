@@ -344,11 +344,14 @@ def init_db():
             CREATE TABLE user_watch_statistics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                total_time_watched INTEGER DEFAULT 0,
-                movies_watched INTEGER DEFAULT 0,
-                episodes_watched INTEGER DEFAULT 0,
-                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                stat_date TEXT NOT NULL,
+                total_watch_time_ms INTEGER DEFAULT 0,
+                episode_count INTEGER DEFAULT 0,
+                movie_count INTEGER DEFAULT 0,
+                unique_shows_count INTEGER DEFAULT 0,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE(user_id, stat_date)
             );
 
             CREATE TABLE user_show_progress (
@@ -434,9 +437,11 @@ def init_db():
             CREATE TABLE user_watch_streaks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                current_streak INTEGER DEFAULT 0,
-                longest_streak INTEGER DEFAULT 0,
-                last_watched_date DATE,
+                streak_start_date TEXT NOT NULL,
+                streak_end_date TEXT NOT NULL,
+                streak_length_days INTEGER DEFAULT 0,
+                is_current BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
 

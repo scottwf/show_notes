@@ -3059,7 +3059,7 @@ def api_statistics_top_shows():
             SELECT
                 s.id,
                 s.title,
-                s.poster_path,
+                s.poster_url as poster_path,
                 COUNT(*) as watch_count,
                 SUM(pal.duration_ms) as total_watch_time_ms
             FROM plex_activity_log pal
@@ -3067,7 +3067,7 @@ def api_statistics_top_shows():
             WHERE pal.plex_username = ?
                 AND pal.media_type = 'episode'
                 AND pal.event_type IN ('media.stop', 'media.scrobble')
-            GROUP BY s.id, s.title, s.poster_path
+            GROUP BY s.id, s.title, s.poster_url
             ORDER BY watch_count DESC
             LIMIT ?
         ''', (plex_username, limit)).fetchall()
@@ -3077,7 +3077,7 @@ def api_statistics_top_shows():
             SELECT
                 m.id,
                 m.title,
-                m.poster_path,
+                m.poster_url as poster_path,
                 COUNT(*) as watch_count,
                 SUM(pal.duration_ms) as total_watch_time_ms
             FROM plex_activity_log pal
@@ -3085,7 +3085,7 @@ def api_statistics_top_shows():
             WHERE pal.plex_username = ?
                 AND pal.media_type = 'movie'
                 AND pal.event_type IN ('media.stop', 'media.scrobble')
-            GROUP BY m.id, m.title, m.poster_path
+            GROUP BY m.id, m.title, m.poster_url
             ORDER BY watch_count DESC
             LIMIT ?
         ''', (plex_username, limit)).fetchall()
