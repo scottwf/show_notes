@@ -2,7 +2,10 @@
 
 {% block profile_content %}
 <div>
-    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Watch Statistics & Viewing Trends</h2>
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Watch Statistics & Viewing Trends</h2>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">All-time statistics from your complete viewing history</p>
+    </div>
 
     <!-- Overview Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -11,7 +14,7 @@
                 <div>
                     <p class="text-sky-100 text-sm font-medium">Total Watch Time</p>
                     <p id="total-watch-hours" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-sky-100 text-xs mt-1">hours</p>
+                    <p class="text-sky-100 text-xs mt-1">hours (all time)</p>
                 </div>
                 <svg class="w-12 h-12 text-sky-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -24,7 +27,7 @@
                 <div>
                     <p class="text-purple-100 text-sm font-medium">Episodes Watched</p>
                     <p id="total-episodes" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-purple-100 text-xs mt-1">episodes</p>
+                    <p class="text-purple-100 text-xs mt-1">episodes (all time)</p>
                 </div>
                 <svg class="w-12 h-12 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
@@ -37,7 +40,7 @@
                 <div>
                     <p class="text-green-100 text-sm font-medium">Movies Watched</p>
                     <p id="total-movies" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-green-100 text-xs mt-1">movies</p>
+                    <p class="text-green-100 text-xs mt-1">movies (all time)</p>
                 </div>
                 <svg class="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
