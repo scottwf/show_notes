@@ -94,9 +94,18 @@ def init_db():
                 is_admin INTEGER DEFAULT 0,
                 email TEXT,
                 profile_photo_url TEXT,
+                bio TEXT,
+                favorite_genres TEXT,
                 joined_at DATETIME,
                 last_login_at DATETIME,
-                plex_joined_at DATETIME
+                plex_joined_at DATETIME,
+                profile_show_profile BOOLEAN DEFAULT 1,
+                profile_show_lists BOOLEAN DEFAULT 1,
+                profile_show_favorites BOOLEAN DEFAULT 1,
+                profile_show_stats BOOLEAN DEFAULT 1,
+                profile_show_activity BOOLEAN DEFAULT 1,
+                profile_show_history BOOLEAN DEFAULT 1,
+                profile_show_progress BOOLEAN DEFAULT 1
             );
             CREATE TABLE settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
