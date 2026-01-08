@@ -83,9 +83,10 @@ def create_app(test_config=None):
     # In a real app, this would likely be a more complex model (e.g., from SQLAlchemy)
     class User:
         # Basic User model for Flask-Login
-        def __init__(self, id, username, is_admin=False):
+        def __init__(self, id, username, is_admin=False, plex_username=None):
             self.id = id
             self.username = username
+            self.plex_username = plex_username
             self.is_admin = bool(is_admin) # Ensure it's a boolean
             self.is_authenticated = True
             self.is_active = True
@@ -103,7 +104,7 @@ def create_app(test_config=None):
                 'SELECT * FROM users WHERE id = ?', (user_id,)
             ).fetchone()
             if user_data:
-                return User(id=user_data['id'], username=user_data['username'], is_admin=user_data['is_admin'])
+                return User(id=user_data['id'], username=user_data['username'], is_admin=user_data['is_admin'], plex_username=user_data.get('plex_username'))
         except Exception as e:
             # Log the error if the database query fails (e.g., table not yet created)
             app.logger.error(f"Error loading user {user_id} from database: {e}")
