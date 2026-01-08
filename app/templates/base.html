@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}ShowNotes{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='logos/favicon-16x16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='logos/favicon-32x32.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -18,7 +20,10 @@
       <!-- Logo/Brand -->
       <div class="flex-shrink-0">
         <a href="{{ url_for('main.home') }}"
-          class="text-xl sm:text-2xl font-bold hover:text-sky-400 transition-colors">ShowNotes</a>
+          class="flex items-center gap-2 text-xl sm:text-2xl font-bold hover:text-sky-400 transition-colors">
+          <img src="{{ url_for('static', filename='logos/shownotes.png') }}" alt="ShowNotes Logo" class="h-8 w-8">
+          <span>ShowNotes</span>
+        </a>
       </div>
 
       <!-- Search Bar -->
