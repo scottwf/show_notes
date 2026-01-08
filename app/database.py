@@ -330,6 +330,29 @@ def init_db():
                 resolution_notes TEXT
             );
 
+            CREATE TABLE problem_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT DEFAULT 'open',
+                priority TEXT DEFAULT 'normal',
+                show_id INTEGER,
+                movie_id INTEGER,
+                episode_id INTEGER,
+                admin_notes TEXT,
+                resolved_by INTEGER,
+                resolved_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id) ON DELETE SET NULL,
+                FOREIGN KEY (movie_id) REFERENCES radarr_movies(id) ON DELETE SET NULL,
+                FOREIGN KEY (episode_id) REFERENCES sonarr_episodes(id) ON DELETE SET NULL,
+                FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
+            );
+
             CREATE TABLE user_favorites (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -495,6 +518,15 @@ def init_db():
                 actor_id TEXT,
                 actor_thumb TEXT,
                 episode_id INTEGER,
+                llm_relationships TEXT,
+                llm_motivations TEXT,
+                llm_quote TEXT,
+                llm_traits TEXT,
+                llm_events TEXT,
+                llm_importance TEXT,
+                llm_raw_response TEXT,
+                llm_last_updated DATETIME,
+                llm_source TEXT,
                 FOREIGN KEY (episode_id) REFERENCES sonarr_episodes(id)
             );
 
