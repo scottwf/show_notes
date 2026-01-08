@@ -623,6 +623,72 @@ def get_episodes_by_series_id(series_id):
         current_app.logger.error(f"Error fetching Sonarr episodes for series ID {series_id}: {e}")
         return None
 
+def sync_sonarr_tags():
+    """
+    Synchronizes Sonarr tags (labels) with the local database.
+
+    Fetches all tags from the Sonarr API and upserts them into the sonarr_tags table.
+    This allows us to map tag IDs to human-readable labels.
+
+    Returns:
+        int: The number of tags synced.
+    """
+    current_app.logger.info("Starting Sonarr tags sync.")
+    tags_synced_count = 0
+
+    with current_app.app_context():
+        db = database.get_db()
+        sonarr_url = database.get_setting('sonarr_url')
+        sonarr_api_key = database.get_setting('sonarr_api_key')
+
+        if not sonarr_url or not sonarr_api_key:
+            current_app.logger.warning("sync_sonarr_tags: Sonarr URL or API key not configured.")
+            return tags_synced_count
+
+        try:
+            # Fetch tags from Sonarr API
+            endpoint = f"{sonarr_url.rstrip('/')}/api/v3/tag"
+            headers = {"X-Api-Key": sonarr_api_key}
+            response = requests.get(endpoint, headers=headers, timeout=10)
+            response.raise_for_status()
+            tags_data = response.json()
+
+            if not tags_data:
+                current_app.logger.info("sync_sonarr_tags: No tags returned from Sonarr API.")
+                return tags_synced_count
+
+            # Sync each tag to the database
+            for tag in tags_data:
+                tag_id = tag.get('id')
+                label = tag.get('label')
+
+                if tag_id is None or not label:
+                    current_app.logger.warning(f"sync_sonarr_tags: Skipping tag with missing id or label: {tag}")
+                    continue
+
+                try:
+                    db.execute("""
+                        INSERT INTO sonarr_tags (id, label, last_synced_at)
+                        VALUES (?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT (id) DO UPDATE SET
+                        label = excluded.label,
+                        last_synced_at = CURRENT_TIMESTAMP
+                    """, (tag_id, label))
+                    tags_synced_count += 1
+                except Exception as e:
+                    current_app.logger.error(f"sync_sonarr_tags: Error syncing tag {tag_id}: {e}")
+                    continue
+
+            db.commit()
+            current_app.logger.info(f"sync_sonarr_tags: Successfully synced {tags_synced_count} tags.")
+
+        except requests.exceptions.RequestException as e:
+            current_app.logger.error(f"sync_sonarr_tags: Error fetching tags from Sonarr API: {e}")
+        except Exception as e:
+            current_app.logger.error(f"sync_sonarr_tags: Unexpected error: {e}")
+
+    return tags_synced_count
+
 def sync_sonarr_library():
     """
     Synchronizes the entire Sonarr library with the local database.
@@ -653,6 +719,9 @@ def sync_sonarr_library():
         syslog.info(SystemLogger.SYNC, "Starting Sonarr library sync")
     except:
         pass
+
+    # Sync tags first so they're available when syncing shows
+    sync_sonarr_tags()
 
     # App context for API calls and initial DB setup
     with current_app.app_context():
@@ -707,6 +776,10 @@ def sync_sonarr_library():
                 tmdb_rating = ratings_data.get("tmdb", {}) if ratings_data else {}
                 metacritic_rating = ratings_data.get("metacritic", {}) if ratings_data else {}
 
+                # Convert tags array to comma-separated string
+                tags_array = show_data.get("tags", [])
+                tags_str = ",".join(str(tag_id) for tag_id in tags_array) if tags_array else None
+
                 show_values = {
                     "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
@@ -728,6 +801,7 @@ def sync_sonarr_library():
                     "ratings_tmdb_votes": tmdb_rating.get("votes"),
                     "ratings_metacritic_value": metacritic_rating.get("value"),
                     "metacritic_id": show_data.get("metacriticId"),
+                    "tags": tags_str,
                 }
 
                 # Filter out None values to avoid inserting NULL for non-nullable or for cleaner updates

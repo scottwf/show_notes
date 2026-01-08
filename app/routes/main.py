@@ -4079,26 +4079,48 @@ def calendar():
             LIMIT 100
         """, (*tracked_show_ids, now)).fetchall()
     
-    # Get upcoming series premieres (shows in library with no available episodes yet)
+    # Get upcoming series and season premieres
+    # This includes:
+    # 1. Series premieres (S01E01 of new shows)
+    # 2. Season premieres (first episode of any season)
+    # Shows are filtered to those requested by the current user (via Jellyseer tags) or
+    # shows where the user has watch history
+
+    # First, check if current user's username exists in any Sonarr tags
+    user_tag_ids = []
+    if current_user.plex_username:
+        user_tags = db.execute("""
+            SELECT id FROM sonarr_tags
+            WHERE label LIKE ?
+        """, (f"%{current_user.plex_username}%",)).fetchall()
+        user_tag_ids = [tag['id'] for tag in user_tags]
+
     series_premieres = db.execute("""
-        SELECT 
+        SELECT
             s.id as show_db_id,
             s.tmdb_id,
             s.title as show_title,
             s.poster_url,
             s.year,
             s.overview,
-            MIN(e.air_date_utc) as premiere_date
+            ss.season_number,
+            e.episode_number,
+            e.air_date_utc as premiere_date,
+            CASE
+                WHEN ss.season_number = 1 AND e.episode_number = 1 THEN 'Series Premiere'
+                ELSE 'Season ' || ss.season_number || ' Premiere'
+            END as premiere_type,
+            s.tags
         FROM sonarr_shows s
         JOIN sonarr_seasons ss ON ss.show_id = s.id
         JOIN sonarr_episodes e ON e.season_id = ss.id
-        WHERE s.episode_file_count = 0
+        WHERE e.episode_number = 1
+            AND ss.season_number > 0
             AND e.air_date_utc IS NOT NULL
             AND e.air_date_utc >= ?
-            AND ss.season_number > 0
-        GROUP BY s.id
-        ORDER BY premiere_date ASC
-        LIMIT 50
+            AND e.has_file = 0
+        ORDER BY e.air_date_utc ASC
+        LIMIT 100
     """, (now,)).fetchall()
     
     # Format the data for template
@@ -4132,6 +4154,17 @@ def calendar():
         show_dict = dict(show)
         show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
         show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+        show_dict['episode_url'] = url_for('main.episode_detail',
+                                           tmdb_id=show['tmdb_id'],
+                                           season_number=show['season_number'],
+                                           episode_number=show['episode_number'])
+
+        # Check if this show was requested by the current user
+        show_dict['user_requested'] = False
+        if user_tag_ids and show['tags']:
+            show_tag_ids = [int(tag_id) for tag_id in show['tags'].split(',') if tag_id.strip()]
+            show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+
         formatted_premieres.append(show_dict)
     
     return render_template('calendar.html',

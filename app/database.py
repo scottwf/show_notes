@@ -170,7 +170,8 @@ def init_db():
                 network_country TEXT,
                 runtime INTEGER,
                 tvmaze_rating REAL,
-                tvmaze_enriched_at DATETIME
+                tvmaze_enriched_at DATETIME,
+                tags TEXT
             );
 
             CREATE TABLE sonarr_seasons ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, sonarr_season_id INTEGER, season_number INTEGER NOT NULL, episode_count INTEGER, episode_file_count INTEGER, statistics TEXT, FOREIGN KEY (show_id) REFERENCES sonarr_shows (id), UNIQUE (show_id, season_number) );
@@ -194,7 +195,13 @@ def init_db():
                 FOREIGN KEY (show_id) REFERENCES sonarr_shows(id),
                 FOREIGN KEY (season_id) REFERENCES sonarr_seasons (id)
             );
-            
+
+            CREATE TABLE sonarr_tags (
+                id INTEGER PRIMARY KEY,
+                label TEXT NOT NULL,
+                last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE radarr_movies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 radarr_id INTEGER UNIQUE NOT NULL,
