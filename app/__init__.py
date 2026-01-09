@@ -104,7 +104,8 @@ def create_app(test_config=None):
                 'SELECT * FROM users WHERE id = ?', (user_id,)
             ).fetchone()
             if user_data:
-                return User(id=user_data['id'], username=user_data['username'], is_admin=user_data['is_admin'], plex_username=user_data.get('plex_username'))
+                plex_username = user_data['plex_username'] if 'plex_username' in user_data.keys() else None
+                return User(id=user_data['id'], username=user_data['username'], is_admin=user_data['is_admin'], plex_username=plex_username)
         except Exception as e:
             # Log the error if the database query fails (e.g., table not yet created)
             app.logger.error(f"Error loading user {user_id} from database: {e}")
