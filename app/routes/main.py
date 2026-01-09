@@ -956,10 +956,17 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         db = database.get_db()
+        current_app.logger.info(f"Login attempt for username: {username}")
         user_record = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        current_app.logger.info(f"User record found: {bool(user_record)}")
+        if user_record:
+            current_app.logger.info(f"User is_admin: {user_record['is_admin']}, has_password_hash: {bool(user_record['password_hash'])}")
         if user_record and user_record['is_admin'] and user_record['password_hash']:
-            if check_password_hash(user_record['password_hash'], password):
+            password_valid = check_password_hash(user_record['password_hash'], password)
+            current_app.logger.info(f"Password check result: {password_valid}")
+            if password_valid:
                 user_obj = current_app.login_manager._user_callback(user_record['id'])
+                current_app.logger.info(f"User object created: {bool(user_obj)}")
                 if user_obj:
                     login_user(user_obj, remember=True)  # Enable persistent login for admin too
                     session['user_id'] = user_obj.id
@@ -970,6 +977,7 @@ def login():
                     db.commit()
                     flash(f'Welcome back, {user_obj.username}!', 'success')
                     return redirect(url_for('main.home'))
+        current_app.logger.warning(f"Login failed for username: {username}")
         flash('Invalid admin credentials.', 'danger')
         return redirect(url_for('main.login'))
 
@@ -1198,13 +1206,13 @@ def callback():
     return redirect(url_for('main.home'))
 
 @main_bp.route('/logout')
-@login_required
 def logout():
     """
     Logs the current user out.
 
     This route clears the user's session data and logs them out using Flask-Login's
     `logout_user` function. It then redirects the user to the homepage.
+    Does not require @login_required to allow clearing broken sessions.
 
     Returns:
         A redirect to the homepage.
@@ -1212,7 +1220,7 @@ def logout():
     logout_user()
     session.clear()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('main.home'))
+    return redirect(url_for('main.login'))
 
 @main_bp.route('/onboarding', methods=['GET', 'POST'])
 def onboarding():
@@ -4290,6 +4298,57 @@ def delete_profile_photo():
         db.rollback()
         current_app.logger.error(f"Error deleting profile photo: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@main_bp.route('/api/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change user's password (admin only)"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        data = request.get_json()
+        current_password = data.get('current_password')
+        new_password = data.get('new_password')
+
+        # Validation
+        if not current_password or not new_password:
+            return jsonify({'success': False, 'error': 'Current and new password are required'}), 400
+
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'error': 'New password must be at least 6 characters'}), 400
+
+        # Get current user
+        user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+
+        # Verify user is admin
+        if not user['is_admin']:
+            return jsonify({'success': False, 'error': 'Only admin users can change passwords'}), 403
+
+        # Verify current password
+        if not user['password_hash'] or not check_password_hash(user['password_hash'], current_password):
+            return jsonify({'success': False, 'error': 'Current password is incorrect'}), 400
+
+        # Hash new password
+        new_password_hash = generate_password_hash(new_password)
+
+        # Update password
+        db.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_password_hash, user_id))
+        db.commit()
+
+        current_app.logger.info(f"Password changed successfully for user {user['username']}")
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error changing password: {str(e)}")
+        return jsonify({'success': False, 'error': 'An error occurred while changing password'}), 500
 
 # ========================================
 # RECOMMENDATIONS
