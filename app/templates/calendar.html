@@ -29,7 +29,12 @@
         <button @click="filter = 'favorites'"
                 :class="filter === 'favorites' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
                 class="px-4 py-2 rounded-lg font-medium transition-colors">
-            Favorites Only
+            Favorited Shows
+        </button>
+        <button @click="filter = 'requests'"
+                :class="filter === 'requests' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                class="px-4 py-2 rounded-lg font-medium transition-colors">
+            Your Requests
         </button>
 
         <!-- Premieres Section -->
@@ -47,7 +52,8 @@
                 <div x-show="(filter === 'all') ||
                              (filter === 'premieres' && '{{ show.premiere_type }}'.includes('Season')) ||
                              (filter === 'series' && '{{ show.premiere_type }}' === 'Series Premiere') ||
-                             (filter === 'favorites' && {{ 'true' if show.user_requested else 'false' }})"
+                             (filter === 'favorites' && {{ 'true' if show.is_favorited else 'false' }}) ||
+                             (filter === 'requests' && {{ 'true' if show.user_requested else 'false' }})"
                      class="bg-slate-100 dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
                 <div class="flex gap-4 p-4">
                     <a href="{{ show.show_url }}" class="flex-shrink-0">

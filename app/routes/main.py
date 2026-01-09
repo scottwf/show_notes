@@ -4173,6 +4173,9 @@ def calendar():
             show_tag_ids = [int(tag_id) for tag_id in show['tags'].split(',') if tag_id.strip()]
             show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
 
+        # Check if this show is favorited by the user
+        show_dict['is_favorited'] = show['show_db_id'] in favorited_ids
+
         formatted_premieres.append(show_dict)
     
     return render_template('calendar.html',
