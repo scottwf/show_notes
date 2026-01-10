@@ -213,22 +213,23 @@ def dashboard():
     # ============================================================================
     
     # Content consumption (unique items played)
+    # Include both Plex webhook events ('media.play', 'media.scrobble') and Tautulli events ('watched')
     unique_movies_played = safe_value(
-        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'movie' AND event_type IN ('media.play', 'media.scrobble')"
+        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'movie' AND event_type IN ('media.play', 'media.scrobble', 'watched')"
     )
     unique_episodes_played = safe_value(
-        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'episode' AND event_type IN ('media.play', 'media.scrobble')"
+        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'episode' AND event_type IN ('media.play', 'media.scrobble', 'watched')"
     )
     unique_shows_watched = safe_value(
         "SELECT COUNT(DISTINCT show_title) FROM plex_activity_log WHERE show_title IS NOT NULL"
     )
-    
+
     # Recent activity volume (last 7 days)
     plex_events_week = safe_value(
         "SELECT COUNT(*) FROM plex_activity_log WHERE event_timestamp >= DATETIME('now', '-7 days')"
     )
     recent_plays = safe_value(
-        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.play' AND event_timestamp >= DATETIME('now', '-7 days')"
+        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type IN ('media.play', 'watched') AND event_timestamp >= DATETIME('now', '-7 days')"
     )
     recent_scrobbles = safe_value(
         "SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.scrobble' AND event_timestamp >= DATETIME('now', '-7 days')"
