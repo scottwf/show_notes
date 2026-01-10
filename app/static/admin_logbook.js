@@ -99,9 +99,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
         data.plex_logs.forEach(row => {
             const eventIcon = getEventIcon(row.event_type_fmt);
-            const titleHtml = row.episode_detail_url && row.display_title ?
-                `<a href="${row.episode_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.display_title)}</a>` :
-                escapeHtml(row.display_title || '');
+
+            // Build title with clickable links
+            let titleHtml = '';
+            if (row.show_title && row.title) {
+                // TV Show - make show title and episode title separately clickable
+                const showLink = row.show_detail_url ?
+                    `<a href="${row.show_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.show_title)}</a>` :
+                    escapeHtml(row.show_title);
+
+                const episodeLink = row.episode_detail_url ?
+                    `<a href="${row.episode_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.title)}</a>` :
+                    escapeHtml(row.title);
+
+                titleHtml = `${showLink} – ${episodeLink}`;
+            } else if (row.episode_detail_url || row.show_detail_url) {
+                // Single link
+                const url = row.episode_detail_url || row.show_detail_url;
+                titleHtml = `<a href="${url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.display_title)}</a>`;
+            } else {
+                // No link available
+                titleHtml = escapeHtml(row.display_title || '');
+            }
 
             tableHtml += `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
@@ -128,9 +147,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
         data.plex_logs.forEach(row => {
             const eventIcon = getEventIcon(row.event_type_fmt);
-            const titleHtml = row.episode_detail_url && row.display_title ?
-                `<a href="${row.episode_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.display_title)}</a>` :
-                `<span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(row.display_title || '')}</span>`;
+
+            // Build title with clickable links (same logic as desktop)
+            let titleHtml = '';
+            if (row.show_title && row.title) {
+                // TV Show - make show title and episode title separately clickable
+                const showLink = row.show_detail_url ?
+                    `<a href="${row.show_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.show_title)}</a>` :
+                    `<span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(row.show_title)}</span>`;
+
+                const episodeLink = row.episode_detail_url ?
+                    `<a href="${row.episode_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.title)}</a>` :
+                    `<span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(row.title)}</span>`;
+
+                titleHtml = `${showLink} – ${episodeLink}`;
+            } else if (row.episode_detail_url || row.show_detail_url) {
+                // Single link
+                const url = row.episode_detail_url || row.show_detail_url;
+                titleHtml = `<a href="${url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.display_title)}</a>`;
+            } else {
+                // No link available
+                titleHtml = `<span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(row.display_title || '')}</span>`;
+            }
 
             cardsHtml += `
                 <div class="bg-white dark:bg-slate-800 shadow rounded-lg border border-slate-200 dark:border-slate-700 p-4">
