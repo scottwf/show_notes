@@ -102,7 +102,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Build title with clickable links
             let titleHtml = '';
-            if (row.show_title && row.title) {
+            if (row.media_type === 'movie' && row.movie_detail_url) {
+                // Movie - link to movie detail page
+                titleHtml = `<a href="${row.movie_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.title)}</a>`;
+            } else if (row.show_title && row.title) {
                 // TV Show - make show title and episode title separately clickable
                 const showLink = row.show_detail_url ?
                     `<a href="${row.show_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.show_title)}</a>` :
@@ -113,9 +116,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     escapeHtml(row.title);
 
                 titleHtml = `${showLink} – ${episodeLink}`;
-            } else if (row.episode_detail_url || row.show_detail_url) {
-                // Single link
-                const url = row.episode_detail_url || row.show_detail_url;
+            } else if (row.episode_detail_url || row.show_detail_url || row.movie_detail_url) {
+                // Single link (fallback)
+                const url = row.movie_detail_url || row.episode_detail_url || row.show_detail_url;
                 titleHtml = `<a href="${url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline">${escapeHtml(row.display_title)}</a>`;
             } else {
                 // No link available
@@ -150,7 +153,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Build title with clickable links (same logic as desktop)
             let titleHtml = '';
-            if (row.show_title && row.title) {
+            if (row.media_type === 'movie' && row.movie_detail_url) {
+                // Movie - link to movie detail page
+                titleHtml = `<a href="${row.movie_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.title)}</a>`;
+            } else if (row.show_title && row.title) {
                 // TV Show - make show title and episode title separately clickable
                 const showLink = row.show_detail_url ?
                     `<a href="${row.show_detail_url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.show_title)}</a>` :
@@ -161,9 +167,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     `<span class="font-medium text-slate-900 dark:text-slate-100">${escapeHtml(row.title)}</span>`;
 
                 titleHtml = `${showLink} – ${episodeLink}`;
-            } else if (row.episode_detail_url || row.show_detail_url) {
-                // Single link
-                const url = row.episode_detail_url || row.show_detail_url;
+            } else if (row.episode_detail_url || row.show_detail_url || row.movie_detail_url) {
+                // Single link (fallback)
+                const url = row.movie_detail_url || row.episode_detail_url || row.show_detail_url;
                 titleHtml = `<a href="${url}" class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline font-medium">${escapeHtml(row.display_title)}</a>`;
             } else {
                 // No link available

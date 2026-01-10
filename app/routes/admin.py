@@ -486,25 +486,38 @@ def logbook_data():
         for row in rows:
             row_dict = dict(row)
 
-            # Get TMDB ID - either from row or lookup by show title
+            # Get TMDB ID - either from row or lookup by title
             tmdb_id = row_dict.get('tmdb_id')
             show_title = row_dict.get('show_title')
+            title = row_dict.get('title')
             media_type = row_dict.get('media_type')
 
-            # If no tmdb_id but we have a show title, look it up
-            if not tmdb_id and show_title and media_type == 'episode':
-                lookup = db.execute(
-                    'SELECT tmdb_id FROM sonarr_shows WHERE title = ? LIMIT 1',
-                    (show_title,)
-                ).fetchone()
-                if lookup:
-                    tmdb_id = lookup['tmdb_id']
-                    row_dict['tmdb_id'] = tmdb_id
+            # If no tmdb_id, look it up based on media type
+            if not tmdb_id:
+                if media_type == 'episode' and show_title:
+                    # Look up TV show by show title
+                    lookup = db.execute(
+                        'SELECT tmdb_id FROM sonarr_shows WHERE title = ? LIMIT 1',
+                        (show_title,)
+                    ).fetchone()
+                    if lookup:
+                        tmdb_id = lookup['tmdb_id']
+                        row_dict['tmdb_id'] = tmdb_id
+                elif media_type == 'movie' and title:
+                    # Look up movie by title
+                    lookup = db.execute(
+                        'SELECT tmdb_id FROM radarr_movies WHERE title = ? LIMIT 1',
+                        (title,)
+                    ).fetchone()
+                    if lookup:
+                        tmdb_id = lookup['tmdb_id']
+                        row_dict['tmdb_id'] = tmdb_id
 
-            # Build episode detail URL
+            # Build URLs based on media type
             season_episode = row_dict.get('season_episode')
             episode_detail_url = None
             show_detail_url = None
+            movie_detail_url = None
 
             if media_type == 'episode' and tmdb_id:
                 # Link to show detail page
@@ -518,9 +531,13 @@ def logbook_data():
                         season_number = int(match.group(1))
                         episode_number = int(match.group(2))
                         episode_detail_url = url_for('main.episode_detail', tmdb_id=tmdb_id, season_number=season_number, episode_number=episode_number)
+            elif media_type == 'movie' and tmdb_id:
+                # Link to movie detail page
+                movie_detail_url = url_for('main.movie_detail', tmdb_id=tmdb_id)
 
             row_dict['episode_detail_url'] = episode_detail_url
             row_dict['show_detail_url'] = show_detail_url
+            row_dict['movie_detail_url'] = movie_detail_url
             # Format timestamp with user's timezone
             ts = row_dict.get('event_timestamp')
             if ts:
