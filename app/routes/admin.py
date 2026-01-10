@@ -413,6 +413,20 @@ def logbook_view():
     """
     return render_template('admin_logbook.html')
 
+@admin_bp.route('/logbook/users')
+@login_required
+@admin_required
+def logbook_users():
+    """Get list of unique Plex usernames for filter dropdown."""
+    db = database.get_db()
+    users = db.execute('''
+        SELECT DISTINCT plex_username
+        FROM plex_activity_log
+        WHERE plex_username IS NOT NULL
+        ORDER BY LOWER(plex_username) COLLATE NOCASE
+    ''').fetchall()
+    return jsonify({'users': [u['plex_username'] for u in users]})
+
 @admin_bp.route('/logbook/data')
 @login_required
 @admin_required
@@ -435,41 +449,38 @@ def logbook_data():
     category = request.args.get('category')
     user = request.args.get('user')
     show = request.args.get('show')
+    media_type = request.args.get('media_type')
+    days = request.args.get('days')
     db = database.get_db()
     sync_logs = []
     plex_logs = []
-    # Service Sync logs
-    if not category or category in ['sync', 'all']:
-        rows = db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()
-        for row in rows:
-            row_dict = dict(row)
-            # Convert timestamps to user's timezone
-            if row_dict.get('last_attempted_sync_at'):
-                try:
-                    row_dict['last_attempted_sync_at'] = convert_utc_to_user_timezone(
-                        row_dict['last_attempted_sync_at'], '%Y-%m-%d %H:%M:%S'
-                    )
-                except Exception:
-                    pass  # Keep original if conversion fails
-            if row_dict.get('last_successful_sync_at'):
-                try:
-                    row_dict['last_successful_sync_at'] = convert_utc_to_user_timezone(
-                        row_dict['last_successful_sync_at'], '%Y-%m-%d %H:%M:%S'
-                    )
-                except Exception:
-                    pass  # Keep original if conversion fails
-            sync_logs.append(row_dict)
+
     # Plex Activity logs
     if not category or category in ['plex', 'all']:
         query = 'SELECT * FROM plex_activity_log WHERE 1=1'
         params = []
+
+        # Filter by user
         if user:
             query += ' AND plex_username = ?'
             params.append(user)
+
+        # Filter by show title
         if show:
             query += ' AND (title LIKE ? OR show_title LIKE ?)'
             params.extend([f'%{show}%']*2)
-        query += ' ORDER BY event_timestamp DESC, id DESC LIMIT 50'
+
+        # Filter by media type
+        if media_type:
+            query += ' AND media_type = ?'
+            params.append(media_type)
+
+        # Filter by date range
+        if days:
+            query += ' AND event_timestamp >= datetime("now", "-" || ? || " days")'
+            params.append(int(days))
+
+        query += ' ORDER BY event_timestamp DESC, id DESC LIMIT 100'
         rows = db.execute(query, params).fetchall()
         # Enrich with episode detail URL and formatted time
         for row in rows:

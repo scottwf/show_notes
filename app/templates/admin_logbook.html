@@ -1,27 +1,65 @@
 {% extends "admin_layout.html" %}
-{% block admin_page_title %}Logbook{% endblock %}
-{% block admin_page_header %}Logbook{% endblock %}
+{% block admin_page_title %}Playback Activity{% endblock %}
+{% block admin_page_header %}Playback Activity{% endblock %}
 {% block admin_page_content %}
-<div class="space-y-8">
-  <div class="flex flex-col md:flex-row md:items-end gap-4 mb-4">
-    <div>
-      <label for="logbook-category" class="mr-2 font-medium">Category:</label>
-      <select id="logbook-category" class="border rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-        <option value="">All</option>
-        <option value="sync">Service Sync</option>
-        <option value="plex">Plex Events</option>
-      </select>
-    </div>
-    <div>
-      <label for="logbook-user" class="mr-2 font-medium">User:</label>
-      <input id="logbook-user" type="text" placeholder="Filter by user" class="border rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-    </div>
-    <div>
-      <label for="logbook-show" class="mr-2 font-medium">Show:</label>
-      <input id="logbook-show" type="text" placeholder="Filter by show title" class="border rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+<div class="space-y-6">
+  <!-- Filters -->
+  <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div>
+        <label for="logbook-user" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          User
+        </label>
+        <select id="logbook-user"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+          <option value="">All Users</option>
+        </select>
+      </div>
+      <div>
+        <label for="logbook-show" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Show
+        </label>
+        <input id="logbook-show" type="text" placeholder="Show title..."
+               class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+      </div>
+      <div>
+        <label for="logbook-media-type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Media Type
+        </label>
+        <select id="logbook-media-type"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+          <option value="">All (Movies & TV)</option>
+          <option value="episode">TV Shows</option>
+          <option value="movie">Movies</option>
+        </select>
+      </div>
+      <div>
+        <label for="logbook-days" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Time Range
+        </label>
+        <select id="logbook-days"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+          <option value="7">Last 7 Days</option>
+          <option value="14">Last 14 Days</option>
+          <option value="30">Last 30 Days</option>
+          <option value="90">Last 90 Days</option>
+          <option value="">All Time</option>
+        </select>
+      </div>
     </div>
   </div>
-  <div id="logbook-loading" class="hidden text-gray-500 dark:text-gray-300">Loading...</div>
+
+  <!-- Loading indicator -->
+  <div id="logbook-loading" class="hidden">
+    <div class="flex items-center justify-center py-8">
+      <svg class="animate-spin h-8 w-8 text-sky-500" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Activity list -->
   <div id="logbook-table-div" class="w-full"></div>
 </div>
 <script src="{{ url_for('static', filename='admin_logbook.js') }}"></script>
