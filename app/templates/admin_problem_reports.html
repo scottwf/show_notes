@@ -127,6 +127,46 @@
 <script>
 let reports = [];
 let currentFilter = 'open';
+let userTimezone = 'UTC'; // Will be set from API response
+
+function formatTimestamp(timestamp, format = 'date') {
+    // Convert UTC timestamp to user's timezone
+    try {
+        // SQLite timestamps are stored as "YYYY-MM-DD HH:MM:SS" in UTC
+        // We need to explicitly treat them as UTC by appending 'Z'
+        let dateStr = timestamp;
+        if (typeof timestamp === 'string' && !timestamp.includes('Z') && !timestamp.includes('+')) {
+            // Add 'Z' to indicate this is UTC time
+            dateStr = timestamp.replace(' ', 'T') + 'Z';
+        }
+
+        const date = new Date(dateStr);
+        if (format === 'date') {
+            return date.toLocaleDateString('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+        } else {
+            return date.toLocaleString('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        }
+    } catch (e) {
+        // Fallback to browser's local timezone if user timezone is invalid
+        return format === 'date'
+            ? new Date(timestamp).toLocaleDateString()
+            : new Date(timestamp).toLocaleString();
+    }
+}
 
 // Load reports on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -144,6 +184,10 @@ async function loadReports(status = 'open') {
 
         if (data.success) {
             reports = data.reports;
+            // Store timezone from response
+            if (data.timezone) {
+                userTimezone = data.timezone;
+            }
             renderReports();
         }
     } catch (error) {
@@ -204,7 +248,7 @@ function renderReports() {
                 </span>
             </td>
             <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                ${new Date(report.created_at).toLocaleDateString()}
+                ${formatTimestamp(report.created_at, 'date')}
             </td>
             <td class="px-6 py-4 text-right">
                 <button onclick="viewReportDetail(${report.id})"
@@ -253,7 +297,7 @@ async function viewReportDetail(id) {
             </div>
             <div>
                 <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Created</h3>
-                <p class="mt-1 text-sm text-slate-900 dark:text-slate-100">${new Date(report.created_at).toLocaleString()}</p>
+                <p class="mt-1 text-sm text-slate-900 dark:text-slate-100">${formatTimestamp(report.created_at, 'full')}</p>
             </div>
         </div>
 

@@ -53,7 +53,8 @@ from ..utils import (
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params,
     test_jellyseer_connection, test_jellyseer_connection_with_params,
-    get_ollama_models
+    get_ollama_models,
+    convert_utc_to_user_timezone, get_user_timezone
 )
 from ..parse_subtitles import process_all_subtitles
 
@@ -438,7 +439,25 @@ def logbook_data():
     plex_logs = []
     # Service Sync logs
     if not category or category in ['sync', 'all']:
-        sync_logs = [dict(row) for row in db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()]
+        rows = db.execute('SELECT * FROM service_sync_status ORDER BY last_attempted_sync_at DESC LIMIT 20').fetchall()
+        for row in rows:
+            row_dict = dict(row)
+            # Convert timestamps to user's timezone
+            if row_dict.get('last_attempted_sync_at'):
+                try:
+                    row_dict['last_attempted_sync_at'] = convert_utc_to_user_timezone(
+                        row_dict['last_attempted_sync_at'], '%Y-%m-%d %H:%M:%S'
+                    )
+                except Exception:
+                    pass  # Keep original if conversion fails
+            if row_dict.get('last_successful_sync_at'):
+                try:
+                    row_dict['last_successful_sync_at'] = convert_utc_to_user_timezone(
+                        row_dict['last_successful_sync_at'], '%Y-%m-%d %H:%M:%S'
+                    )
+                except Exception:
+                    pass  # Keep original if conversion fails
+            sync_logs.append(row_dict)
     # Plex Activity logs
     if not category or category in ['plex', 'all']:
         query = 'SELECT * FROM plex_activity_log WHERE 1=1'
@@ -466,13 +485,11 @@ def logbook_data():
                     episode_number = int(match.group(2))
                     episode_detail_url = url_for('main.episode_detail', tmdb_id=tmdb_id, season_number=season_number, episode_number=episode_number)
             row_dict['episode_detail_url'] = episode_detail_url
-            # Format timestamp
-            import datetime
+            # Format timestamp with user's timezone
             ts = row_dict.get('event_timestamp')
             if ts:
                 try:
-                    dt = datetime.datetime.fromtimestamp(float(ts))
-                    row_dict['event_timestamp_fmt'] = dt.strftime('%Y-%m-%d %H:%M')
+                    row_dict['event_timestamp_fmt'] = convert_utc_to_user_timezone(ts, '%Y-%m-%d %H:%M')
                 except Exception:
                     row_dict['event_timestamp_fmt'] = str(ts)
             # Format event type
@@ -643,8 +660,7 @@ def settings():
         db.execute('''UPDATE settings SET
             radarr_url=?, radarr_api_key=?, radarr_remote_url=?,
             sonarr_url=?, sonarr_api_key=?, sonarr_remote_url=?,
-            bazarr_url=?, bazarr_api_key=?,
-            ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?, preferred_llm_provider=?,
+            bazarr_url=?, bazarr_api_key=?, bazarr_remote_url=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
             thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=? WHERE id=?''', (
@@ -656,11 +672,7 @@ def settings():
             request.form.get('sonarr_remote_url'),
             request.form.get('bazarr_url'),
             request.form.get('bazarr_api_key'),
-            request.form.get('ollama_url'),
-            request.form.get('ollama_model_name'),
-            request.form.get('openai_api_key'),
-            request.form.get('openai_model_name'),
-            request.form.get('preferred_llm_provider'),
+            request.form.get('bazarr_remote_url'),
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
             request.form.get('plex_client_id'),
@@ -691,13 +703,10 @@ def settings():
     }
     merged_settings = dict(settings) if settings else {}
     # Ensure new fields are present in merged_settings, even if None initially from DB
-    merged_settings.setdefault('openai_api_key', None)
-    merged_settings.setdefault('openai_model_name', None)
-    merged_settings.setdefault('preferred_llm_provider', None)
-    merged_settings.setdefault('ollama_model_name', None)
     merged_settings.setdefault('thetvdb_api_key', None)
     merged_settings.setdefault('sonarr_remote_url', None)
     merged_settings.setdefault('radarr_remote_url', None)
+    merged_settings.setdefault('bazarr_remote_url', None)
     merged_settings.setdefault('timezone', 'UTC')
 
     for k, v in defaults.items():
@@ -711,19 +720,8 @@ def settings():
     sonarr_status = test_sonarr_connection()
     radarr_status = test_radarr_connection()
     bazarr_status = test_bazarr_connection()
-    ollama_status = test_ollama_connection()
     tautulli_status = test_tautulli_connection()
     jellyseerr_status = test_jellyseer_connection()
-
-    # Fetch available Ollama models for dropdown
-    ollama_models = get_ollama_models()
-    saved_model = merged_settings.get('ollama_model_name')
-
-    openai_models = [
-        {"name": "gpt-3.5-turbo", "price": "$0.0015 / 1K"},
-        {"name": "gpt-4o", "price": "$0.005 / 1K"},
-        {"name": "gpt-4-turbo", "price": "$0.01 / 1K"},
-    ]
 
     # Get list of timezones
     import pytz
@@ -740,12 +738,11 @@ def settings():
         sonarr_status=sonarr_status,
         radarr_status=radarr_status,
         bazarr_status=bazarr_status,
-        ollama_status=ollama_status,
         tautulli_status=tautulli_status,
         jellyseerr_status=jellyseerr_status,
-        ollama_models=ollama_models,
-        saved_ollama_model=saved_model,
-        openai_models=openai_models,
+        ollama_models=[],  # Empty list since LLM features removed
+        saved_ollama_model=None,
+        openai_models=[],  # Empty list since LLM features removed
         timezones=timezones
     )
 
@@ -1588,13 +1585,17 @@ def api_event_logs():
             search=search
         )
 
+        # Get user's timezone for client-side formatting
+        user_timezone = get_user_timezone()
+
         return jsonify({
             'success': True,
             'logs': logs,
             'total': total_count,
             'page': page,
             'per_page': per_page,
-            'total_pages': (total_count + per_page - 1) // per_page
+            'total_pages': (total_count + per_page - 1) // per_page,
+            'timezone': user_timezone
         })
 
     except Exception as e:
@@ -1845,9 +1846,13 @@ def api_get_problem_reports():
                 ORDER BY pr.created_at DESC
             ''').fetchall()
 
+        # Get user's timezone for client-side formatting
+        user_timezone = get_user_timezone()
+
         return jsonify({
             'success': True,
-            'reports': [dict(r) for r in reports]
+            'reports': [dict(r) for r in reports],
+            'timezone': user_timezone
         })
 
     except Exception as e:

@@ -1877,3 +1877,72 @@ def parse_importance_section(md):
     import re
     match = re.search(r'description: (.+)', md)
     return match.group(1).strip() if match else md.strip()
+
+def get_user_timezone():
+    """
+    Get the configured timezone from settings.
+
+    Returns:
+        str: The timezone string (e.g., 'America/New_York') or 'UTC' if not configured
+    """
+    try:
+        from .database import get_setting
+        timezone = get_setting('timezone')
+        return timezone if timezone else 'UTC'
+    except Exception:
+        return 'UTC'
+
+def convert_utc_to_user_timezone(utc_datetime_str, output_format='%Y-%m-%d %H:%M:%S'):
+    """
+    Convert a UTC datetime string to the user's configured timezone.
+
+    Args:
+        utc_datetime_str: String or datetime object representing UTC time
+        output_format: strftime format string for output
+
+    Returns:
+        str: Formatted datetime string in user's timezone
+    """
+    try:
+        import datetime as dt
+
+        # Handle different input types
+        if isinstance(utc_datetime_str, str):
+            # Try to parse the string
+            try:
+                # Try ISO format first
+                utc_dt = dt.datetime.fromisoformat(utc_datetime_str.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                # Try parsing without timezone info (assume UTC)
+                try:
+                    utc_dt = dt.datetime.strptime(utc_datetime_str, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    # Return original string if parsing fails
+                    return utc_datetime_str
+        elif isinstance(utc_datetime_str, (int, float)):
+            # Unix timestamp
+            utc_dt = dt.datetime.fromtimestamp(float(utc_datetime_str), tz=pytz.UTC)
+        elif isinstance(utc_datetime_str, dt.datetime):
+            utc_dt = utc_datetime_str
+        else:
+            return str(utc_datetime_str)
+
+        # Ensure datetime is timezone-aware (UTC)
+        if utc_dt.tzinfo is None:
+            utc_dt = pytz.UTC.localize(utc_dt)
+        elif utc_dt.tzinfo != pytz.UTC:
+            utc_dt = utc_dt.astimezone(pytz.UTC)
+
+        # Get user's timezone
+        user_tz_str = get_user_timezone()
+        user_tz = pytz.timezone(user_tz_str)
+
+        # Convert to user's timezone
+        local_dt = utc_dt.astimezone(user_tz)
+
+        return local_dt.strftime(output_format)
+
+    except Exception as e:
+        current_app.logger.error(f"Error converting timezone: {e}")
+        # Return original value if conversion fails
+        return str(utc_datetime_str)

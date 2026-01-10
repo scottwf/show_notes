@@ -145,6 +145,7 @@
 <script>
 let currentPage = 1;
 let totalPages = 1;
+let userTimezone = 'UTC'; // Will be set from API response
 let currentFilters = {
     level: '',
     component: '',
@@ -175,6 +176,11 @@ async function loadLogs() {
             throw new Error(data.error || 'Failed to load logs');
         }
 
+        // Store timezone from response
+        if (data.timezone) {
+            userTimezone = data.timezone;
+        }
+
         tbody.innerHTML = '';
 
         if (data.logs.length === 0) {
@@ -197,14 +203,41 @@ async function loadLogs() {
     }
 }
 
+function formatTimestamp(timestamp) {
+    // Convert UTC timestamp to user's timezone
+    try {
+        // SQLite timestamps are stored as "YYYY-MM-DD HH:MM:SS" in UTC
+        // We need to explicitly treat them as UTC by appending 'Z'
+        let dateStr = timestamp;
+        if (typeof timestamp === 'string' && !timestamp.includes('Z') && !timestamp.includes('+')) {
+            // Add 'Z' to indicate this is UTC time
+            dateStr = timestamp.replace(' ', 'T') + 'Z';
+        }
+
+        const date = new Date(dateStr);
+        return date.toLocaleString('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    } catch (e) {
+        // Fallback to browser's local timezone if user timezone is invalid
+        return new Date(timestamp).toLocaleString();
+    }
+}
+
 function createLogRow(log) {
     const row = document.createElement('tr');
     row.className = 'hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors';
     row.onclick = () => showLogDetails(log.id);
 
-    // Format timestamp
-    const timestamp = new Date(log.timestamp);
-    const timeStr = timestamp.toLocaleString();
+    // Format timestamp with user's timezone
+    const timeStr = formatTimestamp(log.timestamp);
 
     // Level badge
     const levelColors = {
@@ -251,7 +284,6 @@ async function showLogDetails(logId) {
         }
 
         const log = data.log;
-        const timestamp = new Date(log.timestamp);
 
         let detailsHTML = '';
         if (log.details) {
@@ -268,7 +300,7 @@ async function showLogDetails(logId) {
             <div class="space-y-3">
                 <div>
                     <label class="text-sm font-semibold text-gray-700 dark:text-gray-300">Time:</label>
-                    <p class="text-sm text-gray-900 dark:text-gray-100">${timestamp.toLocaleString()}</p>
+                    <p class="text-sm text-gray-900 dark:text-gray-100">${formatTimestamp(log.timestamp)}</p>
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-gray-700 dark:text-gray-300">Level:</label>
