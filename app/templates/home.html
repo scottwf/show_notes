@@ -72,35 +72,49 @@
     {% if previous_items_list %}
       <div class="mb-8 sm:mb-12">
         <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3 sm:mb-4">Previously Watched</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-          {% for item in previous_items_list %}
-            <div class="bg-slate-100 dark:bg-slate-800 shadow-lg rounded-lg overflow-hidden transition-transform duration-150 ease-in-out hover:scale-105">
-              <a href="{{ url_for('main.' + item.item_type_for_url + '_detail', tmdb_id=item.link_tmdb_id) if item.item_type_for_url and item.link_tmdb_id else '#' }}">
-                <img class="w-full aspect-[2/3] object-cover"
-                     src="{{ item.cached_poster_url if item.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
-                     alt="Poster for {{ item.title if item.media_type == 'movie' else item.episode_title }}"
-                     onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
-              </a>
-              <div class="p-2 sm:p-3">
-                {% set display_title = (item.title if item.media_type == 'movie' else item.episode_title) %}
-                {% if item.item_type_for_url == 'show' and item.link_tmdb_id %}
-                   <a href="{{ url_for('main.show_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
-                    {{ item.title }} {# Show Title #}
+        <div class="overflow-x-auto pb-4 -mx-2 px-2">
+          <div class="flex gap-4 min-w-min">
+            {% for item in previous_items_list %}
+              <div class="flex-shrink-0 w-48 bg-slate-100 dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div class="flex flex-col h-full">
+                  <a href="{{ url_for('main.' + item.item_type_for_url + '_detail', tmdb_id=item.link_tmdb_id) if item.item_type_for_url and item.link_tmdb_id else '#' }}" class="flex-shrink-0">
+                    <img class="w-full h-72 object-cover"
+                         src="{{ item.cached_poster_url if item.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
+                         alt="Poster for {{ item.title if item.media_type == 'movie' else item.episode_title }}"
+                         onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
                   </a>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ item.episode_title }}">
-                    <a href="{{ item.episode_detail_url }}" class="hover:underline">{{ item.season_episode }}: {{ item.episode_title }}</a>
-                  </p>
-                {% elif item.item_type_for_url == 'movie' and item.link_tmdb_id %}
-                  <a href="{{ url_for('main.movie_detail', tmdb_id=item.link_tmdb_id) }}" class="font-semibold text-sm text-slate-700 dark:text-slate-200 hover:text-sky-500 dark:hover:text-sky-400 block truncate" title="{{ item.title }}">
-                    {{ item.title }}
-                  </a>
-                {% else %}
-                   <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate" title="{{ display_title }}">{{ display_title }}</p>
-                {% endif %}
-                {% if item.year %}<p class="text-xs text-slate-400 dark:text-slate-500">({{ item.year }})</p>{% endif %}
+                  <div class="p-3 flex-1 flex flex-col">
+                    {% set display_title = (item.title if item.media_type == 'movie' else item.episode_title) %}
+                    {% if item.item_type_for_url == 'show' and item.link_tmdb_id %}
+                      <a href="{{ url_for('main.show_detail', tmdb_id=item.link_tmdb_id) }}"
+                         class="font-semibold text-sm text-sky-600 dark:text-sky-400 hover:underline block truncate mb-1"
+                         title="{{ item.title }}">
+                        {{ item.title }}
+                      </a>
+                      <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ item.episode_title }}">
+                        <a href="{{ item.episode_detail_url }}" class="hover:underline">
+                          {{ item.season_episode }}: {{ item.episode_title }}
+                        </a>
+                      </p>
+                    {% elif item.item_type_for_url == 'movie' and item.link_tmdb_id %}
+                      <a href="{{ url_for('main.movie_detail', tmdb_id=item.link_tmdb_id) }}"
+                         class="font-semibold text-sm text-sky-600 dark:text-sky-400 hover:underline block truncate"
+                         title="{{ item.title }}">
+                        {{ item.title }}
+                      </a>
+                    {% else %}
+                      <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 truncate" title="{{ display_title }}">
+                        {{ display_title }}
+                      </p>
+                    {% endif %}
+                    {% if item.year %}
+                      <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">({{ item.year }})</p>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-            </div>
-          {% endfor %}
+            {% endfor %}
+          </div>
         </div>
       </div>
     {% endif %}
