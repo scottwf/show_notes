@@ -463,6 +463,30 @@ def plex_webhook():
                 if season_num is not None and episode_num is not None:
                     season_episode_str = f"S{str(season_num).zfill(2)}E{str(episode_num).zfill(2)}"
 
+            # Check for duplicate event (Plex sometimes sends webhooks twice)
+            # Use session_key + event_type + timestamp as unique identifier
+            session_key = metadata.get('sessionKey')
+            rating_key = metadata.get('ratingKey')
+            view_offset = metadata.get('viewOffset')
+
+            # Look for a recent duplicate (within last 5 seconds)
+            import datetime
+            five_seconds_ago = datetime.datetime.now().timestamp() - 5
+
+            duplicate_check = db.execute('''
+                SELECT id FROM plex_activity_log
+                WHERE session_key = ?
+                  AND event_type = ?
+                  AND rating_key = ?
+                  AND view_offset_ms = ?
+                  AND event_timestamp >= datetime(?, 'unixepoch')
+                LIMIT 1
+            ''', (session_key, event_type, rating_key, view_offset, five_seconds_ago)).fetchone()
+
+            if duplicate_check:
+                current_app.logger.info(f"Skipping duplicate event '{event_type}' for '{metadata.get('title')}'")
+                return jsonify({'status': 'skipped', 'reason': 'duplicate event'}), 200
+
             sql_insert = """
                 INSERT INTO plex_activity_log (
                     event_type, plex_username, player_title, player_uuid, session_key,
@@ -471,9 +495,9 @@ def plex_webhook():
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = (
-                event_type, account.get('title'), player.get('title'), player.get('uuid'), metadata.get('sessionKey'),
+                event_type, account.get('title'), player.get('title'), player.get('uuid'), session_key,
                 metadata.get('ratingKey'), metadata.get('parentRatingKey'), metadata.get('grandparentRatingKey'), metadata.get('type'),
-                metadata.get('title'), metadata.get('grandparentTitle'), season_episode_str, metadata.get('viewOffset'),
+                metadata.get('title'), metadata.get('grandparentTitle'), season_episode_str, view_offset,
                 metadata.get('duration'), show_tmdb_id, json.dumps(payload)
             )
             db.execute(sql_insert, params)
