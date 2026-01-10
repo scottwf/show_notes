@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Load user list for dropdown
     function loadUsers() {
-        fetch('/admin/logbook/users')
+        fetch('/admin/watch-history/users')
             .then(response => response.json())
             .then(data => {
                 if (data.users && data.users.length > 0) {
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function fetchLogbookData() {
         if (loadingDiv) loadingDiv.classList.remove('hidden');
-        fetch(`/admin/logbook/data?${buildQueryParams()}`)
+        fetch(`/admin/watch-history/data?${buildQueryParams()}`)
             .then(response => response.json())
             .then(data => {
                 renderLogbookTable(data);

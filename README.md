@@ -26,7 +26,7 @@ The purpose of ShowNotes is to be a tool for exploring tv show, season and chara
 - **Tautulli Integration:** Completed support for syncing watch history from Tautulli with connection testing.
 - **Episode Pages:** Episodes are now clickable from show details and the homepage.
 - **Collapsible Service Cards:** All service settings on the admin page start collapsed for easier navigation.
-- **Admin Logbook:** New logbook section summarizing sync operations and Plex activity.
+- **Watch History:** View Plex watch activity with filtering by user, show, media type, and date range.
 - **User List:** Admins can view Plex users, last login times, and latest watched items.
 - **Episode Detail Pages:** Individual episode pages now show air date and an "Available" label when the file exists.
 - **Episode Lists:** Season 0 is hidden from show pages and episodes indicate availability instead of download status.

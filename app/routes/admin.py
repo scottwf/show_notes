@@ -397,26 +397,26 @@ def logs_view():
     """
     return render_template('admin_logs.html', title='View Logs')
 
-@admin_bp.route('/logbook')
+@admin_bp.route('/watch-history')
 @login_required
 @admin_required
-def logbook_view():
+def watch_history_view():
     """
-    Renders the interactive logbook page.
+    Renders the watch history page.
 
-    The logbook provides a consolidated view of recent system activities,
-    including service synchronization statuses and Plex watch history. The data
-    for this page is fetched dynamically via the `/logbook/data` endpoint.
+    The watch history provides a view of Plex watch activity with filtering
+    by user, show, media type, and date range. The data for this page is
+    fetched dynamically via the `/watch-history/data` endpoint.
 
     Returns:
-        A rendered HTML template for the logbook.
+        A rendered HTML template for the watch history.
     """
-    return render_template('admin_logbook.html')
+    return render_template('admin_watch_history.html')
 
-@admin_bp.route('/logbook/users')
+@admin_bp.route('/watch-history/users')
 @login_required
 @admin_required
-def logbook_users():
+def watch_history_users():
     """Get list of unique Plex usernames for filter dropdown."""
     db = database.get_db()
     users = db.execute('''
@@ -427,24 +427,25 @@ def logbook_users():
     ''').fetchall()
     return jsonify({'users': [u['plex_username'] for u in users]})
 
-@admin_bp.route('/logbook/data')
+@admin_bp.route('/watch-history/data')
 @login_required
 @admin_required
-def logbook_data():
+def watch_history_data():
     """
-    Provides data for the admin logbook.
+    Provides data for the watch history page.
 
-    Fetches service sync logs and Plex activity logs based on query parameters
-    for category, user, and show. Enriches Plex logs with formatted timestamps
-    and episode detail URLs.
+    Fetches Plex activity logs based on query parameters for user, show,
+    media type, and date range. Enriches logs with formatted timestamps
+    and detail URLs.
 
     Query Params:
-        category (str, optional): Filters logs by category ('sync', 'plex', 'all').
         user (str, optional): Filters Plex logs by username.
         show (str, optional): Filters Plex logs by show title.
+        media_type (str, optional): Filters by media type ('episode', 'movie').
+        days (int, optional): Filters by number of days back.
 
     Returns:
-        flask.Response: JSON response containing lists of sync_logs and plex_logs.
+        flask.Response: JSON response containing list of plex_logs.
     """
     category = request.args.get('category')
     user = request.args.get('user')
