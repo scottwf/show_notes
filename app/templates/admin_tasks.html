@@ -100,11 +100,21 @@
                     Wipe & Fresh Import (Reset)
                 </button>
             </form>
+
+            <!-- Process Watch Status -->
+            <form action="{{ url_for('admin.process_watch_status') }}" method="POST">
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transform transition-all duration-200 ease-in-out flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Process Watch Indicators
+                </button>
+            </form>
         </div>
 
         <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <p class="text-sm text-blue-800 dark:text-blue-300">
-                <strong>💡 Tip:</strong> Use "Wipe & Fresh Import" for initial onboarding to import years of watch history. After that, Plex webhooks and periodic incremental syncs keep data current.
+                <strong>💡 Tip:</strong> After importing history from Tautulli, use "Process Watch Indicators" to mark episodes as watched based on your history. This scans all watch events and updates episode checkboxes on show pages. Run this after any Tautulli import to backfill watch status.
             </p>
         </div>
     </div>

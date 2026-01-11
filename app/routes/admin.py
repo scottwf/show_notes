@@ -1475,6 +1475,47 @@ def tautulli_wipe_and_import():
 
     return redirect(url_for('admin.tasks'))
 
+@admin_bp.route('/process-watch-status', methods=['POST'])
+@login_required
+@admin_required
+def process_watch_status():
+    """
+    Process plex_activity_log to update user_episode_progress with watch indicators.
+
+    This scans all historical watch events and marks episodes as watched in the
+    user_episode_progress table. Useful for backfilling watch status from Tautulli imports.
+
+    Returns:
+        A redirect to the 'admin.tasks' page.
+    """
+    flash("Processing activity log for watch indicators in background. This may take a few minutes. Check Event Logs for progress.", "info")
+
+    import threading
+    app_instance = current_app._get_current_object()
+
+    def process_in_background(app):
+        with app.app_context():
+            try:
+                from app.system_logger import syslog, SystemLogger
+                syslog.info(SystemLogger.SYNC, "Processing activity log for watch status initiated from admin panel")
+
+                from app.utils import process_activity_log_for_watch_status
+                count = process_activity_log_for_watch_status()
+
+                syslog.success(SystemLogger.SYNC, f"Watch status processing completed: {count} episodes marked as watched", {
+                    'episode_count': count
+                })
+            except Exception as e:
+                syslog.error(SystemLogger.SYNC, "Watch status processing failed", {
+                    'error': str(e)
+                })
+
+    process_thread = threading.Thread(target=process_in_background, args=(app_instance,))
+    process_thread.daemon = True
+    process_thread.start()
+
+    return redirect(url_for('admin.tasks'))
+
 @admin_bp.route('/parse-subtitles', methods=['POST'])
 @login_required
 @admin_required

@@ -1663,6 +1663,155 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
     )
     return inserted
 
+def process_activity_log_for_watch_status():
+    """
+    Process plex_activity_log entries to update user_episode_progress with watch indicators.
+
+    This function scans the plex_activity_log for 'media.stop' and 'media.scrobble' events
+    for episodes and updates the user_episode_progress table to mark episodes as watched.
+    This is useful for backfilling watch status from historical Tautulli imports.
+
+    Returns:
+        int: Number of episodes marked as watched
+    """
+    db = database.get_db()
+    updated_count = 0
+
+    current_app.logger.info("Starting to process activity log for watch status...")
+
+    # Get all stop/scrobble events for episodes
+    activity_events = db.execute("""
+        SELECT DISTINCT
+            pal.plex_username,
+            pal.grandparent_rating_key,
+            pal.parent_rating_key,
+            pal.rating_key,
+            pal.tmdb_id,
+            pal.season_episode,
+            pal.view_offset_ms,
+            pal.duration_ms,
+            pal.event_timestamp,
+            pal.media_type
+        FROM plex_activity_log pal
+        WHERE pal.media_type = 'episode'
+          AND pal.event_type IN ('media.stop', 'media.scrobble', 'watched')
+          AND pal.duration_ms > 0
+        ORDER BY pal.event_timestamp DESC
+    """).fetchall()
+
+    current_app.logger.info(f"Found {len(activity_events)} activity events to process")
+
+    for event in activity_events:
+        try:
+            # Calculate watch percentage
+            watch_percentage = (event['view_offset_ms'] / event['duration_ms'] * 100) if event['duration_ms'] > 0 else 0
+
+            # Only mark as watched if >= 95% complete
+            if watch_percentage < 95:
+                continue
+
+            # Get user ID from plex_username
+            user_row = db.execute('SELECT id FROM users WHERE plex_username = ?', (event['plex_username'],)).fetchone()
+            if not user_row:
+                continue
+
+            user_id = user_row['id']
+
+            # Get show info from tmdb_id
+            if not event['tmdb_id']:
+                # Try to get from TVDB ID
+                try:
+                    tvdb_id = int(event['grandparent_rating_key'])
+                    show_row = db.execute('SELECT id, tmdb_id FROM sonarr_shows WHERE tvdb_id = ?', (tvdb_id,)).fetchone()
+                except:
+                    continue
+            else:
+                show_row = db.execute('SELECT id FROM sonarr_shows WHERE tmdb_id = ?', (event['tmdb_id'],)).fetchone()
+
+            if not show_row:
+                continue
+
+            show_id = show_row['id']
+
+            # Parse season and episode numbers from season_episode (e.g., "S01E05")
+            season_episode = event['season_episode']
+            if not season_episode:
+                continue
+
+            import re
+            match = re.match(r'S(\d+)E(\d+)', season_episode)
+            if not match:
+                continue
+
+            season_num = int(match.group(1))
+            episode_num = int(match.group(2))
+
+            # Get episode ID
+            episode_row = db.execute('''
+                SELECT e.id
+                FROM sonarr_episodes e
+                JOIN sonarr_seasons s ON e.season_id = s.id
+                WHERE s.show_id = ? AND s.season_number = ? AND e.episode_number = ?
+            ''', (show_id, season_num, episode_num)).fetchone()
+
+            if not episode_row:
+                continue
+
+            episode_id = episode_row['id']
+
+            # Check if already marked as watched
+            existing = db.execute('''
+                SELECT is_watched FROM user_episode_progress
+                WHERE user_id = ? AND episode_id = ?
+            ''', (user_id, episode_id)).fetchone()
+
+            if existing and existing['is_watched']:
+                # Already marked as watched
+                continue
+
+            # Insert or update episode progress
+            db.execute('''
+                INSERT INTO user_episode_progress (
+                    user_id, episode_id, show_id, season_number, episode_number,
+                    is_watched, watch_count, last_watched_at, marked_manually
+                )
+                VALUES (?, ?, ?, ?, ?, 1, 1, ?, 0)
+                ON CONFLICT (user_id, episode_id) DO UPDATE SET
+                    is_watched = 1,
+                    watch_count = CASE WHEN excluded.is_watched = 1 THEN watch_count + 1 ELSE watch_count END,
+                    last_watched_at = excluded.last_watched_at,
+                    updated_at = CURRENT_TIMESTAMP
+            ''', (user_id, episode_id, show_id, season_num, episode_num, event['event_timestamp']))
+
+            updated_count += 1
+
+            if updated_count % 100 == 0:
+                db.commit()
+                current_app.logger.info(f"Processed {updated_count} episodes so far...")
+
+        except Exception as e:
+            current_app.logger.error(f"Error processing activity event: {e}")
+            continue
+
+    db.commit()
+
+    # Recalculate show completions for all users
+    users = db.execute('SELECT DISTINCT user_id FROM user_episode_progress').fetchall()
+    for user_row in users:
+        user_id = user_row['user_id']
+        shows = db.execute('SELECT DISTINCT show_id FROM user_episode_progress WHERE user_id = ?', (user_id,)).fetchall()
+        for show_row in shows:
+            try:
+                from app.routes.main import _calculate_show_completion
+                _calculate_show_completion(user_id, show_row['show_id'])
+            except:
+                pass
+
+    db.commit()
+
+    current_app.logger.info(f"Finished processing activity log. Marked {updated_count} episodes as watched")
+    return updated_count
+
 def test_tautulli_connection():
     """Tests the connection to the configured Tautulli service."""
     # Get settings from database
