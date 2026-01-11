@@ -547,17 +547,16 @@ def plex_webhook():
                                                 # Insert or update episode progress
                                                 db.execute('''
                                                     INSERT INTO user_episode_progress (
-                                                        user_id, episode_id, season_number, episode_number,
-                                                        is_watched, watch_count, last_watched_at, watch_percentage, marked_manually
+                                                        user_id, episode_id, show_id, season_number, episode_number,
+                                                        is_watched, watch_count, last_watched_at, marked_manually
                                                     )
-                                                    VALUES (?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, ?, 0)
+                                                    VALUES (?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, 0)
                                                     ON CONFLICT (user_id, episode_id) DO UPDATE SET
                                                         is_watched = 1,
                                                         watch_count = watch_count + 1,
                                                         last_watched_at = CURRENT_TIMESTAMP,
-                                                        watch_percentage = excluded.watch_percentage,
                                                         updated_at = CURRENT_TIMESTAMP
-                                                ''', (user['id'], episode_id, season_num, episode_num, watch_percentage))
+                                                ''', (user['id'], episode_id, show_id, season_num, episode_num))
                                                 db.commit()
 
                                                 # Update show completion
