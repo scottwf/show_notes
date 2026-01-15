@@ -72,13 +72,10 @@ git push
 git pull origin main
 
 # Activate venv
-source venv/bin/activate
+source .venv/bin/activate
 
 # Update dependencies
 pip install -r requirements.txt --upgrade
-
-# Run migrations
-python3 upgrade.py
 
 # Rebuild CSS if needed
 npx tailwindcss -i ./app/static/input.css -o ./app/static/css/style.css --minify
@@ -115,10 +112,6 @@ docker-compose up -d
 
 ## Migration Safety
 
-The upgrade script (`upgrade.py`):
-- Backs up database automatically
-- Runs migrations in order
-- Validates schema after completion
-- Provides rollback instructions on failure
+Database schema is managed via `init_db()` in `app/database.py` for fresh installations. Migrations have been consolidated into the main schema. For existing installations, pull the latest code and restart the application.
 
-Always test upgrades on a non-production instance first.
+Always test upgrades on a non-production instance first and backup your database before upgrading.

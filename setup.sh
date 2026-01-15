@@ -121,10 +121,10 @@ echo ""
 
 # Create virtual environment
 echo "Setting up Python virtual environment..."
-if [ -d "venv" ]; then
+if [ -d ".venv" ]; then
     print_warning "Virtual environment already exists. Skipping creation."
 else
-    python3 -m venv venv
+    python3 -m venv .venv
     if [ $? -eq 0 ]; then
         print_success "Virtual environment created"
     else
@@ -135,7 +135,7 @@ fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source venv/bin/activate
+source .venv/bin/activate
 if [ $? -eq 0 ]; then
     print_success "Virtual environment activated"
 else
@@ -178,9 +178,9 @@ fi
 echo "Initializing database..."
 if [ -f "instance/shownotes.sqlite3" ]; then
     print_warning "Database already exists. Skipping initialization."
-    print_info "To reset database, run: rm instance/shownotes.sqlite3 && python3 init_fresh_database.py"
+    print_info "To reset database, run: python3 scripts/reset_database.py"
 else
-    python3 init_fresh_database.py > /tmp/db_init.log 2>&1
+    FLASK_APP=run.py .venv/bin/flask init-db > /tmp/db_init.log 2>&1
     if [ $? -eq 0 ]; then
         print_success "Database initialized"
     else
@@ -227,7 +227,7 @@ echo "1. Edit your .env file with Plex settings:"
 echo -e "   ${YELLOW}nano .env${NC}  # or use your preferred editor"
 echo ""
 echo "2. Start the application:"
-echo -e "   ${YELLOW}source venv/bin/activate${NC}"
+echo -e "   ${YELLOW}source .venv/bin/activate${NC}"
 echo -e "   ${YELLOW}python3 run.py${NC}"
 echo ""
 echo "3. Access ShowNotes in your browser:"
