@@ -456,32 +456,57 @@ def watch_history_data():
     sync_logs = []
     plex_logs = []
 
-    # Plex Activity logs
+    # Plex Activity logs - deduplicated to show only most recent entry per unique item
     if not category or category in ['plex', 'all']:
-        query = 'SELECT * FROM plex_activity_log WHERE 1=1'
+        # Build WHERE conditions
+        where_conditions = []
         params = []
 
         # Filter by user
         if user:
-            query += ' AND plex_username = ?'
+            where_conditions.append('plex_username = ?')
             params.append(user)
 
         # Filter by show title
         if show:
-            query += ' AND (title LIKE ? OR show_title LIKE ?)'
+            where_conditions.append('(title LIKE ? OR show_title LIKE ?)')
             params.extend([f'%{show}%']*2)
 
         # Filter by media type
         if media_type:
-            query += ' AND media_type = ?'
+            where_conditions.append('media_type = ?')
             params.append(media_type)
 
         # Filter by date range
         if days:
-            query += ' AND event_timestamp >= datetime("now", "-" || ? || " days")'
+            where_conditions.append('event_timestamp >= datetime("now", "-" || ? || " days")')
             params.append(int(days))
 
-        query += ' ORDER BY event_timestamp DESC, id DESC LIMIT 100'
+        where_clause = ' AND '.join(where_conditions) if where_conditions else '1=1'
+
+        # Use CTE with ROW_NUMBER to deduplicate entries
+        # Partition by user + show + episode to get one entry per unique watched item per user
+        query = f'''
+            WITH ranked_events AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            plex_username,
+                            CASE
+                                WHEN media_type = 'episode' THEN show_title || '-' || season_episode
+                                WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
+                                ELSE title
+                            END
+                        ORDER BY event_timestamp DESC
+                    ) as rn
+                FROM plex_activity_log
+                WHERE {where_clause}
+            )
+            SELECT * FROM ranked_events
+            WHERE rn = 1
+            ORDER BY event_timestamp DESC
+            LIMIT 100
+        '''
         rows = db.execute(query, params).fetchall()
         # Enrich with episode detail URL and formatted time
         for row in rows:

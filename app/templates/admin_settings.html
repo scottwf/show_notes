@@ -9,19 +9,19 @@ document.addEventListener('DOMContentLoaded', function() {
   // Tab switching
   const tabButtons = document.querySelectorAll('[data-tab]');
   const tabPanels = document.querySelectorAll('[data-panel]');
-  
+
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
       const targetPanel = button.dataset.tab;
-      
-      // Update button states
+
+      // Update button states - active vs inactive styling
       tabButtons.forEach(btn => {
-        btn.classList.remove('border-sky-500', 'text-sky-600', 'dark:text-sky-400', 'dark:border-sky-400');
-        btn.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+        btn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-sky-600', 'dark:text-sky-400', 'border-slate-200', 'dark:border-slate-700', 'border-b-white', 'dark:border-b-slate-800', 'shadow-sm', '-mb-px', 'z-10');
+        btn.classList.add('bg-slate-100', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-400', 'border-transparent', 'hover:bg-slate-200', 'dark:hover:bg-slate-800');
       });
-      button.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400');
-      button.classList.add('border-sky-500', 'text-sky-600', 'dark:text-sky-400', 'dark:border-sky-400');
-      
+      button.classList.remove('bg-slate-100', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-400', 'border-transparent', 'hover:bg-slate-200', 'dark:hover:bg-slate-800');
+      button.classList.add('bg-white', 'dark:bg-slate-800', 'text-sky-600', 'dark:text-sky-400', 'border-slate-200', 'dark:border-slate-700', 'border-b-white', 'dark:border-b-slate-800', 'shadow-sm', '-mb-px', 'z-10');
+
       // Update panel visibility
       tabPanels.forEach(panel => {
         panel.classList.add('hidden');
@@ -37,53 +37,57 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block admin_page_content %}
 <div class="max-w-7xl mx-auto px-4">
-  <!-- Quick Actions Bar -->
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-4 mb-6">
-    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">Quick Sync Actions</h3>
-    <div class="flex flex-wrap gap-2">
-      <button type="button" onclick="syncService('sonarr')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        Sync Sonarr
+  <!-- Tab Navigation -->
+  <div class="relative mb-0">
+    <nav class="flex flex-wrap gap-1 overflow-x-auto pb-0" aria-label="Tabs">
+      <button type="button" data-tab="plex" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 border-slate-200 dark:border-slate-700 shadow-sm -mb-px z-10">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          Plex
+        </span>
       </button>
-      <button type="button" onclick="syncService('radarr')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        Sync Radarr
+      <button type="button" data-tab="notifications" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+          Notifications
+        </span>
       </button>
-      <button type="button" onclick="syncService('tautulli')" class="inline-flex items-center px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
-        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        Sync Tautulli
+      <button type="button" data-tab="media" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path></svg>
+          Media Services
+        </span>
       </button>
-    </div>
-  </div>
-
-  <!-- Tabs -->
-  <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
-    <nav class="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
-      <button type="button" data-tab="plex" class="border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 dark:border-sky-400 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        Plex
+      <button type="button" data-tab="requests" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          Requests
+        </span>
       </button>
-      <button type="button" data-tab="notifications" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        Notifications
+      <button type="button" data-tab="subtitles" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+          Subtitles
+        </span>
       </button>
-      <button type="button" data-tab="media" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        Media Services
+      <button type="button" data-tab="ai" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+          AI/LLM
+        </span>
       </button>
-      <button type="button" data-tab="requests" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        Requests
-      </button>
-      <button type="button" data-tab="subtitles" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        Subtitles
-      </button>
-      <button type="button" data-tab="ai" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        AI/LLM
-      </button>
-      <button type="button" data-tab="general" class="border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 whitespace-nowrap py-4 px-1 font-medium text-sm">
-        General
+      <button type="button" data-tab="general" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          General
+        </span>
       </button>
     </nav>
   </div>
 
-  <form method="post" class="space-y-6">
+  <!-- Tab Content Container -->
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm">
+    <form method="post" class="p-6 space-y-6">
     <!-- Plex Panel -->
     <div data-panel="plex">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -406,27 +410,8 @@ document.addEventListener('DOMContentLoaded', function() {
         Save All Settings
       </button>
     </div>
-  </form>
+    </form>
+  </div><!-- End Tab Content Container -->
 </div>
 
-<script>
-function syncService(service) {
-  const button = event.target;
-  button.disabled = true;
-  button.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Syncing...';
-  
-  fetch(`/admin/sync_${service}_library`, { method: 'POST' })
-    .then(r => r.json())
-    .then(data => {
-      alert(data.message || `${service} sync started`);
-      button.disabled = false;
-      button.innerHTML = button.innerHTML.replace('Syncing...', `Sync ${service.charAt(0).toUpperCase() + service.slice(1)}`);
-    })
-    .catch(err => {
-      alert(`Error: ${err.message}`);
-      button.disabled = false;
-      button.innerHTML = button.innerHTML.replace('Syncing...', `Sync ${service.charAt(0).toUpperCase() + service.slice(1)}`);
-    });
-}
-</script>
 {% endblock %}
