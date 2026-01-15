@@ -126,5 +126,9 @@ def create_app(test_config=None):
     def inject_current_year():
         return {'current_year': datetime.now().year}
 
+    # --- Scheduler Setup ---
+    from app.scheduler import init_scheduler
+    init_scheduler(app)
+
     app.logger.info('ShowNotes application successfully created.')
     return app
