@@ -352,13 +352,21 @@ async function loadTopItems(type = 'show') {
         const listContainer = document.getElementById('top-items-list');
 
         if (data.success && data.items && data.items.length > 0) {
-            listContainer.innerHTML = data.items.map((item, index) => `
-                <div class="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg hover:shadow-md transition-shadow">
+            listContainer.innerHTML = data.items.map((item, index) => {
+                const detailUrl = item.media_type === 'movie'
+                    ? `/movie/${item.tmdb_id}`
+                    : `/show/${item.tmdb_id}`;
+                const posterUrl = item.tmdb_id
+                    ? `/image_proxy/poster/${item.tmdb_id}`
+                    : '/static/logos/placeholder_poster.png';
+
+                return `
+                <a href="${detailUrl}" class="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg hover:shadow-md transition-shadow hover:bg-slate-100 dark:hover:bg-slate-600">
                     <div class="flex-shrink-0 w-8 text-center">
                         <span class="text-2xl font-bold text-slate-400 dark:text-slate-500">${index + 1}</span>
                     </div>
                     <div class="flex-shrink-0">
-                        <img src="${item.poster_path ? '/image_proxy?url=' + encodeURIComponent(item.poster_path) : '/static/logos/placeholder_poster.png'}"
+                        <img src="${posterUrl}"
                              alt="${item.title}"
                              class="w-12 h-18 object-cover rounded shadow-sm"
                              onerror="this.src='/static/logos/placeholder_poster.png'">
@@ -366,11 +374,11 @@ async function loadTopItems(type = 'show') {
                     <div class="flex-1 min-w-0">
                         <p class="font-semibold text-slate-800 dark:text-slate-100 truncate">${item.title}</p>
                         <p class="text-sm text-slate-600 dark:text-slate-400">
-                            ${item.watch_count} ${item.watch_count === 1 ? 'view' : 'views'} • ${item.watch_hours}h
+                            ${item.watch_count} ${item.watch_count === 1 ? 'view' : 'views'} • ${item.watch_time}
                         </p>
                     </div>
-                </div>
-            `).join('');
+                </a>
+            `}).join('');
         } else {
             listContainer.innerHTML = '<p class="text-slate-500 dark:text-slate-400 text-center py-8">No data available</p>';
         }

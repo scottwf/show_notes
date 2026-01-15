@@ -3445,8 +3445,8 @@ def api_statistics_top_shows():
         top_items = db.execute('''
             SELECT
                 s.id,
+                s.tmdb_id,
                 s.title,
-                s.poster_url as poster_path,
                 COUNT(*) as watch_count,
                 SUM(pal.duration_ms) as total_watch_time_ms
             FROM plex_activity_log pal
@@ -3454,7 +3454,7 @@ def api_statistics_top_shows():
             WHERE pal.plex_username = ?
                 AND pal.media_type = 'episode'
                 AND pal.event_type IN ('media.stop', 'media.scrobble')
-            GROUP BY s.id, s.title, s.poster_url
+            GROUP BY s.id, s.tmdb_id, s.title
             ORDER BY watch_count DESC
             LIMIT ?
         ''', (plex_username, limit)).fetchall()
@@ -3463,8 +3463,8 @@ def api_statistics_top_shows():
         top_items = db.execute('''
             SELECT
                 m.id,
+                m.tmdb_id,
                 m.title,
-                m.poster_url as poster_path,
                 COUNT(*) as watch_count,
                 SUM(pal.duration_ms) as total_watch_time_ms
             FROM plex_activity_log pal
@@ -3472,7 +3472,7 @@ def api_statistics_top_shows():
             WHERE pal.plex_username = ?
                 AND pal.media_type = 'movie'
                 AND pal.event_type IN ('media.stop', 'media.scrobble')
-            GROUP BY m.id, m.title, m.poster_url
+            GROUP BY m.id, m.tmdb_id, m.title
             ORDER BY watch_count DESC
             LIMIT ?
         ''', (plex_username, limit)).fetchall()
@@ -3480,13 +3480,19 @@ def api_statistics_top_shows():
     # Format results
     items = []
     for item in top_items:
-        watch_hours = (item['total_watch_time_ms'] or 0) / (1000 * 60 * 60)
+        total_ms = item['total_watch_time_ms'] or 0
+        total_minutes = int(total_ms / (1000 * 60))
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        watch_time_formatted = f"{hours}:{minutes:02d}"
+
         items.append({
             'id': item['id'],
+            'tmdb_id': item['tmdb_id'],
             'title': item['title'],
-            'poster_path': item['poster_path'],
             'watch_count': item['watch_count'],
-            'watch_hours': round(watch_hours, 1)
+            'watch_time': watch_time_formatted,
+            'media_type': media_type
         })
 
     return jsonify({
