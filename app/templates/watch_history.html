@@ -1,0 +1,230 @@
+{% extends 'layout.html' %}
+
+{% block page_content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-2">Watch History</h1>
+        <p class="text-slate-600 dark:text-slate-400">Complete history of all watched content</p>
+    </div>
+
+    {# Filter Controls #}
+    <div class="bg-slate-100 dark:bg-slate-800 rounded-lg p-4 mb-6">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+                <label for="search-filter" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Search
+                </label>
+                <input type="text" id="search-filter" placeholder="Search by title..."
+                    class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+                <label for="type-filter" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Type
+                </label>
+                <select id="type-filter"
+                    class="w-full md:w-40 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                    <option value="all">All</option>
+                    <option value="episode">TV Shows</option>
+                    <option value="movie">Movies</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    {# Watch History List #}
+    {% if watch_history %}
+    <div id="history-list" class="space-y-3">
+        {% for item in watch_history %}
+        <div class="history-item bg-slate-50 dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow"
+            data-type="{{ item.media_type }}" data-title="{{ (item.show_title or item.title) | lower }}">
+            <div class="flex gap-4">
+                <!-- Poster -->
+                <div class="flex-shrink-0">
+                    {% if item.cached_poster_url %}
+                    <a href="{{ item.detail_url or '#' }}">
+                        <img src="{{ item.cached_poster_url }}" alt="{{ item.title or item.show_title }}"
+                            class="w-16 h-24 object-cover rounded shadow-sm"
+                            onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                    </a>
+                    {% else %}
+                    <div class="w-16 h-24 bg-slate-300 dark:bg-slate-600 rounded flex items-center justify-center">
+                        <svg class="w-8 h-8 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z">
+                            </path>
+                        </svg>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Details -->
+                <div class="flex-grow min-w-0">
+                    {% if item.media_type == 'movie' %}
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
+                                {% if item.detail_url %}
+                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.title }}
+                                </a>
+                                {% else %}
+                                {{ item.title }}
+                                {% endif %}
+                            </h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Movie</p>
+                        </div>
+                        <div class="text-right">
+                            {% if item.event_timestamp %}
+                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                {{ item.event_timestamp | format_datetime('%b %d, %Y') }}
+                            </p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ item.event_timestamp | format_datetime('%-I:%M %p') }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% elif item.media_type == 'episode' %}
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">
+                                {% if item.detail_url %}
+                                <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.show_title or item.title }}
+                                </a>
+                                {% else %}
+                                {{ item.show_title or item.title }}
+                                {% endif %}
+                            </h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 truncate">
+                                {% if item.episode_detail_url %}
+                                <a href="{{ item.episode_detail_url }}"
+                                    class="hover:text-sky-600 dark:hover:text-sky-400">
+                                    {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{% endif %}
+                                </a>
+                                {% else %}
+                                {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{%
+                                endif %}
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            {% if item.event_timestamp %}
+                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                {{ item.event_timestamp | format_datetime('%b %d, %Y') }}
+                            </p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ item.event_timestamp | format_datetime('%-I:%M %p') }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 truncate">{{ item.title }}</h3>
+                        </div>
+                        <div class="text-right">
+                            {% if item.event_timestamp %}
+                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                {{ item.event_timestamp | format_datetime('%b %d, %Y') }}
+                            </p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ item.event_timestamp | format_datetime('%-I:%M %p') }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Progress bar if applicable -->
+                    {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
+                    {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
+                    {% if progress < 95 %}
+                    <div class="mt-2 w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
+                        <div class="bg-sky-600 h-1.5 rounded-full" style="width: {{ progress }}%"></div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ progress }}% watched</p>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if watch_history|length >= 100 %}
+    <div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+        <p>Showing most recent 100 items</p>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-4" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No watch history yet</h3>
+        <p class="text-slate-600 dark:text-slate-400">Start watching something on Plex to see it here!</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Filter functionality
+    const searchInput = document.getElementById('search-filter');
+    const typeFilter = document.getElementById('type-filter');
+    const historyItems = document.querySelectorAll('.history-item');
+
+    function filterHistory() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const typeValue = typeFilter.value;
+
+        historyItems.forEach(item => {
+            const title = item.getAttribute('data-title');
+            const type = item.getAttribute('data-type');
+
+            const matchesSearch = !searchTerm || title.includes(searchTerm);
+            const matchesType = typeValue === 'all' || type === typeValue;
+
+            if (matchesSearch && matchesType) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        // Show/hide "no results" message
+        const visibleItems = Array.from(historyItems).filter(item => item.style.display !== 'none');
+        const historyList = document.getElementById('history-list');
+
+        let noResultsMsg = document.getElementById('no-results-message');
+        if (visibleItems.length === 0 && historyItems.length > 0) {
+            if (!noResultsMsg) {
+                noResultsMsg = document.createElement('div');
+                noResultsMsg.id = 'no-results-message';
+                noResultsMsg.className = 'text-center py-12';
+                noResultsMsg.innerHTML = `
+                    <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No results found</h3>
+                    <p class="text-slate-600 dark:text-slate-400">Try adjusting your filters</p>
+                `;
+                historyList.parentElement.appendChild(noResultsMsg);
+            }
+            noResultsMsg.style.display = '';
+            historyList.style.display = 'none';
+        } else {
+            if (noResultsMsg) {
+                noResultsMsg.style.display = 'none';
+            }
+            historyList.style.display = '';
+        }
+    }
+
+    searchInput.addEventListener('input', filterHistory);
+    typeFilter.addEventListener('change', filterHistory);
+</script>
+{% endblock page_content %}
