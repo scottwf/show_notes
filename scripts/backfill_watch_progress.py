@@ -17,9 +17,11 @@ import sys
 from datetime import datetime
 
 # Add parent directory to path to import app modules
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+sys.path.insert(0, parent_dir)
 
-INSTANCE_FOLDER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+INSTANCE_FOLDER_PATH = os.path.join(parent_dir, 'instance')
 DB_PATH = os.environ.get('SHOWNOTES_DB', os.path.join(INSTANCE_FOLDER_PATH, 'shownotes.sqlite3'))
 
 
@@ -74,6 +76,7 @@ def backfill_user_progress(conn, user_id, plex_username):
             season_episode,
             view_offset_ms,
             duration_ms,
+            event_type,
             MAX(id) as latest_event_id,
             MAX(event_timestamp) as last_watched_at
         FROM plex_activity_log
@@ -100,19 +103,26 @@ def backfill_user_progress(conn, user_id, plex_username):
         season_episode = event[1]  # Format: S01E01
         view_offset_ms = event[2] or 0
         duration_ms = event[3] or 0
-        last_watched_at = event[5]
+        event_type = event[4]
+        last_watched_at = event[6]
 
         # Calculate watch percentage
+        # Mark as watched if:
+        # 1. It's a scrobble event (Plex sends this when >= 90% watched), OR
+        # 2. Watch percentage >= 95%, OR
+        # 3. No duration info (assume fully watched)
+        is_scrobble = (event_type == 'media.scrobble')
+
         if view_offset_ms > 0 and duration_ms > 0:
             # If we have both, calculate percentage
             watch_percentage = (view_offset_ms / duration_ms * 100)
 
-            # Only process if >= 95% watched
-            if watch_percentage < 95:
+            # Only process if >= 95% watched (unless it's a scrobble)
+            if not is_scrobble and watch_percentage < 95:
                 skipped_percentage += 1
                 continue
         else:
-            # For events without view_offset (like "watched" type), assume fully watched
+            # For scrobble events or events without view_offset, assume fully watched
             watch_percentage = 100.0
 
         # Parse season and episode numbers
@@ -165,18 +175,18 @@ def backfill_user_progress(conn, user_id, plex_username):
         cur.execute('''
             INSERT INTO user_episode_progress (
                 user_id, show_id, episode_id, season_number, episode_number,
-                is_watched, watch_count, last_watched_at, watch_percentage, marked_manually
+                is_watched, watch_count, last_watched_at, marked_manually
             )
-            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, 0)
+            VALUES (?, ?, ?, ?, ?, 1, 1, ?, 0)
             ON CONFLICT (user_id, episode_id) DO UPDATE SET
                 is_watched = 1,
                 last_watched_at = CASE
                     WHEN excluded.last_watched_at > last_watched_at THEN excluded.last_watched_at
                     ELSE last_watched_at
                 END,
-                watch_percentage = excluded.watch_percentage,
+                watch_count = watch_count + 1,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, show_id, episode_id, season_num, episode_num, last_watched_at, watch_percentage))
+        ''', (user_id, show_id, episode_id, season_num, episode_num, last_watched_at))
 
         episodes_marked += 1
         shows_updated.add(show_id)
