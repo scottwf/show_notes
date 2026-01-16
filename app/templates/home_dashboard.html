@@ -157,11 +157,8 @@
             <svg class="w-6 h-6 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
             </svg>
-            Favorite & Watched Season Premieres
+            Your Upcoming Season Premieres
           </h2>
-          <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
-            View Full Calendar →
-          </a>
         </div>
 
         <div class="overflow-x-auto pb-4 -mx-4 px-4">
@@ -178,11 +175,17 @@
                     {{ show.premiere_type }}
                   </div>
 
-                  {# Favorite Badge #}
+                  {# Favorite or Requested Badge #}
                   {% if show.is_favorited %}
-                  <div class="absolute top-2 left-2 bg-yellow-500 text-white rounded-full p-1 shadow-lg">
+                  <div class="absolute top-2 left-2 bg-yellow-500 text-white rounded-full p-1 shadow-lg" title="Favorited">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                    </svg>
+                  </div>
+                  {% elif show.user_requested %}
+                  <div class="absolute top-2 left-2 bg-purple-500 text-white rounded-full p-1 shadow-lg" title="You requested this">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
                     </svg>
                   </div>
                   {% endif %}
@@ -196,6 +199,7 @@
                   </h3>
                   <p class="text-xs text-slate-600 dark:text-slate-400">
                     {% if show.year %}{{ show.year }}{% endif %}
+                    {% if show.user_requested %} • <span class="text-purple-600 dark:text-purple-400">Requested</span>{% endif %}
                   </p>
                   {% if show.air_date_utc %}
                   <p class="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
@@ -220,9 +224,6 @@
             </svg>
             New Series Premieres
           </h2>
-          <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
-            View Full Calendar →
-          </a>
         </div>
 
         <div class="overflow-x-auto pb-4 -mx-4 px-4">
@@ -238,6 +239,15 @@
                   <div class="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
                     New Series
                   </div>
+
+                  {# Requested Badge #}
+                  {% if show.user_requested %}
+                  <div class="absolute top-2 left-2 bg-purple-500 text-white rounded-full p-1 shadow-lg" title="You requested this">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                    </svg>
+                  </div>
+                  {% endif %}
                 </a>
 
                 <div class="mt-2">
@@ -248,10 +258,62 @@
                   </h3>
                   <p class="text-xs text-slate-600 dark:text-slate-400">
                     {% if show.year %}{{ show.year }}{% endif %}
+                    {% if show.user_requested %} • <span class="text-purple-600 dark:text-purple-400">Requested</span>{% endif %}
                   </p>
                   {% if show.premiere_date %}
                   <p class="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
                     Premieres {{ show.premiere_date | format_datetime('%b %d') }}
+                  </p>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {# Upcoming Movies #}
+    {% if upcoming_movies %}
+      <div class="mb-12">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center">
+            <svg class="w-6 h-6 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"></path>
+            </svg>
+            Recently Added Movies
+          </h2>
+        </div>
+
+        <div class="overflow-x-auto pb-4 -mx-4 px-4">
+          <div class="flex gap-4 min-w-min">
+            {% for movie in upcoming_movies %}
+              <div class="flex-shrink-0 w-40 sm:w-48 group relative">
+                <a href="{{ movie.movie_url }}" class="block">
+                  <img src="{{ movie.cached_poster_url }}" alt="{{ movie.title }}"
+                      class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+
+                  {# Release Type Badge #}
+                  {% if movie.release_type %}
+                  <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    {{ movie.release_type }}
+                  </div>
+                  {% endif %}
+                </a>
+
+                <div class="mt-2">
+                  <h3 class="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate">
+                    <a href="{{ movie.movie_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
+                      {{ movie.title }}
+                    </a>
+                  </h3>
+                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                    {% if movie.year %}{{ movie.year }}{% endif %}
+                  </p>
+                  {% if movie.release_date %}
+                  <p class="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                    {{ movie.release_date[:10] }}
                   </p>
                   {% endif %}
                 </div>

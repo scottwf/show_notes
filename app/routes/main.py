@@ -406,10 +406,35 @@ def home():
     """, (s_username,)).fetchall()
     watched_ids = [row['id'] for row in watched_show_ids]
     
-    # Combine favorited and watched show IDs (unique)
-    tracked_show_ids = list(set(favorited_ids + watched_ids))
+    # Get user tag IDs (shows requested by this user via Jellyseerr)
+    user_tag_ids = []
+    if current_user.plex_username:
+        user_tags = db.execute("""
+            SELECT id FROM sonarr_tags
+            WHERE label LIKE ?
+        """, (f"%{current_user.plex_username}%",)).fetchall()
+        user_tag_ids = [tag['id'] for tag in user_tags]
     
-    # Get upcoming episodes for favorited/watched shows (season premieres)
+    # Get show IDs for user-requested shows
+    user_requested_ids = []
+    if user_tag_ids:
+        user_requested_shows = db.execute("""
+            SELECT DISTINCT s.id, s.tags
+            FROM sonarr_shows s
+            WHERE s.tags IS NOT NULL
+        """).fetchall()
+        
+        for show in user_requested_shows:
+            if show['tags']:
+                # Parse the comma-separated tag IDs
+                show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
+                if any(tag_id in user_tag_ids for tag_id in show_tag_ids):
+                    user_requested_ids.append(show['id'])
+    
+    # Combine favorited, watched, and requested show IDs (unique)
+    tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
+    
+    # Get upcoming episodes for favorited/watched/requested shows (season premieres)
     favorited_season_premieres = []
     if tracked_show_ids:
         placeholders = ','.join('?' * len(tracked_show_ids))
@@ -426,7 +451,8 @@ def home():
                 s.tmdb_id,
                 s.title as show_title,
                 s.poster_url,
-                s.year
+                s.year,
+                s.tags
             FROM sonarr_episodes e
             JOIN sonarr_seasons ss ON e.season_id = ss.id
             JOIN sonarr_shows s ON ss.show_id = s.id
@@ -465,7 +491,7 @@ def home():
         LIMIT 20
     """, (now,)).fetchall()
     
-    # Format favorited/watched season premieres
+    # Format favorited/watched/requested season premieres
     formatted_favorited_premieres = []
     for ep in favorited_season_premieres:
         ep_dict = dict(ep)
@@ -477,6 +503,13 @@ def home():
                                          episode_number=ep['episode_number'])
         ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
         ep_dict['premiere_type'] = f"Season {ep['season_number']} Premiere"
+        
+        # Check if user requested this show
+        ep_dict['user_requested'] = False
+        if user_tag_ids and ep['tags']:
+            show_tag_ids = [int(tag_id) for tag_id in str(ep['tags']).split(',') if tag_id.strip().isdigit()]
+            ep_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+        
         formatted_favorited_premieres.append(ep_dict)
     
     # Format series premieres
@@ -490,7 +523,54 @@ def home():
                                            season_number=show['season_number'],
                                            episode_number=show['episode_number'])
         show_dict['premiere_type'] = 'Series Premiere'
+        
+        # Check if user requested this show
+        show_dict['user_requested'] = False
+        if user_tag_ids and show['tags']:
+            show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
+            show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+        
         formatted_series_premieres.append(show_dict)
+    
+    # Get recently added movies (last 30 synced/added)
+    upcoming_movies = db.execute("""
+        SELECT
+            m.tmdb_id,
+            m.title,
+            m.year,
+            m.overview,
+            m.poster_url,
+            m.status,
+            m.release_date,
+            m.has_file,
+            m.last_synced_at
+        FROM radarr_movies m
+        WHERE m.monitored = 1
+        ORDER BY 
+            CASE 
+                WHEN m.has_file = 0 THEN 0
+                ELSE 1
+            END,
+            m.last_synced_at DESC
+        LIMIT 20
+    """).fetchall()
+    
+    # Format upcoming movies
+    formatted_upcoming_movies = []
+    for movie in upcoming_movies:
+        movie_dict = dict(movie)
+        movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
+        movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
+        
+        # Determine badge text
+        if not movie['has_file']:
+            movie_dict['release_type'] = 'Coming Soon'
+        elif movie['last_synced_at'] and movie['last_synced_at'] >= datetime.datetime.now(timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=7):
+            movie_dict['release_type'] = 'New'
+        else:
+            movie_dict['release_type'] = None
+            
+        formatted_upcoming_movies.append(movie_dict)
 
     return render_template('home_dashboard.html',
                          user=user_dict,
@@ -498,6 +578,7 @@ def home():
                          recent_shows=recent_shows_enriched,
                          favorited_season_premieres=formatted_favorited_premieres,
                          all_series_premieres=formatted_series_premieres,
+                         upcoming_movies=formatted_upcoming_movies,
                          **stats)
 
 @main_bp.route('/profile/history')

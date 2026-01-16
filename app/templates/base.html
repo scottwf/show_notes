@@ -38,8 +38,19 @@
         </form>
       </div>
 
-      <!-- Right-side Icons: Dark Mode Toggle and User Menu -->
+      <!-- Right-side Icons: Dark Mode Toggle, Calendar, and User Menu -->
       <div class="flex items-center space-x-3">
+        <!-- Calendar Icon -->
+        {% if session.user_id %}
+        <a href="{{ url_for('main.calendar') }}" 
+           title="TV Calendar"
+           class="focus:outline-none p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+          </svg>
+        </a>
+        {% endif %}
+        
         <button id="darkmode-toggle" title="Toggle light/dark mode"
           class="focus:outline-none p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 transition-colors">
           <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
