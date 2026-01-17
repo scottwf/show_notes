@@ -121,6 +121,11 @@ def _get_profile_stats(db, user_id=None):
     # Now Playing: get real-time activity from Tautulli
     stats['now_playing_count'] = get_tautulli_activity()
 
+    # Players Today: count unique users who have played something today
+    stats['players_today'] = db.execute(
+        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE DATE(event_timestamp) = DATE('now', 'localtime')"
+    ).fetchone()[0] or 0
+
     # Total shows
     stats['total_shows'] = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0] or 0
 
@@ -434,7 +439,7 @@ def home():
     # Combine favorited, watched, and requested show IDs (unique)
     tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
     
-    # Get upcoming episodes for favorited/watched/requested shows (season premieres)
+    # Get upcoming episodes for favorited/watched/requested shows (season premieres, limit 10)
     favorited_season_premieres = []
     if tracked_show_ids:
         placeholders = ','.join('?' * len(tracked_show_ids))
@@ -463,10 +468,10 @@ def home():
                 AND e.air_date_utc >= ?
                 AND e.has_file = 0
             ORDER BY e.air_date_utc ASC
-            LIMIT 20
+            LIMIT 10
         """, (*tracked_show_ids, now)).fetchall()
     
-    # Get upcoming series premieres (all shows, S01E01)
+    # Get upcoming series premieres (all shows, S01E01, limit 10)
     all_series_premieres = db.execute("""
         SELECT
             s.id as show_db_id,
@@ -488,7 +493,7 @@ def home():
             AND e.air_date_utc >= ?
             AND e.has_file = 0
         ORDER BY e.air_date_utc ASC
-        LIMIT 20
+        LIMIT 10
     """, (now,)).fetchall()
     
     # Format favorited/watched/requested season premieres
@@ -532,8 +537,8 @@ def home():
         
         formatted_series_premieres.append(show_dict)
     
-    # Get recently added movies (last 30 synced/added)
-    upcoming_movies = db.execute("""
+    # Get recently synced movies (most recent 10 from Radarr)
+    recently_synced = db.execute("""
         SELECT
             m.tmdb_id,
             m.title,
@@ -545,32 +550,48 @@ def home():
             m.has_file,
             m.last_synced_at
         FROM radarr_movies m
-        WHERE m.monitored = 1
-        ORDER BY 
-            CASE 
-                WHEN m.has_file = 0 THEN 0
-                ELSE 1
-            END,
-            m.last_synced_at DESC
-        LIMIT 20
+        WHERE m.release_date IS NOT NULL
+            AND m.release_date <= date('now')
+        ORDER BY m.last_synced_at DESC
+        LIMIT 10
     """).fetchall()
     
-    # Format upcoming movies
-    formatted_upcoming_movies = []
-    for movie in upcoming_movies:
+    # Get coming soon movies (future releases, limit 10)
+    coming_soon_movies = db.execute("""
+        SELECT
+            m.tmdb_id,
+            m.title,
+            m.year,
+            m.overview,
+            m.poster_url,
+            m.status,
+            m.release_date,
+            m.has_file,
+            m.last_synced_at
+        FROM radarr_movies m
+        WHERE m.release_date IS NOT NULL
+            AND m.release_date > date('now')
+        ORDER BY m.release_date ASC
+        LIMIT 10
+    """).fetchall()
+    
+    # Format recently synced movies
+    formatted_recently_downloaded = []
+    for movie in recently_synced:
         movie_dict = dict(movie)
         movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
         movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
-        
-        # Determine badge text
-        if not movie['has_file']:
-            movie_dict['release_type'] = 'Coming Soon'
-        elif movie['last_synced_at'] and movie['last_synced_at'] >= datetime.datetime.now(timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=7):
-            movie_dict['release_type'] = 'New'
-        else:
-            movie_dict['release_type'] = None
-            
-        formatted_upcoming_movies.append(movie_dict)
+        movie_dict['badge_text'] = 'In Library'
+        formatted_recently_downloaded.append(movie_dict)
+    
+    # Format coming soon movies
+    formatted_coming_soon = []
+    for movie in coming_soon_movies:
+        movie_dict = dict(movie)
+        movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
+        movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
+        movie_dict['badge_text'] = 'Coming Soon'
+        formatted_coming_soon.append(movie_dict)
 
     return render_template('home_dashboard.html',
                          user=user_dict,
@@ -578,7 +599,8 @@ def home():
                          recent_shows=recent_shows_enriched,
                          favorited_season_premieres=formatted_favorited_premieres,
                          all_series_premieres=formatted_series_premieres,
-                         upcoming_movies=formatted_upcoming_movies,
+                         recently_downloaded=formatted_recently_downloaded,
+                         coming_soon_movies=formatted_coming_soon,
                          **stats)
 
 @main_bp.route('/profile/history')

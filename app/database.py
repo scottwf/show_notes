@@ -18,7 +18,8 @@ def get_db_connection():
     logger.debug(f"Attempting to connect to database at: {db_path}")
     conn = sqlite3.connect(
         current_app.config['DATABASE'],
-        detect_types=sqlite3.PARSE_DECLTYPES
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        timeout=30  # Wait up to 30 seconds for database lock to clear
     )
     conn.row_factory = sqlite3.Row
     logger.debug(f"Successfully connected to database at: {db_path}")
