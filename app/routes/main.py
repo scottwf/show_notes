@@ -1313,8 +1313,9 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        remember_me = request.form.get('remember_me') == 'on'
         db = database.get_db()
-        current_app.logger.info(f"Login attempt for username: {username}")
+        current_app.logger.info(f"Login attempt for username: {username}, remember_me: {remember_me}")
         user_record = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         current_app.logger.info(f"User record found: {bool(user_record)}")
         if user_record:
@@ -1326,7 +1327,8 @@ def login():
                 user_obj = current_app.login_manager._user_callback(user_record['id'])
                 current_app.logger.info(f"User object created: {bool(user_obj)}")
                 if user_obj:
-                    login_user(user_obj, remember=True)  # Enable persistent login for admin too
+                    login_user(user_obj, remember=remember_me)
+                    session.permanent = remember_me  # Make session permanent if remember me is checked
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
@@ -4511,6 +4513,8 @@ def calendar():
     - Upcoming episodes from favorited shows
     - Upcoming episodes from watched shows
     - Upcoming series premieres (shows in library but not yet available)
+
+    Uses daily cached calendar data for improved performance.
     """
     user_id = session.get('user_id')
     if not user_id:
@@ -4518,150 +4522,56 @@ def calendar():
         return redirect(url_for('main.login'))
 
     db = database.get_db()
-    
-    # Get current date/time for filtering
-    now = datetime.datetime.now(timezone.utc).isoformat()
-    
-    # Get favorited show IDs
-    favorited_show_ids = db.execute("""
-        SELECT show_id FROM user_favorites
-        WHERE user_id = ? AND is_dropped = 0
-    """, (user_id,)).fetchall()
-    favorited_ids = [row['show_id'] for row in favorited_show_ids]
-    
-    # Get watched show IDs from plex_activity_log
-    watched_show_ids = db.execute("""
-        SELECT DISTINCT s.id
-        FROM plex_activity_log pal
-        JOIN sonarr_shows s ON s.tvdb_id = CAST(pal.grandparent_rating_key AS INTEGER)
-        WHERE pal.plex_username = (SELECT plex_username FROM users WHERE id = ?)
-            AND pal.media_type = 'episode'
-    """, (user_id,)).fetchall()
-    watched_ids = [row['id'] for row in watched_show_ids]
-    
-    # Combine favorited and watched show IDs (unique)
-    tracked_show_ids = list(set(favorited_ids + watched_ids))
-    
-    # Get upcoming episodes for tracked shows
-    upcoming_episodes = []
-    if tracked_show_ids:
-        placeholders = ','.join('?' * len(tracked_show_ids))
-        upcoming_episodes = db.execute(f"""
-            SELECT 
-                e.id as episode_id,
-                e.episode_number,
-                e.title as episode_title,
-                e.air_date_utc,
-                e.has_file,
-                e.overview,
-                ss.season_number,
-                s.id as show_db_id,
-                s.tmdb_id,
-                s.title as show_title,
-                s.poster_url,
-                s.year
-            FROM sonarr_episodes e
-            JOIN sonarr_seasons ss ON e.season_id = ss.id
-            JOIN sonarr_shows s ON ss.show_id = s.id
-            WHERE s.id IN ({placeholders})
-                AND e.air_date_utc IS NOT NULL
-                AND e.air_date_utc >= ?
-                AND ss.season_number > 0
-            ORDER BY e.air_date_utc ASC
-            LIMIT 100
-        """, (*tracked_show_ids, now)).fetchall()
-    
-    # Get upcoming series and season premieres
-    # This includes:
-    # 1. Series premieres (S01E01 of new shows)
-    # 2. Season premieres (first episode of any season)
-    # Shows are filtered to those requested by the current user (via Jellyseer tags) or
-    # shows where the user has watch history
 
-    # First, check if current user's username exists in any Sonarr tags
-    user_tag_ids = []
-    if current_user.plex_username:
-        user_tags = db.execute("""
-            SELECT id FROM sonarr_tags
-            WHERE label LIKE ?
-        """, (f"%{current_user.plex_username}%",)).fetchall()
-        user_tag_ids = [tag['id'] for tag in user_tags]
+    # Get plex username for user context
+    plex_username = current_user.plex_username if current_user else None
 
-    series_premieres = db.execute("""
-        SELECT
-            s.id as show_db_id,
-            s.tmdb_id,
-            s.title as show_title,
-            s.poster_url,
-            s.year,
-            s.overview,
-            ss.season_number,
-            e.episode_number,
-            e.air_date_utc as premiere_date,
-            CASE
-                WHEN ss.season_number = 1 AND e.episode_number = 1 THEN 'Series Premiere'
-                ELSE 'Season ' || ss.season_number || ' Premiere'
-            END as premiere_type,
-            s.tags
-        FROM sonarr_shows s
-        JOIN sonarr_seasons ss ON ss.show_id = s.id
-        JOIN sonarr_episodes e ON e.season_id = ss.id
-        WHERE e.episode_number = 1
-            AND ss.season_number > 0
-            AND e.air_date_utc IS NOT NULL
-            AND e.air_date_utc >= ?
-            AND e.has_file = 0
-        ORDER BY e.air_date_utc ASC
-        LIMIT 100
-    """, (now,)).fetchall()
-    
-    # Format the data for template
+    # Get calendar data (uses cache when available)
+    from app import utils
+    calendar_data = utils.get_calendar_data_for_user(db, user_id, plex_username)
+
+    # Get favorited and watched IDs as sets for easy lookup
+    favorited_ids = set(calendar_data.get('favorited_show_ids', []))
+    tracked_ids = set(calendar_data.get('tracked_show_ids', []))
+
+    # Format upcoming episodes for template (only tracked shows)
     formatted_upcoming = []
-    for ep in upcoming_episodes:
-        ep_dict = dict(ep)
-        ep_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=ep['tmdb_id'])
-        ep_dict['show_url'] = url_for('main.show_detail', tmdb_id=ep['tmdb_id'])
-        ep_dict['episode_url'] = url_for('main.episode_detail', 
-                                         tmdb_id=ep['tmdb_id'],
-                                         season_number=ep['season_number'],
-                                         episode_number=ep['episode_number'])
-        ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
-        ep_dict['is_watched'] = ep['show_db_id'] in watched_ids
-        
-        # Check if this is a season premiere
-        season_first_ep = db.execute("""
-            SELECT MIN(episode_number) as first_ep
-            FROM sonarr_episodes
-            WHERE season_id = (
-                SELECT id FROM sonarr_seasons 
-                WHERE show_id = ? AND season_number = ?
-            )
-        """, (ep['show_db_id'], ep['season_number'])).fetchone()
-        ep_dict['is_season_premiere'] = (ep['episode_number'] == season_first_ep['first_ep'])
-        
+    for ep in calendar_data.get('tracked_upcoming', []):
+        ep_dict = ep.copy()
+        tmdb_id = ep.get('tmdb_id')
+        if tmdb_id:
+            ep_dict['episode_url'] = url_for('main.episode_detail',
+                                             tmdb_id=tmdb_id,
+                                             season_number=ep.get('season_number'),
+                                             episode_number=ep.get('episode_number'))
+            # Rename fields for template compatibility
+            ep_dict['show_db_id'] = ep.get('show_id')
         formatted_upcoming.append(ep_dict)
-    
+
+    # Format premieres for template
     formatted_premieres = []
-    for show in series_premieres:
-        show_dict = dict(show)
-        show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
-        show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
-        show_dict['episode_url'] = url_for('main.episode_detail',
-                                           tmdb_id=show['tmdb_id'],
-                                           season_number=show['season_number'],
-                                           episode_number=show['episode_number'])
+    for ep in calendar_data.get('premieres', []):
+        ep_dict = ep.copy()
+        tmdb_id = ep.get('tmdb_id')
+        if tmdb_id:
+            ep_dict['episode_url'] = url_for('main.episode_detail',
+                                             tmdb_id=tmdb_id,
+                                             season_number=ep.get('season_number'),
+                                             episode_number=ep.get('episode_number'))
+            # Rename fields for template compatibility
+            ep_dict['show_db_id'] = ep.get('show_id')
 
-        # Check if this show was requested by the current user
-        show_dict['user_requested'] = False
-        if user_tag_ids and show['tags']:
-            show_tag_ids = [int(tag_id) for tag_id in show['tags'].split(',') if tag_id.strip()]
-            show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+            # Add premiere type label
+            if ep.get('is_series_premiere'):
+                ep_dict['premiere_type'] = 'Series Premiere'
+            else:
+                ep_dict['premiere_type'] = f"Season {ep.get('season_number')} Premiere"
 
-        # Check if this show is favorited by the user
-        show_dict['is_favorited'] = show['show_db_id'] in favorited_ids
+            # Rename air_date field for template
+            ep_dict['premiere_date'] = ep.get('air_date_utc')
 
-        formatted_premieres.append(show_dict)
-    
+        formatted_premieres.append(ep_dict)
+
     return render_template('calendar.html',
                          upcoming_episodes=formatted_upcoming,
                          series_premieres=formatted_premieres)
@@ -4684,6 +4594,7 @@ def update_profile_settings():
         profile_show_favorites = request.form.get('profile_show_favorites') == 'true'
         profile_show_history = request.form.get('profile_show_history') == 'true'
         profile_show_progress = request.form.get('profile_show_progress') == 'true'
+        allow_recommendations = request.form.get('allow_recommendations') == 'true'
 
         # Validate bio length
         if len(bio) > 500:
@@ -4727,19 +4638,21 @@ def update_profile_settings():
                 SET bio = ?, profile_photo_url = ?,
                     profile_show_profile = ?, profile_show_lists = ?,
                     profile_show_favorites = ?, profile_show_history = ?,
-                    profile_show_progress = ?
+                    profile_show_progress = ?, allow_recommendations = ?
                 WHERE id = ?
             ''', (bio, photo_url, profile_show_profile, profile_show_lists,
-                  profile_show_favorites, profile_show_history, profile_show_progress, user_id))
+                  profile_show_favorites, profile_show_history, profile_show_progress,
+                  allow_recommendations, user_id))
         else:
             db.execute('''
                 UPDATE users
                 SET bio = ?, profile_show_profile = ?, profile_show_lists = ?,
                     profile_show_favorites = ?, profile_show_history = ?,
-                    profile_show_progress = ?
+                    profile_show_progress = ?, allow_recommendations = ?
                 WHERE id = ?
             ''', (bio, profile_show_profile, profile_show_lists,
-                  profile_show_favorites, profile_show_history, profile_show_progress, user_id))
+                  profile_show_favorites, profile_show_history, profile_show_progress,
+                  allow_recommendations, user_id))
 
         db.commit()
 
@@ -4877,6 +4790,333 @@ def create_recommendation():
         db.rollback()
         current_app.logger.error(f"Error creating recommendation: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/profile/recommendations')
+@login_required
+def profile_recommendations():
+    """Display user's recommendations page (sent and received)"""
+    user_id = session.get('user_id')
+    if not user_id:
+        flash('Please log in to view your profile.', 'warning')
+        return redirect(url_for('main.login'))
+
+    db = database.get_db()
+
+    # Get user info
+    user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+
+    # Convert user row to dict
+    user_dict = dict(user)
+    user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
+
+    # Get user's personal recommendations
+    my_recommendations = db.execute("""
+        SELECT
+            ur.id, ur.media_type, ur.media_id, ur.title, ur.note, ur.created_at,
+            s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
+            m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
+        FROM user_recommendations ur
+        LEFT JOIN sonarr_shows s ON ur.media_type = 'show' AND ur.media_id = s.id
+        LEFT JOIN radarr_movies m ON ur.media_type = 'movie' AND ur.media_id = m.id
+        WHERE ur.user_id = ?
+        ORDER BY ur.created_at DESC
+    """, (user_id,)).fetchall()
+
+    # Enrich personal recommendations
+    enriched_my_recs = []
+    for rec in my_recommendations:
+        rec_dict = dict(rec)
+        if rec_dict['media_type'] == 'show' and rec_dict.get('show_tmdb_id'):
+            rec_dict['tmdb_id'] = rec_dict['show_tmdb_id']
+            rec_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=rec_dict['show_tmdb_id'])
+            rec_dict['detail_url'] = url_for('main.show_detail', tmdb_id=rec_dict['show_tmdb_id'])
+            rec_dict['year'] = rec_dict['show_year']
+        elif rec_dict['media_type'] == 'movie' and rec_dict.get('movie_tmdb_id'):
+            rec_dict['tmdb_id'] = rec_dict['movie_tmdb_id']
+            rec_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=rec_dict['movie_tmdb_id'])
+            rec_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=rec_dict['movie_tmdb_id'])
+            rec_dict['year'] = rec_dict['movie_year']
+        else:
+            rec_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+            rec_dict['detail_url'] = '#'
+            rec_dict['year'] = None
+
+        # Format date
+        if rec_dict.get('created_at'):
+            try:
+                dt = datetime.datetime.fromisoformat(str(rec_dict['created_at']).replace('Z', '+00:00'))
+                rec_dict['formatted_date'] = dt.strftime('%B %d, %Y')
+            except:
+                rec_dict['formatted_date'] = 'Unknown'
+
+        enriched_my_recs.append(rec_dict)
+
+    # Get received recommendations
+    received_recommendations = db.execute("""
+        SELECT
+            rs.id, rs.from_user_id, rs.media_type, rs.media_id, rs.title, rs.note,
+            rs.is_read, rs.created_at,
+            u.username as from_username, u.profile_photo_url as from_photo,
+            s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
+            m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
+        FROM recommendation_shares rs
+        JOIN users u ON rs.from_user_id = u.id
+        LEFT JOIN sonarr_shows s ON rs.media_type = 'show' AND rs.media_id = s.id
+        LEFT JOIN radarr_movies m ON rs.media_type = 'movie' AND rs.media_id = m.id
+        WHERE rs.to_user_id = ?
+        ORDER BY rs.created_at DESC
+    """, (user_id,)).fetchall()
+
+    # Enrich received recommendations
+    enriched_received = []
+    for rec in received_recommendations:
+        rec_dict = dict(rec)
+        if rec_dict['media_type'] == 'show' and rec_dict.get('show_tmdb_id'):
+            rec_dict['tmdb_id'] = rec_dict['show_tmdb_id']
+            rec_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=rec_dict['show_tmdb_id'])
+            rec_dict['detail_url'] = url_for('main.show_detail', tmdb_id=rec_dict['show_tmdb_id'])
+            rec_dict['year'] = rec_dict['show_year']
+        elif rec_dict['media_type'] == 'movie' and rec_dict.get('movie_tmdb_id'):
+            rec_dict['tmdb_id'] = rec_dict['movie_tmdb_id']
+            rec_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=rec_dict['movie_tmdb_id'])
+            rec_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=rec_dict['movie_tmdb_id'])
+            rec_dict['year'] = rec_dict['movie_year']
+        else:
+            rec_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
+            rec_dict['detail_url'] = '#'
+            rec_dict['year'] = None
+
+        # Format date
+        if rec_dict.get('created_at'):
+            try:
+                dt = datetime.datetime.fromisoformat(str(rec_dict['created_at']).replace('Z', '+00:00'))
+                rec_dict['formatted_date'] = dt.strftime('%B %d, %Y')
+            except:
+                rec_dict['formatted_date'] = 'Unknown'
+
+        enriched_received.append(rec_dict)
+
+    # Count unread received recommendations
+    unread_count = sum(1 for r in enriched_received if not r.get('is_read'))
+
+    # Get profile statistics
+    stats = _get_profile_stats(db, user_id)
+
+    return render_template('profile_recommendations.html',
+                         user=user_dict,
+                         my_recommendations=enriched_my_recs,
+                         received_recommendations=enriched_received,
+                         unread_received_count=unread_count,
+                         **stats,
+                         active_tab='recommendations')
+
+
+@main_bp.route('/api/profile/recommendations/<int:rec_id>', methods=['DELETE'])
+@login_required
+def delete_recommendation(rec_id):
+    """Delete a personal recommendation"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Make sure the recommendation belongs to the user
+        rec = db.execute(
+            'SELECT id FROM user_recommendations WHERE id = ? AND user_id = ?',
+            (rec_id, user_id)
+        ).fetchone()
+
+        if not rec:
+            return jsonify({'success': False, 'error': 'Recommendation not found'}), 404
+
+        db.execute('DELETE FROM user_recommendations WHERE id = ?', (rec_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error deleting recommendation: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/users', methods=['GET'])
+@login_required
+def get_users_for_recommendations():
+    """Get list of users who allow recommendations (for user picker)"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Get all users except current user who have allow_recommendations = 1
+        users = db.execute("""
+            SELECT id, username, profile_photo_url
+            FROM users
+            WHERE id != ? AND (allow_recommendations IS NULL OR allow_recommendations = 1)
+            ORDER BY username
+        """, (user_id,)).fetchall()
+
+        users_list = [
+            {
+                'id': u['id'],
+                'username': u['username'],
+                'profile_photo_url': u['profile_photo_url']
+            }
+            for u in users
+        ]
+
+        return jsonify({'success': True, 'users': users_list})
+
+    except Exception as e:
+        current_app.logger.error(f"Error fetching users: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/recommendations/send', methods=['POST'])
+@login_required
+def send_recommendation():
+    """Send a recommendation to another user"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    data = request.get_json()
+    to_user_id = data.get('to_user_id')
+    media_type = data.get('media_type')
+    media_id = data.get('media_id')
+    title = data.get('title', '')
+    note = data.get('note', '').strip()
+
+    if not to_user_id or not media_type or not media_id:
+        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+
+    if media_type not in ['show', 'movie']:
+        return jsonify({'success': False, 'error': 'Invalid media type'}), 400
+
+    db = database.get_db()
+
+    try:
+        # Verify target user exists and allows recommendations
+        target_user = db.execute("""
+            SELECT id, username, allow_recommendations
+            FROM users WHERE id = ?
+        """, (to_user_id,)).fetchone()
+
+        if not target_user:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+
+        # Check if user allows recommendations (default to True if column is NULL)
+        if target_user['allow_recommendations'] == 0:
+            return jsonify({'success': False, 'error': 'This user has disabled recommendations'}), 403
+
+        # Get sender's username
+        sender = db.execute('SELECT username FROM users WHERE id = ?', (user_id,)).fetchone()
+        sender_username = sender['username'] if sender else 'Someone'
+
+        # Insert recommendation share
+        cursor = db.execute('''
+            INSERT INTO recommendation_shares (from_user_id, to_user_id, media_type, media_id, title, note)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, to_user_id, media_type, media_id, title, note))
+        rec_share_id = cursor.lastrowid
+
+        # Also insert a notification for the target user
+        notification_title = f'New Recommendation from {sender_username}'
+        notification_message = f'{sender_username} recommended "{title}" to you'
+        if note:
+            notification_message += f': "{note[:100]}..."' if len(note) > 100 else f': "{note}"'
+
+        # Get show_id or movie_id for the notification
+        show_id = None
+        movie_id = None
+        if media_type == 'show':
+            show_id = media_id
+        elif media_type == 'movie':
+            movie_id = media_id
+
+        db.execute('''
+            INSERT INTO user_notifications
+            (user_id, show_id, movie_id, notification_type, title, message, created_at)
+            VALUES (?, ?, ?, 'recommendation', ?, ?, CURRENT_TIMESTAMP)
+        ''', (to_user_id, show_id, movie_id, notification_title, notification_message))
+
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error sending recommendation: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/recommendations/received/<int:rec_id>/read', methods=['POST'])
+@login_required
+def mark_recommendation_read(rec_id):
+    """Mark a received recommendation as read"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Make sure the recommendation is for the current user
+        rec = db.execute(
+            'SELECT id FROM recommendation_shares WHERE id = ? AND to_user_id = ?',
+            (rec_id, user_id)
+        ).fetchone()
+
+        if not rec:
+            return jsonify({'success': False, 'error': 'Recommendation not found'}), 404
+
+        db.execute('UPDATE recommendation_shares SET is_read = 1 WHERE id = ?', (rec_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error marking recommendation as read: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@main_bp.route('/api/recommendations/received/<int:rec_id>', methods=['DELETE'])
+@login_required
+def delete_received_recommendation(rec_id):
+    """Delete a received recommendation"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+
+    try:
+        # Make sure the recommendation is for the current user
+        rec = db.execute(
+            'SELECT id FROM recommendation_shares WHERE id = ? AND to_user_id = ?',
+            (rec_id, user_id)
+        ).fetchone()
+
+        if not rec:
+            return jsonify({'success': False, 'error': 'Recommendation not found'}), 404
+
+        db.execute('DELETE FROM recommendation_shares WHERE id = ?', (rec_id,))
+        db.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.rollback()
+        current_app.logger.error(f"Error deleting received recommendation: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # ========================================
 # JELLYSEER INTEGRATION

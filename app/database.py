@@ -106,7 +106,8 @@ def init_db():
                 profile_show_stats BOOLEAN DEFAULT 1,
                 profile_show_activity BOOLEAN DEFAULT 1,
                 profile_show_history BOOLEAN DEFAULT 1,
-                profile_show_progress BOOLEAN DEFAULT 1
+                profile_show_progress BOOLEAN DEFAULT 1,
+                allow_recommendations BOOLEAN DEFAULT 1
             );
             CREATE TABLE settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -483,6 +484,23 @@ def init_db():
             -- User recommendations indexes
             CREATE INDEX IF NOT EXISTS idx_user_recommendations_user ON user_recommendations(user_id);
             CREATE INDEX IF NOT EXISTS idx_user_recommendations_media ON user_recommendations(media_type, media_id);
+
+            CREATE TABLE recommendation_shares (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_user_id INTEGER NOT NULL,
+                to_user_id INTEGER NOT NULL,
+                media_type TEXT NOT NULL,
+                media_id INTEGER NOT NULL,
+                title TEXT,
+                note TEXT,
+                is_read BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_rec_shares_to ON recommendation_shares(to_user_id);
+            CREATE INDEX IF NOT EXISTS idx_rec_shares_from ON recommendation_shares(from_user_id);
 
             CREATE TABLE show_cast (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

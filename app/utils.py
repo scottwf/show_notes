@@ -1127,6 +1127,9 @@ def sync_sonarr_library():
 
         current_app.logger.info(f"Sonarr library sync finished. Synced {shows_synced_count} shows and {episodes_synced_count} episodes.")
 
+        # Invalidate calendar cache since episode data has changed
+        invalidate_calendar_cache()
+
         try:
             from app.system_logger import syslog, SystemLogger
             syslog.success(SystemLogger.SYNC, f"Sonarr library sync complete", {
@@ -2095,3 +2098,292 @@ def convert_utc_to_user_timezone(utc_datetime_str, output_format='%Y-%m-%d %H:%M
         current_app.logger.error(f"Error converting timezone: {e}")
         # Return original value if conversion fails
         return str(utc_datetime_str)
+
+
+# ========================================
+# CALENDAR DATA CACHING
+# ========================================
+
+def get_calendar_cache_path():
+    """Get the path to the calendar cache file."""
+    cache_dir = os.path.join(current_app.root_path, 'static', 'cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, 'calendar_data.json')
+
+
+def get_calendar_cache():
+    """
+    Get cached calendar data if it exists and is from today.
+
+    Returns:
+        dict: Cached calendar data or None if cache is stale/missing
+    """
+    try:
+        cache_path = get_calendar_cache_path()
+
+        if not os.path.exists(cache_path):
+            return None
+
+        with open(cache_path, 'r') as f:
+            cache = json.load(f)
+
+        # Check if cache is from today
+        cache_date = cache.get('cache_date')
+        today = datetime.date.today().isoformat()
+
+        if cache_date != today:
+            current_app.logger.info(f"Calendar cache is stale (from {cache_date}, today is {today})")
+            return None
+
+        current_app.logger.debug("Using cached calendar data")
+        return cache.get('data')
+
+    except Exception as e:
+        current_app.logger.error(f"Error reading calendar cache: {e}")
+        return None
+
+
+def set_calendar_cache(data):
+    """
+    Save calendar data to cache.
+
+    Args:
+        data: Dictionary with calendar data to cache
+    """
+    try:
+        cache_path = get_calendar_cache_path()
+
+        cache = {
+            'cache_date': datetime.date.today().isoformat(),
+            'cached_at': datetime.datetime.now().isoformat(),
+            'data': data
+        }
+
+        with open(cache_path, 'w') as f:
+            json.dump(cache, f)
+
+        current_app.logger.info("Calendar data cached successfully")
+
+    except Exception as e:
+        current_app.logger.error(f"Error writing calendar cache: {e}")
+
+
+def invalidate_calendar_cache():
+    """
+    Invalidate the calendar cache (e.g., after Sonarr sync).
+    """
+    try:
+        cache_path = get_calendar_cache_path()
+
+        if os.path.exists(cache_path):
+            os.remove(cache_path)
+            current_app.logger.info("Calendar cache invalidated")
+
+    except Exception as e:
+        current_app.logger.error(f"Error invalidating calendar cache: {e}")
+
+
+def build_calendar_data(db):
+    """
+    Build calendar data from the database.
+
+    This fetches all upcoming episodes and premieres and returns them
+    in a format that can be cached and used by both the calendar page
+    and homepage widgets.
+
+    Args:
+        db: Database connection
+
+    Returns:
+        dict: Calendar data with upcoming_episodes and premieres
+    """
+    from flask import url_for
+    import datetime as dt
+
+    now = dt.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    today = dt.date.today().isoformat()
+
+    # Get all upcoming episodes (next 30 days, limit 200)
+    thirty_days_later = (dt.date.today() + dt.timedelta(days=30)).isoformat()
+
+    upcoming_episodes = db.execute("""
+        SELECT
+            e.id as episode_id,
+            e.title as episode_title,
+            e.episode_number,
+            e.air_date_utc,
+            e.overview as episode_overview,
+            e.has_file,
+            ss.season_number,
+            s.id as show_id,
+            s.title as show_title,
+            s.tmdb_id,
+            s.tvdb_id,
+            s.year,
+            s.status,
+            s.network_name
+        FROM sonarr_episodes e
+        JOIN sonarr_seasons ss ON e.season_id = ss.id
+        JOIN sonarr_shows s ON ss.show_id = s.id
+        WHERE e.air_date_utc >= ?
+          AND e.air_date_utc <= ?
+          AND ss.season_number > 0
+        ORDER BY e.air_date_utc ASC
+        LIMIT 200
+    """, (now, thirty_days_later + ' 23:59:59')).fetchall()
+
+    # Get all premieres (season premiere = episode 1, not yet downloaded)
+    premieres = db.execute("""
+        SELECT
+            e.id as episode_id,
+            e.title as episode_title,
+            e.episode_number,
+            e.air_date_utc,
+            e.overview as episode_overview,
+            e.has_file,
+            ss.season_number,
+            s.id as show_id,
+            s.title as show_title,
+            s.tmdb_id,
+            s.tvdb_id,
+            s.year,
+            s.status,
+            s.network_name,
+            s.sonarr_id,
+            s.tags as show_tags
+        FROM sonarr_episodes e
+        JOIN sonarr_seasons ss ON e.season_id = ss.id
+        JOIN sonarr_shows s ON ss.show_id = s.id
+        WHERE e.episode_number = 1
+          AND ss.season_number > 0
+          AND e.air_date_utc >= ?
+          AND e.has_file = 0
+        ORDER BY e.air_date_utc ASC
+        LIMIT 100
+    """, (now,)).fetchall()
+
+    # Get all Sonarr tags for user request matching
+    sonarr_tags = db.execute("SELECT id, label FROM sonarr_tags").fetchall()
+    tags_by_label = {tag['label'].lower(): tag['id'] for tag in sonarr_tags}
+
+    # Convert to serializable format
+    def episode_to_dict(ep, is_premiere=False):
+        ep_dict = dict(ep)
+        # Add computed fields that don't depend on user context
+        ep_dict['is_season_premiere'] = ep_dict.get('episode_number') == 1
+        ep_dict['is_series_premiere'] = ep_dict.get('episode_number') == 1 and ep_dict.get('season_number') == 1
+
+        # Parse tags if present
+        if ep_dict.get('show_tags'):
+            try:
+                ep_dict['show_tags'] = json.loads(ep_dict['show_tags'])
+            except:
+                ep_dict['show_tags'] = []
+
+        return ep_dict
+
+    data = {
+        'upcoming_episodes': [episode_to_dict(ep) for ep in upcoming_episodes],
+        'premieres': [episode_to_dict(ep, is_premiere=True) for ep in premieres],
+        'tags_by_label': tags_by_label,
+        'built_at': datetime.datetime.now().isoformat()
+    }
+
+    return data
+
+
+def get_calendar_data_for_user(db, user_id, plex_username=None):
+    """
+    Get calendar data enriched with user-specific information.
+
+    This uses cached data when available and adds user context like
+    favorites and watch history.
+
+    Args:
+        db: Database connection
+        user_id: Current user's ID
+        plex_username: User's Plex username for request matching
+
+    Returns:
+        dict: Calendar data with user context added
+    """
+    from flask import url_for
+
+    # Try to get cached data
+    cached = get_calendar_cache()
+
+    if cached:
+        data = cached
+    else:
+        # Build fresh data
+        data = build_calendar_data(db)
+        # Cache it for other users/requests
+        set_calendar_cache(data)
+
+    # Get user-specific data
+    favorited_show_ids = set()
+    watched_show_ids = set()
+
+    # Get user's favorites
+    favorites = db.execute(
+        'SELECT show_id FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
+        (user_id,)
+    ).fetchall()
+    favorited_show_ids = {f['show_id'] for f in favorites}
+
+    # Get user's watched shows from Plex activity
+    watched = db.execute("""
+        SELECT DISTINCT s.id
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON CAST(pal.grandparent_rating_key AS INTEGER) = s.tvdb_id
+        WHERE pal.plex_username = ?
+          AND pal.media_type = 'episode'
+    """, (plex_username or '',)).fetchall()
+    watched_show_ids = {w['id'] for w in watched}
+
+    # Get user's tag ID for request matching
+    user_tag_id = None
+    if plex_username:
+        tags_by_label = data.get('tags_by_label', {})
+        user_tag_id = tags_by_label.get(plex_username.lower())
+
+    # Tracked shows = favorited + watched
+    tracked_show_ids = favorited_show_ids | watched_show_ids
+
+    # Enrich episodes with user context and URLs
+    def enrich_episode(ep):
+        ep = ep.copy()  # Don't modify cached data
+        show_id = ep.get('show_id')
+        tmdb_id = ep.get('tmdb_id')
+
+        ep['is_favorited'] = show_id in favorited_show_ids
+        ep['is_watched'] = show_id in watched_show_ids
+        ep['is_tracked'] = show_id in tracked_show_ids
+
+        # Check if user requested this show
+        ep['user_requested'] = False
+        if user_tag_id and ep.get('show_tags'):
+            ep['user_requested'] = user_tag_id in ep['show_tags']
+
+        # Add URLs (these need to be generated at request time)
+        if tmdb_id:
+            ep['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=tmdb_id)
+            ep['show_url'] = url_for('main.show_detail', tmdb_id=tmdb_id)
+
+        return ep
+
+    enriched_data = {
+        'upcoming_episodes': [enrich_episode(ep) for ep in data['upcoming_episodes']],
+        'premieres': [enrich_episode(ep) for ep in data['premieres']],
+        'tracked_show_ids': list(tracked_show_ids),
+        'favorited_show_ids': list(favorited_show_ids),
+        'user_tag_id': user_tag_id
+    }
+
+    # Filter upcoming to only tracked shows for the main calendar view
+    enriched_data['tracked_upcoming'] = [
+        ep for ep in enriched_data['upcoming_episodes']
+        if ep['is_tracked']
+    ]
+
+    return enriched_data

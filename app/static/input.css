@@ -5,3 +5,12 @@
 .keyboard-selected {
     @apply bg-gray-200 dark:bg-gray-700;
 }
+
+/* Hide scrollbar but allow scrolling */
+.scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+}

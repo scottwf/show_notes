@@ -25,6 +25,11 @@ def create_app(test_config=None):
         SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        # Flask-Login remember me cookie configuration
+        REMEMBER_COOKIE_DURATION=timedelta(days=30),  # Remember me lasts 30 days
+        REMEMBER_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SAMESITE='Lax',
     )
 
     print("DEBUG: Finished configuration setup")

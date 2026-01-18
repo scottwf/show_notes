@@ -60,6 +60,18 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Recommend Button -->
+                        <button onclick="openRecommendModal()"
+                            class="flex-shrink-0 p-3 rounded-full bg-slate-100/20 dark:bg-slate-700/50 hover:bg-slate-200/30 dark:hover:bg-slate-600/70 transition-colors shadow-md hover:shadow-lg"
+                            title="Recommend to others">
+                            <svg class="w-8 h-8 text-white hover:text-green-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5">
+                                </path>
+                            </svg>
+                        </button>
                         {% endif %}
                     </div>
                     {% if movie.year %}
@@ -237,6 +249,57 @@
 
 </div>
 
+<!-- Recommend Modal -->
+<div id="recommend-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100">Recommend "{{ movie.title }}"</h3>
+                <button onclick="closeRecommendModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <form id="recommend-form">
+                <!-- Send to User Picker -->
+                <div class="mb-4">
+                    <label for="recommend-user-select" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Send to (optional)
+                    </label>
+                    <select id="recommend-user-select" name="to_user_id"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <option value="">Keep personal (just for me)</option>
+                        <!-- Users loaded via JS -->
+                    </select>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select a user to send this recommendation to them, or leave empty to save it for yourself.</p>
+                </div>
+
+                <div class="mb-4">
+                    <label for="recommend-note" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Why do you recommend this? (optional)
+                    </label>
+                    <textarea id="recommend-note" name="note" rows="3"
+                        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        placeholder="Great movie because..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeRecommendModal()"
+                        class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg">
+                        Recommend
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     // Add to List functionality
     let userLists = [];
@@ -396,6 +459,107 @@
     // Load lists on page load
     document.addEventListener('DOMContentLoaded', () => {
         loadUserLists();
+    });
+
+    // Recommend Modal Functions
+    function openRecommendModal() {
+        document.getElementById('recommend-modal').classList.remove('hidden');
+        loadRecommendUsers();
+    }
+
+    function closeRecommendModal() {
+        document.getElementById('recommend-modal').classList.add('hidden');
+    }
+
+    // Load users for the recommend modal
+    async function loadRecommendUsers() {
+        const select = document.getElementById('recommend-user-select');
+        if (!select) return;
+
+        try {
+            const response = await fetch('/api/users');
+            const data = await response.json();
+
+            if (data.success && data.users) {
+                // Clear existing options except the first one
+                select.innerHTML = '<option value="">Keep personal (just for me)</option>';
+
+                data.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.username;
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading users:', error);
+        }
+    }
+
+    // Handle recommend form submission
+    document.getElementById('recommend-form')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const note = document.getElementById('recommend-note').value;
+        const toUserId = document.getElementById('recommend-user-select').value;
+
+        try {
+            let response;
+            let successMessage;
+
+            if (toUserId) {
+                // Send to another user
+                response = await fetch('/api/recommendations/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        to_user_id: parseInt(toUserId),
+                        media_type: 'movie',
+                        media_id: movieId,
+                        title: '{{ movie.title | replace("'", "\\'") }}',
+                        note: note
+                    })
+                });
+                successMessage = 'Recommendation sent!';
+            } else {
+                // Personal recommendation
+                response = await fetch('/api/profile/recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        media_type: 'movie',
+                        media_id: movieId,
+                        title: '{{ movie.title | replace("'", "\\'") }}',
+                        note: note
+                    })
+                });
+                successMessage = 'Added to your recommendations!';
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification(successMessage, 'success');
+                closeRecommendModal();
+                document.getElementById('recommend-note').value = '';
+                document.getElementById('recommend-user-select').value = '';
+            } else {
+                showNotification(data.error || 'Unknown error', 'error', 'Error submitting recommendation');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('Please try again.', 'error', 'Error submitting recommendation');
+        }
+    });
+
+    // Close recommend modal when clicking outside
+    document.getElementById('recommend-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeRecommendModal();
+        }
     });
 </script>
 {% endblock %}

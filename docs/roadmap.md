@@ -6,6 +6,12 @@ ShowNotes is a Plex companion app providing spoiler-aware summaries, character i
 
 ## Recently Completed
 
+### 2026 Q1
+- **Recommendations system** - Send/receive show and movie recommendations between users
+- **Calendar performance** - Daily caching for faster calendar page loads
+- **Remember me login** - Persistent 30-day login sessions with checkbox option
+- **Recommendations privacy** - Users can opt out of receiving recommendations
+
 ### 2025 Q1
 - User profiles with favorites, watch history, and custom lists
 - Profile photos and personalization
@@ -49,7 +55,7 @@ ShowNotes is a Plex companion app providing spoiler-aware summaries, character i
 ### Long Term (6+ months)
 - [ ] API for third-party integrations
 - [ ] Advanced analytics and charts
-- [ ] Social features (shared lists, recommendations)
+- [x] Social features (shared lists, recommendations) - **Completed Jan 2026**
 - [ ] Plugin system for extensibility
 
 ## Feature Requests
