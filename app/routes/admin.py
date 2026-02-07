@@ -178,107 +178,102 @@ def dashboard():
         A rendered HTML template for the admin dashboard with all metrics.
     """
     db = database.get_db()
-    
-    def safe_value(query):
-        """Execute a scalar SQL query and return a numeric result or 0."""
-        try:
-            result = db.execute(query).fetchone()
-            return result[0] if result and result[0] is not None else 0
-        except Exception:
-            return 0
+    import datetime
 
     # ============================================================================
-    # MEDIA LIBRARY STATISTICS
+    # CONSOLIDATED QUERIES - Reduce 30+ queries to ~5 queries
     # ============================================================================
-    
-    # Basic library counts
-    movie_count = safe_value('SELECT COUNT(*) FROM radarr_movies')
-    show_count = safe_value('SELECT COUNT(*) FROM sonarr_shows')
-    user_count = safe_value('SELECT COUNT(*) FROM users')
 
-    # File availability metrics
-    episodes_with_files = safe_value('SELECT COUNT(*) FROM sonarr_episodes WHERE has_file = 1')
-    movies_with_files = safe_value('SELECT COUNT(*) FROM radarr_movies WHERE has_file = 1')
-    
-    # Recent sync activity (last 7 days)
-    radarr_week_count = safe_value(
-        "SELECT COUNT(*) FROM radarr_movies WHERE last_synced_at >= DATETIME('now', '-7 days')"
-    )
-    sonarr_week_count = safe_value(
-        "SELECT COUNT(*) FROM sonarr_shows WHERE last_synced_at >= DATETIME('now', '-7 days')"
-    )
+    # Query 1: Media library counts (combines 7 individual queries into 1)
+    library_stats = db.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM radarr_movies) as movie_count,
+            (SELECT COUNT(*) FROM sonarr_shows) as show_count,
+            (SELECT COUNT(*) FROM users) as user_count,
+            (SELECT COUNT(*) FROM sonarr_episodes WHERE has_file = 1) as episodes_with_files,
+            (SELECT COUNT(*) FROM radarr_movies WHERE has_file = 1) as movies_with_files,
+            (SELECT COUNT(*) FROM radarr_movies WHERE last_synced_at >= DATETIME('now', '-7 days')) as radarr_week_count,
+            (SELECT COUNT(*) FROM sonarr_shows WHERE last_synced_at >= DATETIME('now', '-7 days')) as sonarr_week_count
+    """).fetchone()
+
+    movie_count = library_stats['movie_count'] or 0
+    show_count = library_stats['show_count'] or 0
+    user_count = library_stats['user_count'] or 0
+    episodes_with_files = library_stats['episodes_with_files'] or 0
+    movies_with_files = library_stats['movies_with_files'] or 0
+    radarr_week_count = library_stats['radarr_week_count'] or 0
+    sonarr_week_count = library_stats['sonarr_week_count'] or 0
+
+    # Query 2: Plex activity metrics (combines 10 individual queries into 1)
+    plex_stats = db.execute("""
+        SELECT
+            (SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'movie' AND event_type IN ('media.play', 'media.scrobble', 'watched')) as unique_movies_played,
+            (SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'episode' AND event_type IN ('media.play', 'media.scrobble', 'watched')) as unique_episodes_played,
+            (SELECT COUNT(DISTINCT show_title) FROM plex_activity_log WHERE show_title IS NOT NULL) as unique_shows_watched,
+            (SELECT COUNT(*) FROM plex_activity_log WHERE event_timestamp >= DATETIME('now', '-7 days')) as plex_events_week,
+            (SELECT COUNT(*) FROM plex_activity_log WHERE event_type IN ('media.play', 'watched') AND event_timestamp >= DATETIME('now', '-7 days')) as recent_plays,
+            (SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.scrobble' AND event_timestamp >= DATETIME('now', '-7 days')) as recent_scrobbles,
+            (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL) as unique_plex_users,
+            (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-1 day')) as plex_users_today,
+            (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-7 days')) as plex_users_week,
+            (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-30 days')) as plex_users_month
+    """).fetchone()
+
+    unique_movies_played = plex_stats['unique_movies_played'] or 0
+    unique_episodes_played = plex_stats['unique_episodes_played'] or 0
+    unique_shows_watched = plex_stats['unique_shows_watched'] or 0
+    plex_events_week = plex_stats['plex_events_week'] or 0
+    recent_plays = plex_stats['recent_plays'] or 0
+    recent_scrobbles = plex_stats['recent_scrobbles'] or 0
+    unique_plex_users = plex_stats['unique_plex_users'] or 0
+    plex_users_today = plex_stats['plex_users_today'] or 0
+    plex_users_week = plex_stats['plex_users_week'] or 0
+    plex_users_month = plex_stats['plex_users_month'] or 0
+
+    # Query 3: User login activity (combines 3 queries into 1)
+    user_stats = db.execute("""
+        SELECT
+            (SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-1 day')) as shownotes_users_today,
+            (SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-7 days')) as shownotes_users_week,
+            (SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-30 days')) as shownotes_users_month
+    """).fetchone()
+
+    shownotes_users_today = user_stats['shownotes_users_today'] or 0
+    shownotes_users_week = user_stats['shownotes_users_week'] or 0
+    shownotes_users_month = user_stats['shownotes_users_month'] or 0
+
+    # Query 4: API usage metrics (combines 6 queries into 1)
+    api_stats = db.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM api_usage) as total_api_calls,
+            (SELECT SUM(cost_usd) FROM api_usage) as total_api_cost,
+            (SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')) as openai_cost_week,
+            (SELECT COUNT(*) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')) as openai_call_count_week,
+            (SELECT NULL) as ollama_avg_ms,
+            (SELECT COUNT(*) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')) as ollama_call_count_week
+    """).fetchone()
+
+    total_api_calls = api_stats['total_api_calls'] or 0
+    total_api_cost = api_stats['total_api_cost'] or 0
+    openai_cost_week = api_stats['openai_cost_week'] or 0
+    openai_call_count_week = api_stats['openai_call_count_week'] or 0
+    ollama_avg_ms = api_stats['ollama_avg_ms'] or 0
+    ollama_call_count_week = api_stats['ollama_call_count_week'] or 0
 
     # ============================================================================
-    # PLEX ACTIVITY METRICS
+    # WEBHOOK ACTIVITY METRICS (kept as separate queries - different tables)
     # ============================================================================
-    
-    # Content consumption (unique items played)
-    # Include both Plex webhook events ('media.play', 'media.scrobble') and Tautulli events ('watched')
-    unique_movies_played = safe_value(
-        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'movie' AND event_type IN ('media.play', 'media.scrobble', 'watched')"
-    )
-    unique_episodes_played = safe_value(
-        "SELECT COUNT(DISTINCT title) FROM plex_activity_log WHERE media_type = 'episode' AND event_type IN ('media.play', 'media.scrobble', 'watched')"
-    )
-    unique_shows_watched = safe_value(
-        "SELECT COUNT(DISTINCT show_title) FROM plex_activity_log WHERE show_title IS NOT NULL"
-    )
 
-    # Recent activity volume (last 7 days)
-    plex_events_week = safe_value(
-        "SELECT COUNT(*) FROM plex_activity_log WHERE event_timestamp >= DATETIME('now', '-7 days')"
-    )
-    recent_plays = safe_value(
-        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type IN ('media.play', 'watched') AND event_timestamp >= DATETIME('now', '-7 days')"
-    )
-    recent_scrobbles = safe_value(
-        "SELECT COUNT(*) FROM plex_activity_log WHERE event_type = 'media.scrobble' AND event_timestamp >= DATETIME('now', '-7 days')"
-    )
-    
-    # ============================================================================
-    # USER ACTIVITY METRICS
-    # ============================================================================
-    
-    # Plex user activity (based on media consumption)
-    unique_plex_users = safe_value(
-        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL"
-    )
-    plex_users_today = safe_value(
-        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-1 day')"
-    )
-    plex_users_week = safe_value(
-        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-7 days')"
-    )
-    plex_users_month = safe_value(
-        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE plex_username IS NOT NULL AND event_timestamp >= DATETIME('now', '-30 days')"
-    )
-    
-    # ShowNotes user activity (based on login activity)
-    shownotes_users_today = safe_value(
-        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-1 day')"
-    )
-    shownotes_users_week = safe_value(
-        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-7 days')"
-    )
-    shownotes_users_month = safe_value(
-        "SELECT COUNT(DISTINCT username) FROM users WHERE last_login_at >= DATETIME('now', '-30 days')"
-    )
-    
-    # ============================================================================
-    # WEBHOOK ACTIVITY METRICS
-    # ============================================================================
-    
     # Get last webhook activity timestamps
     sonarr_last_webhook = db.execute(
         "SELECT received_at, event_type, payload_summary FROM webhook_activity WHERE service_name = 'sonarr' ORDER BY received_at DESC LIMIT 1"
     ).fetchone()
-    
+
     radarr_last_webhook = db.execute(
         "SELECT received_at, event_type, payload_summary FROM webhook_activity WHERE service_name = 'radarr' ORDER BY received_at DESC LIMIT 1"
     ).fetchone()
-    
+
     # Convert string timestamps to datetime objects for template formatting
-    import datetime
     if sonarr_last_webhook and sonarr_last_webhook['received_at']:
         try:
             sonarr_last_webhook = dict(sonarr_last_webhook)
@@ -287,7 +282,7 @@ def dashboard():
             )
         except (ValueError, TypeError):
             sonarr_last_webhook['received_at'] = None
-    
+
     if radarr_last_webhook and radarr_last_webhook['received_at']:
         try:
             radarr_last_webhook = dict(radarr_last_webhook)
@@ -296,30 +291,6 @@ def dashboard():
             )
         except (ValueError, TypeError):
             radarr_last_webhook['received_at'] = None
-    
-    # ============================================================================
-    # API USAGE METRICS
-    # ============================================================================
-    
-    # Total API usage
-    total_api_calls = safe_value('SELECT COUNT(*) FROM api_usage')
-    total_api_cost = safe_value('SELECT SUM(cost_usd) FROM api_usage')
-    
-    # OpenAI usage (last 7 days)
-    openai_cost_week = safe_value(
-        "SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
-    )
-    openai_call_count_week = safe_value(
-        "SELECT COUNT(*) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')"
-    )
-    
-    # Ollama usage (last 7 days)
-    ollama_avg_ms = safe_value(
-        "SELECT AVG(processing_time_ms) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
-    )
-    ollama_call_count_week = safe_value(
-        "SELECT COUNT(*) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')"
-    )
 
     return render_template(
         'admin_dashboard.html',
@@ -508,35 +479,67 @@ def watch_history_data():
             LIMIT 100
         '''
         rows = db.execute(query, params).fetchall()
+
+        # PERFORMANCE OPTIMIZATION: Batch lookup TMDB IDs instead of querying in loop
+        # Collect all unique show titles and movie titles that need lookup
+        import re
+        show_titles_to_lookup = set()
+        movie_titles_to_lookup = set()
+
+        for row in rows:
+            if not row['tmdb_id']:
+                if row['media_type'] == 'episode' and row['show_title']:
+                    show_titles_to_lookup.add(row['show_title'])
+                elif row['media_type'] == 'movie' and row['title']:
+                    movie_titles_to_lookup.add(row['title'])
+
+        # Batch fetch show TMDB IDs (single query instead of N queries)
+        show_tmdb_map = {}
+        if show_titles_to_lookup:
+            placeholders = ','.join('?' * len(show_titles_to_lookup))
+            show_results = db.execute(
+                f'SELECT title, tmdb_id FROM sonarr_shows WHERE title IN ({placeholders})',
+                list(show_titles_to_lookup)
+            ).fetchall()
+            show_tmdb_map = {r['title']: r['tmdb_id'] for r in show_results}
+
+        # Batch fetch movie TMDB IDs (single query instead of N queries)
+        movie_tmdb_map = {}
+        if movie_titles_to_lookup:
+            placeholders = ','.join('?' * len(movie_titles_to_lookup))
+            movie_results = db.execute(
+                f'SELECT title, tmdb_id FROM radarr_movies WHERE title IN ({placeholders})',
+                list(movie_titles_to_lookup)
+            ).fetchall()
+            movie_tmdb_map = {r['title']: r['tmdb_id'] for r in movie_results}
+
+        # Event type display mapping
+        event_type_map = {
+            'media.play': 'Play',
+            'media.pause': 'Pause',
+            'media.stop': 'Stop',
+            'media.scrobble': 'Scrobble'
+        }
+
         # Enrich with episode detail URL and formatted time
         for row in rows:
             row_dict = dict(row)
 
-            # Get TMDB ID - either from row or lookup by title
+            # Get TMDB ID - either from row or from batch lookup
             tmdb_id = row_dict.get('tmdb_id')
             show_title = row_dict.get('show_title')
             title = row_dict.get('title')
             media_type = row_dict.get('media_type')
 
-            # If no tmdb_id, look it up based on media type
+            # Use batch lookup results if no tmdb_id
             if not tmdb_id:
                 if media_type == 'episode' and show_title:
-                    # Look up TV show by show title
-                    lookup = db.execute(
-                        'SELECT tmdb_id FROM sonarr_shows WHERE title = ? LIMIT 1',
-                        (show_title,)
-                    ).fetchone()
-                    if lookup:
-                        tmdb_id = lookup['tmdb_id']
+                    tmdb_id = show_tmdb_map.get(show_title)
+                    if tmdb_id:
                         row_dict['tmdb_id'] = tmdb_id
                 elif media_type == 'movie' and title:
-                    # Look up movie by title
-                    lookup = db.execute(
-                        'SELECT tmdb_id FROM radarr_movies WHERE title = ? LIMIT 1',
-                        (title,)
-                    ).fetchone()
-                    if lookup:
-                        tmdb_id = lookup['tmdb_id']
+                    tmdb_id = movie_tmdb_map.get(title)
+                    if tmdb_id:
                         row_dict['tmdb_id'] = tmdb_id
 
             # Build URLs based on media type
@@ -551,7 +554,6 @@ def watch_history_data():
 
                 # If we have season/episode info, link to episode detail
                 if season_episode:
-                    import re
                     match = re.match(r'S(\d+)E(\d+)', season_episode)
                     if match:
                         season_number = int(match.group(1))
@@ -564,6 +566,7 @@ def watch_history_data():
             row_dict['episode_detail_url'] = episode_detail_url
             row_dict['show_detail_url'] = show_detail_url
             row_dict['movie_detail_url'] = movie_detail_url
+
             # Format timestamp with user's timezone
             ts = row_dict.get('event_timestamp')
             if ts:
@@ -571,37 +574,19 @@ def watch_history_data():
                     row_dict['event_timestamp_fmt'] = convert_utc_to_user_timezone(ts, '%Y-%m-%d %H:%M')
                 except Exception:
                     row_dict['event_timestamp_fmt'] = str(ts)
+
             # Format event type
             event_type = row_dict.get('event_type')
             if event_type:
-                event_type_map = {
-                    'media.play': 'Play',
-                    'media.pause': 'Pause',
-                    'media.stop': 'Stop',
-                    'media.scrobble': 'Scrobble'
-                }
                 row_dict['event_type_fmt'] = event_type_map.get(event_type, event_type)
-            # Get show title and episode title
-            show_title = row_dict.get('show_title')
+
+            # Build display title
             episode_title = row_dict.get('title')
             row_dict['display_title'] = f'{show_title} – {episode_title}' if show_title else episode_title
-            # Get correct TMDB ID from sonarr_shows
-            if tmdb_id:
-                sonarr_show = db.execute('SELECT tmdb_id FROM sonarr_shows WHERE tmdb_id=?', (tmdb_id,)).fetchone()
-                if sonarr_show:
-                    row_dict['tmdb_id'] = sonarr_show['tmdb_id']
+
             plex_logs.append(row_dict)
+
     return jsonify({'sync_logs': sync_logs, 'plex_logs': plex_logs})
-    db = database.get_db()
-    users = db.execute('SELECT id, username, plex_username, plex_user_id, last_login_at FROM users').fetchall()
-    user_latest = {}
-    for u in users:
-        latest = db.execute('''SELECT title, season_episode FROM plex_activity_log
-                              WHERE plex_username = ? AND event_type IN ('media.stop','media.scrobble')
-                              ORDER BY event_timestamp DESC LIMIT 1''', (u['plex_username'],)).fetchone()
-        user_latest[u['id']] = latest
-    plex_token = database.get_setting('plex_token')
-    return render_template('admin_users.html', users=users, user_latest=user_latest, plex_token=plex_token)
 
 @admin_bp.route('/logs/list', methods=['GET'])
 @login_required

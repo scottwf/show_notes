@@ -20,6 +20,9 @@ COPY . .
 # Create instance directory for database
 RUN mkdir -p instance
 
+# Ensure cached image directories exist for volume mounts
+RUN mkdir -p app/static/poster app/static/background app/static/cast app/static/cache app/static/uploads
+
 # Expose port
 EXPOSE 5003
 

@@ -16,8 +16,12 @@ services:
       - /home/docker/appdata/shownotes:/app/instance
       # Logs
       - /home/docker/appdata/shownotes/logs:/app/logs
-      # Static files (cached images, etc.)
-      - /home/docker/appdata/shownotes/static:/app/app/static
+      # Cached images (persisted across rebuilds)
+      - /home/docker/appdata/shownotes/static/poster:/app/app/static/poster
+      - /home/docker/appdata/shownotes/static/background:/app/app/static/background
+      - /home/docker/appdata/shownotes/static/cast:/app/app/static/cast
+      - /home/docker/appdata/shownotes/static/cache:/app/app/static/cache
+      - /home/docker/appdata/shownotes/static/uploads:/app/app/static/uploads
     networks:
       - shownotes-network
 
