@@ -2,8 +2,9 @@ import os
 import logging
 from datetime import timedelta, datetime
 from logging.handlers import RotatingFileHandler
-from flask import Flask, Markup
+from flask import Flask
 from flask_login import LoginManager
+from markupsafe import Markup
 import markdown
 from . import database
 from . import cli
