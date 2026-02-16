@@ -2348,6 +2348,26 @@ def episode_detail(tmdb_id, season_number, episode_number):
 
     episode_dict = dict(episode_row)
 
+    # Fetch previous and next episodes for navigation
+    prev_episode = None
+    next_episode = None
+    
+    # Get previous episode (highest episode number less than current)
+    prev_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number < ? ORDER BY episode_number DESC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if prev_row:
+        prev_episode = dict(prev_row)
+    
+    # Get next episode (lowest episode number greater than current)
+    next_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number > ? ORDER BY episode_number ASC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if next_row:
+        next_episode = dict(next_row)
+
     # Try all possible IDs for cast lookup
     episode_characters = []
     # 1. Sonarr TVDB ID
@@ -2441,7 +2461,9 @@ def episode_detail(tmdb_id, season_number, episode_number):
                            show=show_dict,
                            episode=episode_dict,
                            season_number=season_number,
-                           episode_characters=episode_characters)
+                           episode_characters=episode_characters,
+                           prev_episode=prev_episode,
+                           next_episode=next_episode)
 
 @main_bp.route('/image_proxy/<string:type>/<int:id>')
 @login_required
