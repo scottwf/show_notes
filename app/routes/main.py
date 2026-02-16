@@ -1906,9 +1906,13 @@ def search():
     """
     query = request.args.get('q', '').lower()
     if not query:
-        return jsonify([])
+        return jsonify({'results': [], 'jellyseer_url': None, 'query': ''})
 
     db = database.get_db()
+    
+    # Get Jellyseerr URL from settings
+    settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
+    jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
     
     # Search Sonarr
     sonarr_results = db.execute(
@@ -1935,7 +1939,11 @@ def search():
     # Sort results by title
     results.sort(key=lambda x: x['title'])
     
-    return jsonify(results)
+    return jsonify({
+        'results': results,
+        'jellyseer_url': jellyseer_url,
+        'query': request.args.get('q', '')
+    })
 
 @main_bp.route('/movie/<int:tmdb_id>')
 @login_required
