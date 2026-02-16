@@ -91,7 +91,7 @@
             role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
             <!-- User Info Header -->
             <div class="px-4 py-3">
-              <a href="{{ url_for('main.profile') }}" class="block hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+              <a href="{{ url_for('main.profile') }}" class="block hover:text-sky-600 dark:hover:text-sky-400 transition-colors" aria-label="View your profile">
                 <p class="text-sm font-medium text-gray-900 dark:text-white">{{ session.username }}</p>
               </a>
               {% if session.is_admin %}
