@@ -147,11 +147,12 @@
         </div>
 
         <!-- Episode Navigation -->
-        <div class="flex justify-between items-center my-6">
+        <nav class="flex {% if prev_episode and next_episode %}justify-between{% elif prev_episode %}justify-start{% else %}justify-end{% endif %} items-center my-6" aria-label="Episode navigation">
             {% if prev_episode %}
             <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season_number, episode_number=prev_episode.episode_number) }}"
-               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group">
-                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group"
+               aria-label="Previous episode: {{ prev_episode.title }}">
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                 </svg>
                 <div class="text-left">
@@ -161,27 +162,24 @@
                     </div>
                 </div>
             </a>
-            {% else %}
-            <div></div>
             {% endif %}
 
             {% if next_episode %}
             <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season_number, episode_number=next_episode.episode_number) }}"
-               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group">
+               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group"
+               aria-label="Next episode: {{ next_episode.title }}">
                 <div class="text-right">
                     <div class="text-xs text-gray-500 dark:text-gray-400">Next Episode</div>
                     <div class="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
                         {{ next_episode.episode_number }}. {{ next_episode.title }}
                     </div>
                 </div>
-                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                 </svg>
             </a>
-            {% else %}
-            <div></div>
             {% endif %}
-        </div>
+        </nav>
 
         <!-- Cast -->
         <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-6">
