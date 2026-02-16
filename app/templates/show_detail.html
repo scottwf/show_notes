@@ -129,10 +129,10 @@
                     </p>
                     {% endif %}
 
-                    <p
-                        class="text-gray-800 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6 font-medium">
-                        {{ show.tvmaze_summary or show.overview | default('No overview available.') }}
-                    </p>
+                    <div
+                        class="text-gray-800 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6 font-medium markdown-content">
+                        {{ (show.tvmaze_summary or show.overview | default('No overview available.')) | markdown }}
+                    </div>
 
                     <!-- Show Metadata -->
                     {% if show.genres_list or show.network_name or show.runtime %}

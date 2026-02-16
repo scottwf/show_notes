@@ -2,8 +2,9 @@ import os
 import logging
 from datetime import timedelta, datetime
 from logging.handlers import RotatingFileHandler
-from flask import Flask
+from flask import Flask, Markup
 from flask_login import LoginManager
+import markdown
 from . import database
 from . import cli
 from .utils import format_datetime_simple, format_milliseconds
@@ -120,6 +121,16 @@ def create_app(test_config=None):
     # Register Jinja filters
     app.jinja_env.filters['format_datetime'] = format_datetime_simple
     app.jinja_env.filters['format_ms'] = format_milliseconds
+    
+    def markdown_filter(text):
+        """Convert markdown text to HTML"""
+        if not text:
+            return ''
+        # Convert markdown to HTML with common extensions
+        html = markdown.markdown(text, extensions=['nl2br', 'tables', 'fenced_code'])
+        return Markup(html)
+    
+    app.jinja_env.filters['markdown'] = markdown_filter
 
     # Register context processor to make current year available in all templates
     @app.context_processor
