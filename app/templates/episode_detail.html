@@ -14,6 +14,41 @@
     <!-- Content Area -->
     <div class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-[15vh] md:pt-[20vh]">
 
+        <!-- Breadcrumb Navigation -->
+        <nav class="mb-6" aria-label="Breadcrumb">
+            <ol class="flex flex-wrap items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                <li class="flex items-center">
+                    <a href="{{ url_for('main.home') }}" class="hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+                        Home
+                    </a>
+                    <svg class="w-4 h-4 mx-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </li>
+                <li class="flex items-center">
+                    <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+                        {{ show.title }}
+                    </a>
+                    <svg class="w-4 h-4 mx-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </li>
+                <li class="flex items-center">
+                    <span class="text-gray-500 dark:text-gray-500">
+                        Season {{ season_number }}
+                    </span>
+                    <svg class="w-4 h-4 mx-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </li>
+                <li class="flex items-center">
+                    <span class="text-gray-700 dark:text-gray-300 font-semibold">
+                        Episode {{ episode.episode_number }}
+                    </span>
+                </li>
+            </ol>
+        </nav>
+
         <div class="md:flex md:items-start md:space-x-8 lg:space-x-12 mb-8">
             <!-- Poster -->
             <div class="flex-shrink-0 w-48 sm:w-56 md:w-64 mx-auto md:mx-0 mb-6 md:mb-0">
@@ -111,7 +146,42 @@
             </div>
         </div>
 
+        <!-- Episode Navigation -->
+        <div class="flex justify-between items-center my-6">
+            {% if prev_episode %}
+            <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season_number, episode_number=prev_episode.episode_number) }}"
+               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group">
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                <div class="text-left">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Previous Episode</div>
+                    <div class="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                        {{ prev_episode.episode_number }}. {{ prev_episode.title }}
+                    </div>
+                </div>
+            </a>
+            {% else %}
+            <div></div>
+            {% endif %}
 
+            {% if next_episode %}
+            <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season_number, episode_number=next_episode.episode_number) }}"
+               class="flex items-center space-x-2 px-4 py-3 bg-white dark:bg-slate-800/70 backdrop-blur-md rounded-lg shadow-md hover:shadow-lg transition-all hover:bg-sky-50 dark:hover:bg-slate-700/70 group">
+                <div class="text-right">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Next Episode</div>
+                    <div class="text-sm font-semibold text-gray-700 dark:text-gray-200 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                        {{ next_episode.episode_number }}. {{ next_episode.title }}
+                    </div>
+                </div>
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+            {% else %}
+            <div></div>
+            {% endif %}
+        </div>
 
         <!-- Cast -->
         <div class="bg-white dark:bg-slate-800/70 backdrop-blur-md shadow-xl rounded-lg p-6">
