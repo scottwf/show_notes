@@ -2352,21 +2352,21 @@ def episode_detail(tmdb_id, season_number, episode_number):
     prev_episode = None
     next_episode = None
     
-    # Get all episodes in the season ordered by episode number
-    all_episodes = db.execute(
-        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? ORDER BY episode_number',
-        (season_row['id'],)
-    ).fetchall()
-    all_episodes = [dict(row) for row in all_episodes]
+    # Get previous episode (highest episode number less than current)
+    prev_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number < ? ORDER BY episode_number DESC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if prev_row:
+        prev_episode = dict(prev_row)
     
-    # Find current episode index and get prev/next
-    for i, ep in enumerate(all_episodes):
-        if ep['episode_number'] == episode_number:
-            if i > 0:
-                prev_episode = all_episodes[i - 1]
-            if i < len(all_episodes) - 1:
-                next_episode = all_episodes[i + 1]
-            break
+    # Get next episode (lowest episode number greater than current)
+    next_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number > ? ORDER BY episode_number ASC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if next_row:
+        next_episode = dict(next_row)
 
     # Try all possible IDs for cast lookup
     episode_characters = []
