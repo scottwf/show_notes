@@ -124,7 +124,13 @@ def create_app(test_config=None):
     app.jinja_env.filters['format_ms'] = format_milliseconds
     
     def markdown_filter(text):
-        """Convert markdown text to HTML"""
+        """
+        Convert markdown text to HTML.
+        
+        Note: This filter does not sanitize HTML as it's intended for trusted content only.
+        All show summaries come from external APIs (Sonarr, TVMaze, etc.) and are not 
+        user-generated content. The data is retrieved from trusted sources.
+        """
         if not text:
             return ''
         # Convert markdown to HTML with common extensions

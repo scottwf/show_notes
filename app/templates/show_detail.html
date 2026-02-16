@@ -131,7 +131,7 @@
 
                     <div
                         class="text-gray-800 dark:text-gray-200 leading-relaxed max-w-prose line-clamp-5 hover:line-clamp-none transition-all duration-300 ease-in-out mb-6 font-medium markdown-content">
-                        {{ (show.tvmaze_summary or show.overview | default('No overview available.')) | markdown }}
+                        {{ (show.tvmaze_summary or show.overview) | default('No overview available.') | markdown }}
                     </div>
 
                     <!-- Show Metadata -->
