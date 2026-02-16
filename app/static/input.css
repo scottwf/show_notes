@@ -31,6 +31,10 @@
     @apply mb-4;
 }
 
+.markdown-content p:last-child {
+    @apply mb-0;
+}
+
 .markdown-content ul {
     @apply list-disc list-inside mb-4 ml-4;
 }

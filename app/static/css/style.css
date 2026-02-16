@@ -31,3 +31,4 @@
 .dark .markdown-content th{--tw-bg-opacity:1;background-color:rgb(55 65 81/var(--tw-bg-opacity,1))}
 .markdown-content td{border-width:1px;--tw-border-opacity:1;border-color:rgb(209 213 219/var(--tw-border-opacity,1));padding-left:1rem;padding-right:1rem;padding-top:.5rem;padding-bottom:.5rem}
 .dark .markdown-content td{--tw-border-opacity:1;border-color:rgb(75 85 99/var(--tw-border-opacity,1))}
+.markdown-content p:last-child{margin-bottom:0}
