@@ -5295,3 +5295,56 @@ def create_problem_report():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@main_bp.route('/api/generate-show-summary', methods=['POST'])
+@login_required
+def generate_show_summary_route():
+    """Generate or regenerate a show summary for the current user."""
+    from app.summary_services import generate_show_summary
+    
+    data = request.get_json()
+    tmdb_id = data.get('tmdb_id')
+    
+    if not tmdb_id:
+        return jsonify({"error": "tmdb_id required"}), 400
+    
+    success, error = generate_show_summary(int(tmdb_id))
+    
+    if success:
+        return jsonify({
+            "status": "completed",
+            "message": f"Show summary generated successfully"
+        })
+    else:
+        return jsonify({
+            "status": "failed",
+            "error": error or "Unknown error"
+        }), 500
+
+
+@main_bp.route('/api/generate-season-summary', methods=['POST'])
+@login_required
+def generate_season_summary_route():
+    """Generate or regenerate a season summary for the current user."""
+    from app.summary_services import generate_season_summary
+    
+    data = request.get_json()
+    tmdb_id = data.get('tmdb_id')
+    season_number = data.get('season_number')
+    
+    if not tmdb_id or season_number is None:
+        return jsonify({"error": "tmdb_id and season_number required"}), 400
+    
+    success, error = generate_season_summary(int(tmdb_id), int(season_number))
+    
+    if success:
+        return jsonify({
+            "status": "completed",
+            "message": f"Season {season_number} summary generated successfully"
+        })
+    else:
+        return jsonify({
+            "status": "failed",
+            "error": error or "Unknown error"
+        }), 500
