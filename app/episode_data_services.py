@@ -192,6 +192,104 @@ class TVMazeService(EpisodeDataService):
             logger.info(f"Fetched {len(data)} cast members for TVMaze ID {tvmaze_id}")
         return data if data else []
 
+class TheTVDBService(EpisodeDataService):
+    """Service to fetch data from TheTVDB API v4"""
+
+    def __init__(self, api_key: str):
+        super().__init__("TheTVDB", rate_limit=40)
+        self.api_key = api_key
+        self.base_url = "https://api4.thetvdb.com/v4"
+        self.token = None
+        self.token_expires_at = 0
+
+    def _ensure_token(self) -> bool:
+        """Authenticate and get/refresh JWT bearer token"""
+        if self.token and time.time() < self.token_expires_at:
+            return True
+
+        try:
+            resp = requests.post(
+                f"{self.base_url}/login",
+                json={"apikey": self.api_key},
+                timeout=10
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            self.token = data.get('data', {}).get('token')
+            if self.token:
+                # Token valid for ~1 month, refresh after 24 hours to be safe
+                self.token_expires_at = time.time() + 86400
+                return True
+            logger.error("TheTVDB login response missing token")
+            return False
+        except requests.exceptions.RequestException as e:
+            logger.error(f"TheTVDB authentication failed: {e}")
+            return False
+
+    def _make_authenticated_request(self, url: str, params: Dict = None) -> Optional[Dict]:
+        """Make request with Bearer token"""
+        if not self._ensure_token():
+            return None
+
+        self._rate_limit_check()
+
+        try:
+            headers = {"Authorization": f"Bearer {self.token}"}
+            response = requests.get(url, params=params, headers=headers, timeout=15)
+
+            # Handle token expiry
+            if response.status_code == 401:
+                self.token = None
+                self.token_expires_at = 0
+                if not self._ensure_token():
+                    return None
+                headers = {"Authorization": f"Bearer {self.token}"}
+                response = requests.get(url, params=params, headers=headers, timeout=15)
+
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"TheTVDB request failed: {e}")
+            return None
+
+    def get_series_extended(self, tvdb_id: int) -> Optional[Dict]:
+        """Get extended series details including characters"""
+        request_key = str(tvdb_id)
+
+        # Check cache first
+        cached = self._get_from_cache("tvdb_series_extended", request_key)
+        if cached:
+            return cached
+
+        url = f"{self.base_url}/series/{tvdb_id}/extended"
+        result = self._make_authenticated_request(url)
+
+        if result and result.get('data'):
+            data = result['data']
+            logger.info(f"TheTVDB: Fetched extended data for series {tvdb_id} ({data.get('name', 'Unknown')})")
+            self._save_to_cache("tvdb_series_extended", request_key, data)
+            return data
+
+        return None
+
+    def get_series_characters(self, tvdb_id: int) -> List[Dict]:
+        """Extract characters from extended series data"""
+        series_data = self.get_series_extended(tvdb_id)
+        if not series_data:
+            return []
+
+        characters = series_data.get('characters', [])
+        # Filter to actors only (exclude directors, writers, etc.)
+        actor_characters = [c for c in characters if c.get('peopleType') == 'Actor']
+
+        if not actor_characters:
+            # Fallback: include all characters with a personName
+            actor_characters = [c for c in characters if c.get('personName')]
+
+        logger.info(f"TheTVDB: Found {len(actor_characters)} cast members for series {tvdb_id}")
+        return actor_characters
+
+
 class TMDBService(EpisodeDataService):
     """Service to fetch episode data from TMDB API"""
     

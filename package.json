@@ -1,0 +1,11 @@
+{
+  "name": "shownotes",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./app/static/input.css -o ./app/static/css/style.css",
+    "watch:css": "tailwindcss -i ./app/static/input.css -o ./app/static/css/style.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

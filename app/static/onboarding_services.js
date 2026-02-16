@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', function() {
           key = document.getElementById('jellyseer_api_key').value;
         } else if (service === 'ollama') {
           url = document.getElementById('ollama_url').value;
+        } else if (service === 'thetvdb') {
+          key = document.getElementById('thetvdb_api_key').value;
         } else if (service === 'pushover') {
           key = document.getElementById('pushover_token').value;
           url = document.getElementById('pushover_key').value;

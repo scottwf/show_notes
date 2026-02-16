@@ -157,7 +157,7 @@
             <svg class="w-6 h-6 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
             </svg>
-            Your Upcoming Season Premieres
+            New & Upcoming Season Premieres
           </h2>
         </div>
 
@@ -171,9 +171,15 @@
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
+                  {% if show.is_newly_aired %}
+                  <div class="absolute top-2 right-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    NEW
+                  </div>
+                  {% else %}
                   <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
                     {{ show.premiere_type }}
                   </div>
+                  {% endif %}
 
                   {# Favorite or Requested Badge #}
                   {% if show.is_favorited %}
@@ -202,8 +208,8 @@
                     {% if show.user_requested %} • <span class="text-purple-600 dark:text-purple-400">Requested</span>{% endif %}
                   </p>
                   {% if show.air_date_utc %}
-                  <p class="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
-                    Airs {{ show.air_date_utc | format_datetime('%b %d') }}
+                  <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
+                    {% if show.is_newly_aired %}Aired{% else %}Airs{% endif %} {{ show.air_date_utc | format_datetime('%b %d') }}
                   </p>
                   {% endif %}
                 </div>
@@ -222,7 +228,7 @@
             <svg class="w-6 h-6 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
             </svg>
-            New Series Premieres
+            New & Upcoming Series Premieres
           </h2>
         </div>
 
@@ -236,9 +242,15 @@
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
+                  {% if show.is_newly_aired %}
+                  <div class="absolute top-2 right-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    NEW
+                  </div>
+                  {% else %}
                   <div class="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
                     New Series
                   </div>
+                  {% endif %}
 
                   {# Requested Badge #}
                   {% if show.user_requested %}
@@ -261,8 +273,8 @@
                     {% if show.user_requested %} • <span class="text-purple-600 dark:text-purple-400">Requested</span>{% endif %}
                   </p>
                   {% if show.premiere_date %}
-                  <p class="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
-                    Premieres {{ show.premiere_date | format_datetime('%b %d') }}
+                  <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
+                    {% if show.is_newly_aired %}Premiered{% else %}Premieres{% endif %} {{ show.premiere_date | format_datetime('%b %d') }}
                   </p>
                   {% endif %}
                 </div>

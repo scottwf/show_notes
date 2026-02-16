@@ -43,27 +43,49 @@
   const plexLoginBtn = document.getElementById('plex-login-btn');
   if (plexLoginBtn) {
     plexLoginBtn.addEventListener('click', async () => {
-      document.getElementById('login_status').textContent = 'Connecting to Plex...';
-      const resp = await fetch('/login/plex/start');
-      const data = await resp.json();
-      // Open a new window for Plex authentication
-      const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
+      const statusEl = document.getElementById('login_status');
+      statusEl.textContent = 'Connecting to Plex...';
+
+      // Safari-safe popup flow: open synchronously in click handler.
+      const authWindow = window.open('', '_blank', 'width=600,height=700,scrollbars=yes');
+      if (!authWindow) {
+        statusEl.textContent = 'Could not open Plex login window. Please ensure popups are not blocked.';
+        return;
+      }
+
+      authWindow.document.write('<!doctype html><title>Plex Login</title><p style="font-family: sans-serif; padding: 1rem;">Connecting to Plex...</p>');
+
+      try {
+        const resp = await fetch('/login/plex/start');
+        const data = await resp.json();
+        if (!resp.ok || data.error || !data.authUrl) {
+          statusEl.textContent = data.error ? `Error: ${data.error}` : 'Failed to start Plex login.';
+          authWindow.close();
+          return;
+        }
+
+        authWindow.location.href = data.authUrl;
+      } catch (e) {
+        statusEl.textContent = 'Failed to start Plex login.';
+        authWindow.close();
+        return;
+      }
 
     async function poll(){
       if (authWindow && authWindow.closed) {
         // Window was closed by user before authorization
-        document.getElementById('login_status').textContent = 'Login cancelled or window closed before completion.';
+        statusEl.textContent = 'Login cancelled or window closed before completion.';
         return;
       }
       try {
         const r = await fetch('/login/plex/poll');
         if (!r.ok) {
-          document.getElementById('login_status').textContent = 'Error polling login status. Please try again.';
+          statusEl.textContent = 'Error polling login status. Please try again.';
           return;
         }
         const p = await r.json();
         if(p.authorized){
-          document.getElementById('login_status').textContent = 'Logged in successfully! Redirecting...';
+          statusEl.textContent = 'Logged in successfully! Redirecting...';
           window.location = '/'; // Redirect to home or dashboard
         } else {
           // Only set timeout if auth window is still open
@@ -71,12 +93,12 @@
             setTimeout(poll, 2000);
           } else if (!authWindow) {
             // if window creation failed
-             document.getElementById('login_status').textContent = 'Could not open Plex login window. Please check your popup blocker settings.';
+             statusEl.textContent = 'Could not open Plex login window. Please check your popup blocker settings.';
           }
         }
       } catch (error) {
         console.error("Polling error:", error);
-        document.getElementById('login_status').textContent = 'An error occurred. Please try again.';
+        statusEl.textContent = 'An error occurred. Please try again.';
       }
     }
     // Start polling only if window was successfully opened

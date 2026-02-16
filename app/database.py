@@ -7,7 +7,7 @@ import logging
 DATABASE = 'data/shownotes.db' # This will be updated by app.config['DATABASE']
 
 # Define the current schema version. Increment this when you make schema changes.
-CURRENT_SCHEMA_VERSION = 3 # Started at 1, incremented to 3 for notifications and reports
+CURRENT_SCHEMA_VERSION = 4 # Incremented for scheduler config and LLM summary tables
 
 def get_db_connection():
     db_path = current_app.config['DATABASE']
@@ -77,7 +77,7 @@ def init_db():
 
             -- CREATE TABLE character_summaries ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, season_limit INTEGER, episode_limit INTEGER, raw_summary TEXT, parsed_traits TEXT, parsed_events TEXT, parsed_relationships TEXT, parsed_importance TEXT, parsed_quote TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
             -- CREATE TABLE character_chats ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, user_message TEXT NOT NULL, character_reply TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
-            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL );
+            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL, processing_time_ms INTEGER );
             -- CREATE TABLE shows ( id INTEGER PRIMARY KEY AUTOINCREMENT, tmdb_id INTEGER UNIQUE, title TEXT NOT NULL, description TEXT, poster_path TEXT, backdrop_path TEXT );
             -- CREATE TABLE season_metadata ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, season_number INTEGER NOT NULL, name TEXT, overview TEXT, poster_path TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (show_id, season_number) );
             -- CREATE TABLE top_characters ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, character_name TEXT NOT NULL, actor_name TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id) );
@@ -133,7 +133,25 @@ def init_db():
                 jellyseer_api_key TEXT,
                 jellyseer_remote_url TEXT,
                 thetvdb_api_key TEXT,
-                timezone TEXT DEFAULT 'UTC'
+                timezone TEXT DEFAULT 'UTC',
+                ollama_url TEXT,
+                ollama_model_name TEXT,
+                openai_api_key TEXT,
+                openai_model_name TEXT,
+                preferred_llm_provider TEXT,
+                llm_knowledge_cutoff_date TEXT,
+                summary_schedule_start_hour INTEGER DEFAULT 2,
+                summary_schedule_end_hour INTEGER DEFAULT 6,
+                summary_delay_seconds INTEGER DEFAULT 30,
+                summary_enabled INTEGER DEFAULT 0,
+                schedule_tautulli_hour INTEGER DEFAULT 3,
+                schedule_tautulli_minute INTEGER DEFAULT 0,
+                schedule_sonarr_day TEXT DEFAULT 'sun',
+                schedule_sonarr_hour INTEGER DEFAULT 4,
+                schedule_sonarr_minute INTEGER DEFAULT 0,
+                schedule_radarr_day TEXT DEFAULT 'sun',
+                schedule_radarr_hour INTEGER DEFAULT 5,
+                schedule_radarr_minute INTEGER DEFAULT 0
             );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
@@ -171,6 +189,8 @@ def init_db():
                 runtime INTEGER,
                 tvmaze_rating REAL,
                 tvmaze_enriched_at DATETIME,
+                tvdb_enriched_at DATETIME,
+                enrichment_source TEXT DEFAULT 'tvmaze',
                 tags TEXT
             );
 
@@ -487,6 +507,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 show_id INTEGER,
                 show_tvmaze_id INTEGER,
+                show_tvdb_id INTEGER,
                 person_id INTEGER,
                 person_name TEXT,
                 person_image_url TEXT,
@@ -498,8 +519,11 @@ def init_db():
                 cast_order INTEGER,
                 is_voice BOOLEAN DEFAULT 0,
                 tmdb_person_id INTEGER,
+                enrichment_source TEXT DEFAULT 'tvmaze',
                 FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
             );
+            CREATE INDEX IF NOT EXISTS idx_show_cast_tvdb_id ON show_cast(show_tvdb_id);
+            CREATE INDEX IF NOT EXISTS idx_show_cast_show_id ON show_cast(show_id);
 
             CREATE TABLE episode_characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -595,6 +619,44 @@ def init_db():
             );
 
             CREATE INDEX IF NOT EXISTS idx_tvmaze_cache_lookup ON tvmaze_cache(request_type, request_key);
+
+            CREATE TABLE season_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tmdb_id INTEGER NOT NULL,
+                show_title TEXT,
+                season_number INTEGER NOT NULL,
+                summary_text TEXT,
+                raw_llm_response TEXT,
+                llm_provider TEXT NOT NULL,
+                llm_model TEXT NOT NULL,
+                prompt_text TEXT,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tmdb_id, season_number, llm_provider, llm_model)
+            );
+
+            CREATE TABLE show_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tmdb_id INTEGER NOT NULL,
+                show_title TEXT,
+                summary_text TEXT,
+                raw_llm_response TEXT,
+                llm_provider TEXT NOT NULL,
+                llm_model TEXT NOT NULL,
+                prompt_text TEXT,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tmdb_id, llm_provider, llm_model)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_summaries_tmdb_season ON season_summaries(tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_season_summaries_status ON season_summaries(status);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_tmdb ON show_summaries(tmdb_id);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))

@@ -53,6 +53,7 @@ from ..utils import (
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params,
     test_jellyseer_connection, test_jellyseer_connection_with_params,
+    test_thetvdb_connection, test_thetvdb_connection_with_params,
     get_ollama_models,
     convert_utc_to_user_timezone, get_user_timezone
 )
@@ -92,6 +93,7 @@ ADMIN_SEARCHABLE_ROUTES = [
 
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
+    {'title': 'AI Summaries & LLM Usage', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_summaries')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -381,6 +383,94 @@ def tasks():
         A rendered HTML template for the admin tasks page.
     """
     return render_template('admin_tasks.html', title='Admin Tasks')
+
+# ============================================================================
+# AI SUMMARIES & LLM USAGE
+# ============================================================================
+
+@admin_bp.route('/ai-summaries')
+@login_required
+@admin_required
+def ai_summaries():
+    """Renders the AI Summaries & LLM Usage admin page."""
+    db = get_db()
+
+    def safe_value(query, params=None):
+        try:
+            result = db.execute(query, params or ()).fetchone()
+            return result[0] if result and result[0] is not None else 0
+        except Exception:
+            return 0
+
+    # --- Usage stats ---
+    total_calls = safe_value('SELECT COUNT(*) FROM api_usage')
+    total_tokens = safe_value('SELECT SUM(total_tokens) FROM api_usage')
+    total_cost = safe_value('SELECT SUM(cost_usd) FROM api_usage')
+    avg_processing_time = safe_value('SELECT AVG(processing_time_ms) FROM api_usage WHERE processing_time_ms IS NOT NULL')
+
+    # Last 7 days
+    calls_7d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+    tokens_7d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+    cost_7d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+
+    # Last 30 days
+    calls_30d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+    tokens_30d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+    cost_30d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+
+    # Per-provider breakdown
+    provider_stats = db.execute("""
+        SELECT provider,
+               COUNT(*) as calls,
+               SUM(total_tokens) as tokens,
+               SUM(cost_usd) as cost,
+               AVG(processing_time_ms) as avg_time
+        FROM api_usage
+        GROUP BY provider
+        ORDER BY calls DESC
+    """).fetchall()
+
+    # --- Summary queue status ---
+    try:
+        from ..summary_services import get_summary_queue_status
+        queue_status = get_summary_queue_status()
+    except Exception:
+        queue_status = {
+            'pending_count': 0, 'completed_count': 0, 'failed_count': 0,
+            'generating_count': 0, 'last_generated_at': None,
+            'current_provider': '', 'current_model': '',
+        }
+
+    # --- All summaries list ---
+    season_summaries = db.execute("""
+        SELECT ss.id, ss.tmdb_id, ss.show_title, ss.season_number, ss.status,
+               ss.llm_provider, ss.llm_model, ss.summary_text, ss.error_message,
+               ss.created_at, ss.updated_at
+        FROM season_summaries ss
+        ORDER BY ss.updated_at DESC
+    """).fetchall()
+
+    show_summaries = db.execute("""
+        SELECT sh.id, sh.tmdb_id, sh.show_title, sh.status,
+               sh.llm_provider, sh.llm_model, sh.summary_text, sh.error_message,
+               sh.created_at, sh.updated_at
+        FROM show_summaries sh
+        ORDER BY sh.updated_at DESC
+    """).fetchall()
+
+    return render_template('admin_ai_summaries.html',
+        title='AI Summaries & LLM Usage',
+        total_calls=total_calls,
+        total_tokens=total_tokens,
+        total_cost=total_cost,
+        avg_processing_time=avg_processing_time,
+        calls_7d=calls_7d, tokens_7d=tokens_7d, cost_7d=cost_7d,
+        calls_30d=calls_30d, tokens_30d=tokens_30d, cost_30d=cost_30d,
+        provider_stats=provider_stats,
+        queue_status=queue_status,
+        season_summaries=season_summaries,
+        show_summaries=show_summaries,
+    )
 
 # ============================================================================
 # LOG MANAGEMENT
@@ -742,7 +832,17 @@ def settings():
             bazarr_url=?, bazarr_api_key=?, bazarr_remote_url=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
-            thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=? WHERE id=?''', (
+            thetvdb_api_key=?, timezone=?,
+            jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=?,
+            ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?,
+            preferred_llm_provider=?,
+            schedule_tautulli_hour=?, schedule_tautulli_minute=?,
+            schedule_sonarr_day=?, schedule_sonarr_hour=?, schedule_sonarr_minute=?,
+            schedule_radarr_day=?, schedule_radarr_hour=?, schedule_radarr_minute=?,
+            llm_knowledge_cutoff_date=?,
+            summary_schedule_start_hour=?, summary_schedule_end_hour=?,
+            summary_delay_seconds=?, summary_enabled=?
+            WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('radarr_remote_url'),
@@ -762,9 +862,35 @@ def settings():
             request.form.get('jellyseer_url'),
             request.form.get('jellyseer_api_key'),
             request.form.get('jellyseer_remote_url'),
-            settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
+            request.form.get('ollama_url'),
+            request.form.get('ollama_model_name'),
+            request.form.get('openai_api_key'),
+            request.form.get('openai_model_name'),
+            request.form.get('preferred_llm_provider') or None,
+            request.form.get('schedule_tautulli_hour', 3, type=int),
+            request.form.get('schedule_tautulli_minute', 0, type=int),
+            request.form.get('schedule_sonarr_day', 'sun'),
+            request.form.get('schedule_sonarr_hour', 4, type=int),
+            request.form.get('schedule_sonarr_minute', 0, type=int),
+            request.form.get('schedule_radarr_day', 'sun'),
+            request.form.get('schedule_radarr_hour', 5, type=int),
+            request.form.get('schedule_radarr_minute', 0, type=int),
+            request.form.get('llm_knowledge_cutoff_date') or None,
+            request.form.get('summary_schedule_start_hour', 2, type=int),
+            request.form.get('summary_schedule_end_hour', 6, type=int),
+            request.form.get('summary_delay_seconds', 30, type=int),
+            1 if request.form.get('summary_enabled') else 0,
+            settings['id'] if settings else 1
         ))
         db.commit()
+
+        # Reschedule background jobs with new times
+        try:
+            from app.scheduler import reschedule_jobs
+            reschedule_jobs(current_app._get_current_object())
+        except Exception as e:
+            current_app.logger.warning(f"Could not reschedule jobs: {e}")
+
         flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin.settings'))
     
@@ -801,6 +927,7 @@ def settings():
     bazarr_status = test_bazarr_connection()
     tautulli_status = test_tautulli_connection()
     jellyseerr_status = test_jellyseer_connection()
+    thetvdb_status = test_thetvdb_connection()
 
     # Get list of timezones
     import pytz
@@ -819,9 +946,9 @@ def settings():
         bazarr_status=bazarr_status,
         tautulli_status=tautulli_status,
         jellyseerr_status=jellyseerr_status,
-        ollama_models=[],  # Empty list since LLM features removed
-        saved_ollama_model=None,
-        openai_models=[],  # Empty list since LLM features removed
+        thetvdb_status=thetvdb_status,
+        ollama_models=[],
+        saved_ollama_model=merged_settings.get('ollama_model_name'),
         timezones=timezones
     )
 
@@ -859,6 +986,49 @@ def test_ollama_models_route():
     """Debug route to test Ollama model fetching"""
     models = get_ollama_models()
     return jsonify({"models": models, "count": len(models)})
+
+@admin_bp.route('/api/summary-queue-status')
+@login_required
+@admin_required
+def summary_queue_status():
+    """API endpoint to get summary generation queue status."""
+    from app.summary_services import get_summary_queue_status
+    return jsonify(get_summary_queue_status())
+
+@admin_bp.route('/api/trigger-summary-generation', methods=['POST'])
+@login_required
+@admin_required
+def trigger_summary_generation():
+    """Manually trigger summary generation in a background thread."""
+    import threading
+    from app.summary_services import process_summary_queue
+
+    app = current_app._get_current_object()
+
+    def run_summaries():
+        process_summary_queue(app)
+
+    thread = threading.Thread(target=run_summaries)
+    thread.daemon = True
+    thread.start()
+    return jsonify({"status": "started", "message": "Summary generation started in background"})
+
+@admin_bp.route('/api/generate-season-summary', methods=['POST'])
+@login_required
+@admin_required
+def generate_single_season_summary():
+    """Generate summary for a specific show/season immediately."""
+    from app.summary_services import generate_season_summary
+    tmdb_id = request.json.get('tmdb_id')
+    season_number = request.json.get('season_number')
+    if not tmdb_id or season_number is None:
+        return jsonify({"error": "tmdb_id and season_number required"}), 400
+
+    success, error = generate_season_summary(int(tmdb_id), int(season_number))
+    if success:
+        return jsonify({"status": "completed", "message": f"Summary generated for tmdb_id={tmdb_id} S{season_number}"})
+    else:
+        return jsonify({"status": "failed", "error": error}), 500
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
 @login_required
@@ -1323,6 +1493,8 @@ def test_api_connection():
         success, error_message = test_tautulli_connection_with_params(url, api_key)
     elif service == 'jellyseer' or service == 'jellyseerr':  # Support both spellings
         success, error_message = test_jellyseer_connection_with_params(url, api_key)
+    elif service == 'thetvdb':
+        success, error_message = test_thetvdb_connection_with_params(api_key)
     
     if success:
         return jsonify({'success': True})

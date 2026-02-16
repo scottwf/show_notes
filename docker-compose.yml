@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   shownotes:
     build: .
@@ -7,17 +5,20 @@ services:
     restart: unless-stopped
     ports:
       - "5003:5003"
+    env_file:
+      - .env
     environment:
-      - ENVIRONMENT=production
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - FLASK_APP=run.py
     volumes:
       # Database and app data
       - /home/docker/appdata/shownotes:/app/instance
       # Logs
       - /home/docker/appdata/shownotes/logs:/app/logs
-      # Static files (cached images, etc.)
-      - /home/docker/appdata/shownotes/static:/app/app/static
+      # Persistent image caches only (do NOT mount entire static dir)
+      - /home/docker/appdata/shownotes/static/poster:/app/app/static/poster
+      - /home/docker/appdata/shownotes/static/background:/app/app/static/background
+      - /home/docker/appdata/shownotes/static/cast:/app/app/static/cast
+      - /home/docker/appdata/shownotes/static/uploads:/app/app/static/uploads
     networks:
       - shownotes-network
 
