@@ -86,6 +86,7 @@
         const p = await r.json();
         if(p.authorized){
           statusEl.textContent = 'Logged in successfully! Redirecting...';
+          if (authWindow && !authWindow.closed) authWindow.close();
           window.location = '/'; // Redirect to home or dashboard
         } else {
           // Only set timeout if auth window is still open
