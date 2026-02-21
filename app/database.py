@@ -665,6 +665,8 @@ def init_db():
         logger.info("Creating search indexes for sonarr_shows and radarr_movies...")
         db.execute('CREATE INDEX IF NOT EXISTS idx_sonarr_shows_title_lower ON sonarr_shows(LOWER(title));')
         db.execute('CREATE INDEX IF NOT EXISTS idx_radarr_movies_title_lower ON radarr_movies(LOWER(title));')
+        # Composite index for the homepage recent-activity query (filters on all three columns)
+        db.execute('CREATE INDEX IF NOT EXISTS idx_plex_activity_user_type_time ON plex_activity_log(plex_username, event_type, event_timestamp);')
         logger.info("Search indexes created.")
 
         db.commit() # Explicit commit

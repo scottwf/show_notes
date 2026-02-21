@@ -990,7 +990,9 @@ def sync_sonarr_library():
                         ep_tmdb_rating = ep_ratings_data.get("tmdb", {}) if ep_ratings_data else {}
 
                         episode_values = {
+                            "show_id": show_db_id,
                             "season_id": season_db_id,
+                            "season_number": season_number,
                             "sonarr_show_id": sonarr_show_id,  # Sonarr's seriesId
                             "sonarr_episode_id": episode_data.get("id"),  # Sonarr's episodeId
                             "episode_number": episode_data.get("episodeNumber"),
@@ -1082,7 +1084,9 @@ def sync_sonarr_library():
 
                     for episode_data in episodes_in_season: # episodes_in_season are from all_episodes_data, grouped
                         episode_values_fb = {
+                            "show_id": show_db_id,
                             "season_id": season_db_id_fb,
+                            "season_number": season_number,
                             "sonarr_show_id": sonarr_show_id,
                             "sonarr_episode_id": episode_data.get("id"),
                             "episode_number": episode_data.get("episodeNumber"),
@@ -1090,7 +1094,6 @@ def sync_sonarr_library():
                             "overview": episode_data.get("overview"),
                             "air_date_utc": episode_data.get("airDateUtc"),
                             "has_file": bool(episode_data.get("hasFile", False)),
-                            # "monitored": bool(episode_data.get("monitored", False)), # Removed
                         }
                         episode_values_fb_filtered = {k: v for k, v in episode_values_fb.items() if v is not None or k == 'sonarr_episode_id'}
                         sql_episode_fb = """
@@ -1642,20 +1645,19 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
                         duplicates += 1
                         continue
 
-                # Get show's TMDB ID from database using grandparent_rating_key (TVDB ID)
+                # Get show's TMDB ID from database
+                # grandparent_rating_key is Plex's internal ID, NOT TVDB ID,
+                # so we primarily match by show title
                 show_tmdb_id = None
-                grandparent_key = item.get('grandparent_rating_key')
-                if grandparent_key and item.get('media_type') == 'episode':
-                    try:
-                        tvdb_id = int(grandparent_key)
+                if item.get('media_type') == 'episode':
+                    show_title = item.get('grandparent_title')
+                    if show_title:
                         show_record = db_conn.execute(
-                            'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
-                            (tvdb_id,)
+                            'SELECT tmdb_id FROM sonarr_shows WHERE LOWER(title) = LOWER(?)',
+                            (show_title,)
                         ).fetchone()
                         if show_record:
                             show_tmdb_id = show_record['tmdb_id']
-                    except (ValueError, TypeError):
-                        pass
 
                 db_conn.execute(
                     """INSERT INTO plex_activity_log (
@@ -1731,14 +1733,36 @@ def process_activity_log_for_watch_status():
 
     current_app.logger.info("Starting to process activity log for watch status...")
 
-    # Get all stop/scrobble events for episodes
+    # Backfill tmdb_id for activity log entries that are missing it (e.g., from Tautulli imports)
+    # This uses show_title matching against sonarr_shows to populate tmdb_id
+    try:
+        backfill_result = db.execute("""
+            UPDATE plex_activity_log
+            SET tmdb_id = (
+                SELECT s.tmdb_id FROM sonarr_shows s
+                WHERE LOWER(s.title) = LOWER(plex_activity_log.show_title)
+                LIMIT 1
+            )
+            WHERE tmdb_id IS NULL
+              AND show_title IS NOT NULL
+              AND media_type = 'episode'
+        """)
+        if backfill_result.rowcount > 0:
+            db.commit()
+            current_app.logger.info(f"Backfilled tmdb_id for {backfill_result.rowcount} activity log entries")
+    except Exception as e:
+        current_app.logger.warning(f"tmdb_id backfill failed (non-critical): {e}")
+
+    # Get all stop/scrobble/watched events for episodes
     activity_events = db.execute("""
         SELECT DISTINCT
+            pal.event_type,
             pal.plex_username,
             pal.grandparent_rating_key,
             pal.parent_rating_key,
             pal.rating_key,
             pal.tmdb_id,
+            pal.show_title,
             pal.season_episode,
             pal.view_offset_ms,
             pal.duration_ms,
@@ -1747,7 +1771,6 @@ def process_activity_log_for_watch_status():
         FROM plex_activity_log pal
         WHERE pal.media_type = 'episode'
           AND pal.event_type IN ('media.stop', 'media.scrobble', 'watched')
-          AND pal.duration_ms > 0
         ORDER BY pal.event_timestamp DESC
     """).fetchall()
 
@@ -1755,14 +1778,27 @@ def process_activity_log_for_watch_status():
 
     for event in activity_events:
         try:
-            # Calculate watch percentage (guard against NULL values)
-            view_offset = event['view_offset_ms'] or 0
-            duration = event['duration_ms'] or 0
-            watch_percentage = (view_offset / duration * 100) if duration > 0 else 0
+            # Determine if this event represents a completed watch.
+            # Tautulli-imported entries have event_type='watched' and NULL view_offset_ms,
+            # so we treat those as watched directly (Tautulli only records completed watches).
+            # For Plex webhook entries (media.stop/media.scrobble), use the percentage check.
+            event_type = event['event_type'] if 'event_type' in event.keys() else ''
 
-            # Only mark as watched if >= 95% complete
-            if watch_percentage < 95:
-                continue
+            if event_type == 'watched':
+                # Tautulli imports — these are already confirmed watched
+                pass
+            elif event_type == 'media.scrobble':
+                # Plex sends scrobble at ~90% watched — treat as watched
+                pass
+            else:
+                # For media.stop, check watch percentage
+                view_offset = event['view_offset_ms'] or 0
+                duration = event['duration_ms'] or 0
+                watch_percentage = (view_offset / duration * 100) if duration > 0 else 0
+
+                # Only mark as watched if >= 95% complete
+                if watch_percentage < 95:
+                    continue
 
             # Get user ID from plex_username
             user_row = db.execute('SELECT id FROM users WHERE plex_username = ?', (event['plex_username'],)).fetchone()
@@ -1771,16 +1807,16 @@ def process_activity_log_for_watch_status():
 
             user_id = user_row['id']
 
-            # Get show info from tmdb_id
-            if not event['tmdb_id']:
-                # Try to get from TVDB ID
-                try:
-                    tvdb_id = int(event['grandparent_rating_key'])
-                    show_row = db.execute('SELECT id, tmdb_id FROM sonarr_shows WHERE tvdb_id = ?', (tvdb_id,)).fetchone()
-                except:
-                    continue
-            else:
+            # Get show info — try tmdb_id first, then fall back to show title matching
+            show_row = None
+            if event['tmdb_id']:
                 show_row = db.execute('SELECT id FROM sonarr_shows WHERE tmdb_id = ?', (event['tmdb_id'],)).fetchone()
+
+            if not show_row and event['show_title']:
+                show_row = db.execute(
+                    'SELECT id FROM sonarr_shows WHERE LOWER(title) = LOWER(?)',
+                    (event['show_title'],)
+                ).fetchone()
 
             if not show_row:
                 continue
@@ -1979,7 +2015,7 @@ def get_tautulli_activity():
             'cmd': 'get_activity'
         }
 
-        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
+        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=5)
 
         if response.status_code == 200:
             data = response.json()
@@ -1993,6 +2029,53 @@ def get_tautulli_activity():
         # Silently fail and return 0 - don't break the page if Tautulli is down
         return 0
 
+def get_tautulli_data(username=None):
+    """
+    Fetch Tautulli activity in a single API call, returning both the user's current
+    session and the total stream count.
+
+    Args:
+        username (str, optional): Plex username to find the user's session
+
+    Returns:
+        tuple: (user_session_or_None, stream_count_int)
+    """
+    try:
+        tautulli_url = database.get_setting('tautulli_url')
+        tautulli_api_key = database.get_setting('tautulli_api_key')
+
+        if not tautulli_url or not tautulli_api_key:
+            return None, 0
+
+        params = {
+            'apikey': tautulli_api_key,
+            'cmd': 'get_activity'
+        }
+
+        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('response', {}).get('result') == 'success':
+                activity = data.get('response', {}).get('data', {})
+                sessions = activity.get('sessions', [])
+                stream_count = activity.get('stream_count', 0)
+
+                user_session = None
+                if username and sessions:
+                    for session in sessions:
+                        if session.get('user') == username:
+                            user_session = session
+                            break
+                elif sessions:
+                    user_session = sessions[0]
+
+                return user_session, stream_count
+
+        return None, 0
+    except Exception:
+        return None, 0
+
 def get_tautulli_current_activity(username=None):
     """
     Get detailed current activity from Tautulli with real-time progress.
@@ -2003,39 +2086,8 @@ def get_tautulli_current_activity(username=None):
     Returns:
         dict or None: Session data with real-time progress, or None if no activity/error
     """
-    try:
-        tautulli_url = database.get_setting('tautulli_url')
-        tautulli_api_key = database.get_setting('tautulli_api_key')
-
-        if not tautulli_url or not tautulli_api_key:
-            return None
-
-        params = {
-            'apikey': tautulli_api_key,
-            'cmd': 'get_activity'
-        }
-
-        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('response', {}).get('result') == 'success':
-                sessions = data.get('response', {}).get('data', {}).get('sessions', [])
-
-                # If username provided, filter for that user
-                if username and sessions:
-                    for session in sessions:
-                        if session.get('user') == username:
-                            return session
-                    return None
-
-                # Otherwise return first session if any
-                return sessions[0] if sessions else None
-
-        return None
-    except Exception as e:
-        # Silently fail - don't break the page if Tautulli is down
-        return None
+    session, _ = get_tautulli_data(username=username)
+    return session
 
 def parse_llm_markdown_sections(md):
     """

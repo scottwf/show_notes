@@ -108,18 +108,25 @@ def update_session_profile_photo():
         except Exception:
             pass  # Silently fail to avoid breaking the request
 
-def _get_profile_stats(db, user_id=None):
+def _get_profile_stats(db, user_id=None, now_playing_count=None):
     """
     Helper function to get consistent statistics for profile pages.
     Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
     favorite_count (if user_id provided), unread_notification_count (if user_id provided)
+
+    Args:
+        now_playing_count: Pre-fetched stream count to avoid a redundant Tautulli API call.
+                           If None, fetches from Tautulli directly.
     """
     from ..utils import get_tautulli_activity
 
     stats = {}
 
-    # Now Playing: get real-time activity from Tautulli
-    stats['now_playing_count'] = get_tautulli_activity()
+    # Now Playing: use pre-fetched count if provided, otherwise call Tautulli
+    if now_playing_count is not None:
+        stats['now_playing_count'] = now_playing_count
+    else:
+        stats['now_playing_count'] = get_tautulli_activity()
 
     # Total shows
     stats['total_shows'] = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0] or 0
@@ -258,12 +265,13 @@ def home():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get currently playing/paused item from Tautulli (real-time data)
-    from ..utils import get_tautulli_current_activity
+    # Single API call returns both the user's session and total stream count
+    from ..utils import get_tautulli_data
 
     current_plex_event = None
     s_username = user['plex_username'] if user['plex_username'] else user['username']
 
-    tautulli_session = get_tautulli_current_activity(username=s_username)
+    tautulli_session, tautulli_stream_count = get_tautulli_data(username=s_username)
 
     if tautulli_session:
         # Convert Tautulli session data to our expected format
@@ -322,8 +330,8 @@ def home():
                 if episode and episode['overview']:
                     current_plex_event['overview'] = episode['overview']
 
-    # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    # Get profile statistics — pass pre-fetched stream count to avoid a second Tautulli call
+    stats = _get_profile_stats(db, user_id, now_playing_count=tautulli_stream_count)
 
     # Get recently watched shows from last 7 days (grouped by show/movie for homepage cards)
     recent_watched = db.execute("""
@@ -350,17 +358,36 @@ def home():
         LIMIT 20
     """, (s_username,)).fetchall()
 
-    # Enrich recently watched with show/movie data for cards
+    # Enrich recently watched with show/movie data — batch lookups to avoid N+1 queries
+    movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
+                      if dict(i)['media_type'] == 'movie' and dict(i).get('tmdb_id')]
+    show_titles = [dict(i)['display_title'].lower() for i in recent_watched
+                   if dict(i)['media_type'] == 'episode' and dict(i).get('display_title')]
+
+    movies_by_id = {}
+    if movie_tmdb_ids:
+        placeholders = ','.join('?' * len(movie_tmdb_ids))
+        for row in db.execute(
+            f'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
+            movie_tmdb_ids
+        ).fetchall():
+            movies_by_id[row['tmdb_id']] = dict(row)
+
+    shows_by_title = {}
+    if show_titles:
+        placeholders = ','.join('?' * len(show_titles))
+        for row in db.execute(
+            f'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+            show_titles
+        ).fetchall():
+            shows_by_title[row['title'].lower()] = dict(row)
+
     recent_shows_enriched = []
     for item in recent_watched:
         item_dict = dict(item)
 
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = db.execute(
-                'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id = ?',
-                (item_dict['tmdb_id'],)
-            ).fetchone()
-
+            movie = movies_by_id.get(item_dict['tmdb_id'])
             if movie:
                 item_dict['title'] = movie['title']
                 item_dict['year'] = movie['year']
@@ -371,11 +398,7 @@ def home():
                 recent_shows_enriched.append(item_dict)
 
         elif item_dict['media_type'] == 'episode' and item_dict.get('display_title'):
-            show = db.execute(
-                'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
-                (item_dict['display_title'].lower(),)
-            ).fetchone()
-
+            show = shows_by_title.get(item_dict['display_title'].lower())
             if show:
                 item_dict['title'] = show['title']
                 item_dict['year'] = show['year']
@@ -1048,19 +1071,36 @@ def sonarr_webhook():
                                 episode_num = ep.get('episodeNumber')
                                 if season_num is None or episode_num is None:
                                     continue
+                                # Look up season_id first, then update by season_id + episode_number
+                                # This is more reliable than show_id + season_number which may be NULL
+                                # for episodes created by the full sync
+                                season_local = db_local.execute(
+                                    'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                                    (show_local_id, season_num)
+                                ).fetchone()
+                                if not season_local:
+                                    current_app.logger.warning(
+                                        f"No season row found for show_id={show_local_id} season={season_num} during optimistic mark"
+                                    )
+                                    continue
                                 result = db_local.execute(
                                     '''
                                     UPDATE sonarr_episodes
                                     SET has_file = 1
-                                    WHERE show_id = ? AND season_number = ? AND episode_number = ?
+                                    WHERE season_id = ? AND episode_number = ?
                                     ''',
-                                    (show_local_id, season_num, episode_num)
+                                    (season_local['id'], episode_num)
                                 )
                                 marked_count += result.rowcount
                             if marked_count:
                                 db_local.commit()
                                 current_app.logger.info(
                                     f"Marked {marked_count} episode row(s) available immediately for series {series_id} from Download webhook."
+                                )
+                            else:
+                                current_app.logger.warning(
+                                    f"Optimistic mark matched 0 episodes for series {series_id}. "
+                                    f"Episodes may not exist in DB yet — background sync will create them."
                                 )
                     except Exception as mark_err:
                         current_app.logger.warning(f"Immediate has_file mark from Download webhook failed: {mark_err}")
@@ -1100,13 +1140,20 @@ def sonarr_webhook():
                                         if show_row_check:
                                             show_id_check = show_row_check['id']
                                             for season_num, episode_num in expected_eps:
+                                                # Use season_id lookup for reliable matching
+                                                season_check = db_check.execute(
+                                                    'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                                                    (show_id_check, season_num)
+                                                ).fetchone()
+                                                if not season_check:
+                                                    continue
                                                 row = db_check.execute(
                                                     '''
                                                     SELECT has_file
                                                     FROM sonarr_episodes
-                                                    WHERE show_id = ? AND season_number = ? AND episode_number = ?
+                                                    WHERE season_id = ? AND episode_number = ?
                                                     ''',
-                                                    (show_id_check, season_num, episode_num)
+                                                    (season_check['id'], episode_num)
                                                 ).fetchone()
                                                 if row and row['has_file']:
                                                     available_count += 1
@@ -1910,9 +1957,17 @@ def search():
 
     db = database.get_db()
     
-    # Get Jellyseerr URL from settings
-    settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
-    jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
+    # Prefer remote/public Jellyseerr URL for browser links, fallback to local URL.
+    settings = db.execute(
+        'SELECT jellyseer_remote_url, jellyseer_url FROM settings LIMIT 1'
+    ).fetchone()
+    jellyseer_url = None
+    if settings:
+        jellyseer_url = (
+            settings['jellyseer_remote_url']
+            or settings['jellyseer_url']
+            or None
+        )
     
     # Search Sonarr
     sonarr_results = db.execute(
@@ -2126,24 +2181,23 @@ def show_detail(tmdb_id):
     currently_watched_episode_info = None
     last_watched_episode_info = None
     plex_username = session.get('username')
-    show_tvdb_id = show_dict.get('tvdb_id') # This is from sonarr_shows.tvdb_id
+    show_tmdb_id_for_plex = show_dict.get('tmdb_id')
 
-    if plex_username and show_tvdb_id:
+    if plex_username and show_tmdb_id_for_plex:
         try:
-            # grandparent_rating_key in plex_activity_log is Plex's internal key, often related to tvdb_id but might be string.
-            # Convert show_tvdb_id to string for safer comparison if Plex stores it as string.
+            # Match by tmdb_id which is reliably set by both Plex webhooks and Tautulli sync
             plex_activity_row = db.execute(
                 """
                 SELECT title, season_episode, view_offset_ms, duration_ms, event_timestamp
                 FROM plex_activity_log
                 WHERE plex_username = ?
-                  AND grandparent_rating_key = ?
+                  AND tmdb_id = ?
                   AND media_type = 'episode'
                   AND event_type IN ('media.play', 'media.pause', 'media.resume')
                 ORDER BY event_timestamp DESC
                 LIMIT 1
                 """,
-                (plex_username, str(show_tvdb_id))
+                (plex_username, show_tmdb_id_for_plex)
             ).fetchone()
 
             if plex_activity_row:
@@ -2153,10 +2207,10 @@ def show_detail(tmdb_id):
                    currently_watched_episode_info['duration_ms'] > 0:
                     progress = (currently_watched_episode_info['view_offset_ms'] / currently_watched_episode_info['duration_ms']) * 100
                     currently_watched_episode_info['progress_percent'] = round(progress)
-        except sqlite3.Error as e_sql: # More specific for DB errors
-            current_app.logger.error(f"SQLite error fetching currently watched episode for show TVDB ID {show_tvdb_id} and user {plex_username}: {e_sql}")
+        except sqlite3.Error as e_sql:
+            current_app.logger.error(f"SQLite error fetching currently watched episode for show TMDB ID {show_tmdb_id_for_plex} and user {plex_username}: {e_sql}")
         except Exception as e_watched:
-            current_app.logger.error(f"Generic error fetching currently watched episode for show TVDB ID {show_tvdb_id} and user {plex_username}: {e_watched}")
+            current_app.logger.error(f"Generic error fetching currently watched episode for show TMDB ID {show_tmdb_id_for_plex} and user {plex_username}: {e_watched}")
 
         if not currently_watched_episode_info:
             last_row = db.execute(
@@ -2164,13 +2218,13 @@ def show_detail(tmdb_id):
                 SELECT title, season_episode, event_timestamp
                 FROM plex_activity_log
                 WHERE plex_username = ?
-                  AND grandparent_rating_key = ?
+                  AND tmdb_id = ?
                   AND media_type = 'episode'
-                  AND event_type IN ('media.stop', 'media.scrobble')
+                  AND event_type IN ('media.stop', 'media.scrobble', 'watched')
                 ORDER BY event_timestamp DESC
                 LIMIT 1
                 """,
-                (plex_username, str(show_tvdb_id))
+                (plex_username, show_tmdb_id_for_plex)
             ).fetchone()
             if last_row:
                 last_watched_episode_info = dict(last_row)
@@ -5339,7 +5393,14 @@ def generate_show_summary_route():
     if not tmdb_id:
         return jsonify({"error": "tmdb_id required"}), 400
     
-    success, error = generate_show_summary(int(tmdb_id))
+    try:
+        success, error = generate_show_summary(int(tmdb_id))
+    except Exception as e:
+        current_app.logger.error(f"Error generating show summary for tmdb_id={tmdb_id}: {e}", exc_info=True)
+        return jsonify({
+            "status": "failed",
+            "error": str(e)
+        }), 500
     
     if success:
         return jsonify({

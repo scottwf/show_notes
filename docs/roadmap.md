@@ -38,6 +38,7 @@ ShowNotes is a Plex companion app providing spoiler-aware summaries, character i
 - [ ] Statistics backfill from activity log
 - [ ] Enhanced notification preferences
 - [ ] Watch progress analytics
+- [ ] Admin prompt management for AI summaries (edit/review/preview/reset templates)
 
 ### Medium Term (3-6 months)
 - [ ] Multi-user sub-profiles per account

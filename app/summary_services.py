@@ -239,8 +239,68 @@ def generate_show_summary(tmdb_id):
         ORDER BY season_number
     """, (tmdb_id, provider, model)).fetchall()
 
+    # Manual show generation should not fail just because season summaries
+    # have not been generated yet. Generate eligible seasons first, then retry.
     if not summaries:
-        return False, "No completed season summaries to synthesize"
+        cutoff_date = get_setting('llm_knowledge_cutoff_date')
+        if not cutoff_date:
+            return False, "No completed season summaries and no knowledge cutoff date configured"
+
+        eligible_seasons = db.execute("""
+            SELECT ss.season_number
+            FROM sonarr_seasons ss
+            JOIN sonarr_shows s ON s.id = ss.show_id
+            JOIN sonarr_episodes e ON e.season_id = ss.id
+            LEFT JOIN season_summaries sm ON sm.tmdb_id = s.tmdb_id
+                AND sm.season_number = ss.season_number
+                AND sm.llm_provider = ? AND sm.llm_model = ?
+                AND sm.status = 'completed'
+            WHERE s.tmdb_id = ?
+                AND ss.season_number > 0
+                AND ss.episode_count > 0
+                AND ss.episode_file_count = ss.episode_count
+                AND sm.id IS NULL
+            GROUP BY ss.id
+            HAVING MAX(e.air_date_utc) IS NOT NULL AND MAX(e.air_date_utc) < ?
+            ORDER BY ss.season_number
+        """, (provider, model, tmdb_id, cutoff_date)).fetchall()
+
+        if not eligible_seasons:
+            # Manual button fallback: if cutoff-based eligibility finds nothing,
+            # try any season that has at least one downloaded episode file.
+            eligible_seasons = db.execute("""
+                SELECT ss.season_number
+                FROM sonarr_seasons ss
+                JOIN sonarr_shows s ON s.id = ss.show_id
+                LEFT JOIN season_summaries sm ON sm.tmdb_id = s.tmdb_id
+                    AND sm.season_number = ss.season_number
+                    AND sm.llm_provider = ? AND sm.llm_model = ?
+                    AND sm.status = 'completed'
+                WHERE s.tmdb_id = ?
+                    AND ss.season_number > 0
+                    AND ss.episode_count > 0
+                    AND ss.episode_file_count > 0
+                    AND sm.id IS NULL
+                ORDER BY ss.season_number
+            """, (provider, model, tmdb_id)).fetchall()
+
+        if not eligible_seasons:
+            return False, "No completed season summaries to synthesize and no seasons with episode files found"
+
+        first_error = None
+        for season in eligible_seasons:
+            success, error = generate_season_summary(tmdb_id, int(season['season_number']))
+            if not success and not first_error:
+                first_error = error
+
+        summaries = db.execute("""
+            SELECT season_number, summary_text FROM season_summaries
+            WHERE tmdb_id = ? AND llm_provider = ? AND llm_model = ? AND status = 'completed'
+            ORDER BY season_number
+        """, (tmdb_id, provider, model)).fetchall()
+
+        if not summaries:
+            return False, first_error or "Season summary generation did not produce any completed summaries"
 
     season_texts = []
     for s in summaries:
