@@ -17,66 +17,64 @@
 
 <body>
     <div x-data="{ sidebarOpen: false }" class="flex flex-col h-screen bg-slate-100 dark:bg-slate-900">
-        <!-- Top bar - Admin header with admin search -->
-        <header
-            class="relative flex items-center justify-between h-16 px-4 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700 w-full z-10 shrink-0">
-            <div class="flex items-center space-x-3">
-                <!-- Mobile menu button for sidebar -->
-                <button @click="sidebarOpen = !sidebarOpen" class="text-gray-500 lg:hidden focus:outline-none">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6h16M4 12h16M4 18h16"></path>
-                    </svg>
-                </button>
-                <!-- Brand Link -->
-                <a href="{{ url_for('main.home') }}"
-                    class="text-lg font-semibold text-slate-800 dark:text-slate-100 hover:text-sky-500 dark:hover:text-sky-400 transition-colors">ShowNotes</a>
-            </div>
+        <!-- Top bar - Admin header -->
+        <header class="px-3 py-2 bg-white border-b dark:bg-slate-800 dark:border-slate-700 w-full z-10 shrink-0">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
 
-            <div class="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                {% block admin_page_header %}{% endblock %}
-            </div>
+                <!-- Left: hamburger + brand + page title -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button @click="sidebarOpen = !sidebarOpen" class="text-gray-500 lg:hidden focus:outline-none p-1">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <a href="{{ url_for('main.home') }}"
+                        class="text-base font-semibold text-slate-800 dark:text-slate-100 hover:text-sky-500 dark:hover:text-sky-400 transition-colors">ShowNotes</a>
+                    {% set page_title %}{% block admin_page_header %}{% endblock %}{% endset %}
+                    {% if page_title.strip() %}
+                    <span class="text-slate-400 dark:text-slate-500 select-none">/</span>
+                    <span class="text-sm font-medium text-slate-600 dark:text-slate-300 truncate max-w-[140px] sm:max-w-none">{{ page_title.strip() }}</span>
+                    {% endif %}
+                </div>
 
-            <!-- Admin Search Bar -->
-            <div class="flex-grow max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl mx-4">
-                <form id="admin-search-form" class="relative">
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true"
-                                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z" />
-                            </svg>
+                <!-- Search: full-width second row on mobile, inline on lg+ -->
+                <div class="order-last w-full lg:order-none lg:w-auto lg:flex-grow lg:max-w-xl">
+                    <form id="admin-search-form" class="relative">
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" aria-hidden="true"
+                                    xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 20">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+                                        stroke-width="2" d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z" />
+                                </svg>
+                            </div>
+                            <input id="admin-search-input" type="text"
+                                placeholder="Search admin pages, shows & movies…"
+                                class="block w-full pl-10 pr-3 py-1.5 text-sm rounded-md text-gray-900 dark:text-gray-100 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-colors"
+                                autocomplete="off">
                         </div>
-                        <input id="admin-search-input" type="text"
-                            placeholder="Search admin pages, shows & movies (Ctrl+K)"
-                            class="block w-full pl-10 pr-3 py-1.5 text-sm rounded-md text-gray-900 dark:text-gray-100 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 focus:outline-none transition-colors duration-150"
-                            autocomplete="off">
-                    </div>
-                    <div id="admin-search-results"
-                        class="absolute left-0 right-0 mt-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-md z-[100] hidden overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700">
-                        <!-- Results will be populated by JavaScript -->
-                    </div>
-                </form>
-            </div>
+                        <div id="admin-search-results"
+                            class="absolute left-0 right-0 mt-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-lg rounded-md z-[100] hidden overflow-y-auto max-h-80 border border-slate-200 dark:border-slate-700">
+                        </div>
+                    </form>
+                </div>
 
-            <div class="flex items-center space-x-3">
-                <!-- Dark Mode Toggle -->
-                <button id="darkmode-toggle" title="Toggle light/dark mode"
-                    class="focus:outline-none p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-                    </svg>
-                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z"
-                            fill-rule="evenodd" clip-rule="evenodd"></path>
-                    </svg>
-                </button>
-                <!-- Admin User Menu if needed -->
+                <!-- Right: dark mode toggle -->
+                <div class="flex items-center ml-auto">
+                    <button id="darkmode-toggle" title="Toggle light/dark mode"
+                        class="focus:outline-none p-2 rounded-full text-gray-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                        <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                        </svg>
+                        <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z"
+                                fill-rule="evenodd" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
+
             </div>
         </header>
 

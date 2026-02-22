@@ -72,13 +72,17 @@
 }
 
 .markdown-content table {
-    @apply w-full mb-4 border-collapse;
+    @apply w-full mb-4 border-collapse text-sm;
 }
 
 .markdown-content th {
-    @apply bg-gray-200 dark:bg-gray-700 px-4 py-2 text-left font-semibold;
+    @apply bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold align-top whitespace-nowrap;
 }
 
 .markdown-content td {
-    @apply border border-gray-300 dark:border-gray-600 px-4 py-2;
+    @apply border border-gray-300 dark:border-gray-600 px-3 py-2 align-top;
+}
+
+.markdown-content tr:nth-child(even) td {
+    @apply bg-gray-50 dark:bg-gray-800/50;
 }
