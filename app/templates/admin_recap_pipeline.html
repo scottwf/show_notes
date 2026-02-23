@@ -1,0 +1,274 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}Recap Pipeline{% endblock %}
+{% block admin_page_header %}Recap Pipeline (Subtitle-First){% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+
+    {% if view_recap %}
+    <!-- ── Single recap view ─────────────────────────────────────────────── -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100">
+                {{ view_recap.show_title }} — Season {{ view_recap.season_number }} Recap
+            </h3>
+            <a href="{{ url_for('admin.recap_pipeline') }}"
+               class="text-sm text-blue-600 dark:text-blue-400 hover:underline">← Back to Recap Pipeline</a>
+        </div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-4 space-x-4">
+            <span>Model: <strong>{{ view_recap.local_model }}</strong></span>
+            {% if view_recap.openai_model_version %}
+            <span>OpenAI polish: <strong>{{ view_recap.openai_model_version }}</strong>
+                {% if view_recap.openai_cost_usd %}(cost: ${{ "%.4f"|format(view_recap.openai_cost_usd) }}){% endif %}
+            </span>
+            {% endif %}
+            {% if view_recap.runtime_seconds %}
+            <span>Runtime: {{ "%.1f"|format(view_recap.runtime_seconds) }}s</span>
+            {% endif %}
+            {% if view_recap.spoiler_cutoff_episode and view_recap.spoiler_cutoff_episode > 0 %}
+            <span class="text-amber-500">Spoiler cutoff: episode {{ view_recap.spoiler_cutoff_episode }}</span>
+            {% endif %}
+        </div>
+        <div class="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200">
+            {% if view_recap.openai_polished_text %}
+                {{ view_recap.openai_polished_text | safe }}
+            {% else %}
+                {{ view_recap.recap_text | safe }}
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+
+    <!-- ── Status cards ──────────────────────────────────────────────────── -->
+    <div>
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-3">Pipeline Status</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Episode recaps completed</p>
+                <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ status.episode_recaps.get('completed', 0) }}</p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Episode recaps failed</p>
+                <p class="text-2xl font-bold text-red-500">{{ status.episode_recaps.get('failed', 0) }}</p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Season recaps completed</p>
+                <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ status.season_recaps.get('completed', 0) }}</p>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Season recaps failed</p>
+                <p class="text-2xl font-bold text-red-500">{{ status.season_recaps.get('failed', 0) }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Generate season recap form ───────────────────────────────────── -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Generate Season Recap</h3>
+        <form method="POST" action="{{ url_for('admin.recap_pipeline_generate_season') }}"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Show</label>
+                <select name="tmdb_id" required
+                        class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+                    <option value="">— select a show —</option>
+                    {% for show in shows_with_subs %}
+                    <option value="{{ show.tmdb_id }}">{{ show.title }} ({{ show.subtitle_episode_count }} episodes with subs)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Season</label>
+                <input type="number" name="season_number" min="1" required placeholder="e.g. 1"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Local Model</label>
+                <input type="text" name="local_model" value="gpt-oss:20b" placeholder="gpt-oss:20b"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Spoiler Cutoff Episode
+                    <span class="text-slate-400 font-normal">(optional)</span></label>
+                <input type="number" name="spoiler_cutoff" min="1" placeholder="leave blank for all"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div class="flex items-center gap-4 pt-5">
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input type="checkbox" name="openai_polish" value="1"
+                           class="rounded border-slate-300 dark:border-slate-600">
+                    OpenAI polish
+                </label>
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input type="checkbox" name="force" value="1"
+                           class="rounded border-slate-300 dark:border-slate-600">
+                    Force regenerate
+                </label>
+            </div>
+            <div class="pt-5">
+                <button type="submit"
+                        class="w-full rounded bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium transition-colors">
+                    Generate Season Recap
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ── Generate episode recap form ──────────────────────────────────── -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6 border border-slate-200 dark:border-slate-700">
+        <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Generate Single Episode Recap</h3>
+        <form method="POST" action="{{ url_for('admin.recap_pipeline_generate_episode') }}"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Show</label>
+                <select name="tmdb_id" required
+                        class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+                    <option value="">— select —</option>
+                    {% for show in shows_with_subs %}
+                    <option value="{{ show.tmdb_id }}">{{ show.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Season</label>
+                <input type="number" name="season_number" min="1" required placeholder="e.g. 1"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Episode</label>
+                <input type="number" name="episode_number" min="1" required placeholder="e.g. 3"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Local Model</label>
+                <input type="text" name="local_model" value="gpt-oss:20b"
+                       class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 px-3 py-2 text-sm">
+            </div>
+            <div class="flex items-center gap-4 pt-5">
+                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                    <input type="checkbox" name="force" value="1"
+                           class="rounded border-slate-300 dark:border-slate-600">
+                    Force regenerate
+                </label>
+            </div>
+            <div class="pt-5">
+                <button type="submit"
+                        class="w-full rounded bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-sm font-medium transition-colors">
+                    Generate Episode Recap
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ── Recent season recaps ──────────────────────────────────────────── -->
+    {% if recent_season_recaps %}
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Recent Season Recaps</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-900">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Show</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Season</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Model</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Cutoff</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Runtime</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Updated</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for r in recent_season_recaps %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="px-4 py-3 text-slate-800 dark:text-slate-200">{{ r.show_title }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ r.season_number }}</td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs">{{ r.local_model }}{% if r.openai_model_version %} + {{ r.openai_model_version }}{% endif %}</td>
+                        <td class="px-4 py-3">
+                            {% if r.status == 'completed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">completed</span>
+                            {% elif r.status == 'failed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title="{{ r.error_message }}">failed</span>
+                            {% elif r.status == 'generating' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">generating…</span>
+                            {% else %}
+                            <span class="text-slate-400 text-xs">{{ r.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
+                            {% if r.spoiler_cutoff_episode and r.spoiler_cutoff_episode > 0 %}
+                            E{{ r.spoiler_cutoff_episode }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
+                            {% if r.runtime_seconds %}{{ "%.0f"|format(r.runtime_seconds) }}s{% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ r.updated_at }}</td>
+                        <td class="px-4 py-3">
+                            {% if r.status == 'completed' %}
+                            <a href="{{ url_for('admin.recap_pipeline_view_season', recap_id=r.id) }}"
+                               class="text-blue-600 dark:text-blue-400 hover:underline text-xs">View</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ── Recent episode recaps ─────────────────────────────────────────── -->
+    {% if recent_episode_recaps %}
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Recent Episode Recaps</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-900">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Show</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Episode</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Model</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Runtime</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Updated</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for r in recent_episode_recaps %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        <td class="px-4 py-3 text-slate-800 dark:text-slate-200">{{ r.show_title }}</td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">S{{ "%02d"|format(r.season_number) }}E{{ "%02d"|format(r.episode_number) }}</td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs">{{ r.local_model }}</td>
+                        <td class="px-4 py-3">
+                            {% if r.status == 'completed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">completed</span>
+                            {% elif r.status == 'failed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" title="{{ r.error_message }}">failed</span>
+                            {% elif r.status == 'generating' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">generating…</span>
+                            {% else %}
+                            <span class="text-slate-400 text-xs">{{ r.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
+                            {% if r.runtime_seconds %}{{ "%.0f"|format(r.runtime_seconds) }}s{% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ r.updated_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% endif %}{# end if view_recap #}
+</div>
+{% endblock %}

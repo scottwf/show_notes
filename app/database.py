@@ -7,7 +7,7 @@ import logging
 DATABASE = 'data/shownotes.db' # This will be updated by app.config['DATABASE']
 
 # Define the current schema version. Increment this when you make schema changes.
-CURRENT_SCHEMA_VERSION = 4 # Incremented for scheduler config and LLM summary tables
+CURRENT_SCHEMA_VERSION = 5 # Incremented for recap pipeline tables
 
 def get_db_connection():
     db_path = current_app.config['DATABASE']
@@ -657,6 +657,55 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_season_summaries_status ON season_summaries(status);
             CREATE INDEX IF NOT EXISTS idx_show_summaries_tmdb ON show_summaries(tmdb_id);
             CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status);
+
+            CREATE TABLE episode_recaps (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_tmdb_id           INTEGER NOT NULL,
+                season_number          INTEGER NOT NULL,
+                episode_number         INTEGER NOT NULL,
+                spoiler_cutoff_episode INTEGER NOT NULL DEFAULT 0,
+                local_model            TEXT    NOT NULL,
+                prompt_version         TEXT    NOT NULL DEFAULT '1',
+                status                 TEXT    NOT NULL DEFAULT 'pending',
+                summary_text           TEXT,
+                raw_chunks_json        TEXT,
+                runtime_seconds        REAL,
+                error_message          TEXT,
+                created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (show_tmdb_id, season_number, episode_number,
+                        spoiler_cutoff_episode, local_model, prompt_version)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_episode_recaps_show_season
+                ON episode_recaps(show_tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_episode_recaps_status
+                ON episode_recaps(status);
+
+            CREATE TABLE season_recaps (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_tmdb_id           INTEGER NOT NULL,
+                season_number          INTEGER NOT NULL,
+                spoiler_cutoff_episode INTEGER NOT NULL DEFAULT 0,
+                local_model            TEXT    NOT NULL,
+                prompt_version         TEXT    NOT NULL DEFAULT '1',
+                openai_model_version   TEXT    NOT NULL DEFAULT '',
+                status                 TEXT    NOT NULL DEFAULT 'pending',
+                recap_text             TEXT,
+                openai_polished_text   TEXT,
+                openai_cost_usd        REAL,
+                runtime_seconds        REAL,
+                error_message          TEXT,
+                created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (show_tmdb_id, season_number, spoiler_cutoff_episode,
+                        local_model, prompt_version, openai_model_version)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_recaps_show_season
+                ON season_recaps(show_tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_season_recaps_status
+                ON season_recaps(status);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))
