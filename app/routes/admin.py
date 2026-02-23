@@ -94,6 +94,7 @@ ADMIN_SEARCHABLE_ROUTES = [
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
     {'title': 'AI Summaries & LLM Usage', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_summaries')},
+    {'title': 'Recap Pipeline (Subtitle-First)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.recap_pipeline')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -2257,3 +2258,163 @@ def api_update_problem_report(report_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# RECAP PIPELINE (subtitle-first, local model)
+# ============================================================================
+
+@admin_bp.route('/recap-pipeline')
+@login_required
+@admin_required
+def recap_pipeline():
+    """Renders the subtitle-first recap pipeline admin page."""
+    from ..recap_pipeline import get_recap_pipeline_status
+
+    db = get_db()
+    status = get_recap_pipeline_status()
+
+    # List all shows that have subtitles available
+    shows_with_subs = db.execute("""
+        SELECT s.tmdb_id, s.title,
+               COUNT(DISTINCT sub.season_number || '-' || sub.episode_number) AS subtitle_episode_count
+        FROM sonarr_shows s
+        JOIN subtitles sub ON sub.show_tmdb_id = s.tmdb_id
+        GROUP BY s.tmdb_id, s.title
+        ORDER BY s.title
+    """).fetchall()
+
+    # Recent recaps
+    recent_season_recaps = db.execute("""
+        SELECT sr.id, s.title AS show_title, sr.season_number,
+               sr.local_model, sr.openai_model_version, sr.status,
+               sr.spoiler_cutoff_episode, sr.runtime_seconds,
+               sr.openai_cost_usd, sr.updated_at,
+               sr.error_message
+        FROM season_recaps sr
+        JOIN sonarr_shows s ON s.tmdb_id = sr.show_tmdb_id
+        ORDER BY sr.updated_at DESC
+        LIMIT 50
+    """).fetchall()
+
+    recent_episode_recaps = db.execute("""
+        SELECT er.id, s.title AS show_title, er.season_number, er.episode_number,
+               er.local_model, er.status, er.runtime_seconds, er.updated_at,
+               er.error_message
+        FROM episode_recaps er
+        JOIN sonarr_shows s ON s.tmdb_id = er.show_tmdb_id
+        ORDER BY er.updated_at DESC
+        LIMIT 100
+    """).fetchall()
+
+    return render_template(
+        'admin_recap_pipeline.html',
+        title='Recap Pipeline',
+        status=status,
+        shows_with_subs=shows_with_subs,
+        recent_season_recaps=recent_season_recaps,
+        recent_episode_recaps=recent_episode_recaps,
+    )
+
+
+@admin_bp.route('/recap-pipeline/generate-season', methods=['POST'])
+@login_required
+@admin_required
+def recap_pipeline_generate_season():
+    """Trigger subtitle-first season recap generation."""
+    from ..recap_pipeline import generate_season_recap
+
+    tmdb_id = request.form.get('tmdb_id', type=int)
+    season_number = request.form.get('season_number', type=int)
+    spoiler_cutoff = request.form.get('spoiler_cutoff', type=int) or None
+    local_model = request.form.get('local_model', 'gpt-oss:20b').strip() or 'gpt-oss:20b'
+    openai_polish = bool(request.form.get('openai_polish'))
+    force = bool(request.form.get('force'))
+
+    if not tmdb_id or not season_number:
+        flash('tmdb_id and season_number are required.', 'danger')
+        return redirect(url_for('admin.recap_pipeline'))
+
+    current_app.logger.info(
+        f"Admin triggered season recap: tmdb={tmdb_id} S{season_number} "
+        f"model={local_model} polish={openai_polish} force={force}"
+    )
+
+    recap, error = generate_season_recap(
+        tmdb_id, season_number,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=local_model,
+        openai_polish=openai_polish,
+        force=force,
+    )
+
+    if error:
+        flash(f'Season recap generation failed: {error}', 'danger')
+    else:
+        flash(f'Season recap generated successfully for season {season_number}.', 'success')
+
+    return redirect(url_for('admin.recap_pipeline'))
+
+
+@admin_bp.route('/recap-pipeline/generate-episode', methods=['POST'])
+@login_required
+@admin_required
+def recap_pipeline_generate_episode():
+    """Trigger subtitle-first episode recap generation."""
+    from ..recap_pipeline import generate_episode_recap
+
+    tmdb_id = request.form.get('tmdb_id', type=int)
+    season_number = request.form.get('season_number', type=int)
+    episode_number = request.form.get('episode_number', type=int)
+    spoiler_cutoff = request.form.get('spoiler_cutoff', type=int) or None
+    local_model = request.form.get('local_model', 'gpt-oss:20b').strip() or 'gpt-oss:20b'
+    force = bool(request.form.get('force'))
+
+    if not tmdb_id or not season_number or not episode_number:
+        flash('tmdb_id, season_number, and episode_number are required.', 'danger')
+        return redirect(url_for('admin.recap_pipeline'))
+
+    current_app.logger.info(
+        f"Admin triggered episode recap: tmdb={tmdb_id} S{season_number}E{episode_number} "
+        f"model={local_model} force={force}"
+    )
+
+    summary, error = generate_episode_recap(
+        tmdb_id, season_number, episode_number,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=local_model,
+        force=force,
+    )
+
+    if error:
+        flash(f'Episode recap generation failed: {error}', 'danger')
+    else:
+        flash(
+            f'Episode recap generated for S{season_number:02d}E{episode_number:02d}.',
+            'success',
+        )
+
+    return redirect(url_for('admin.recap_pipeline'))
+
+
+@admin_bp.route('/recap-pipeline/season/<int:recap_id>', methods=['GET'])
+@login_required
+@admin_required
+def recap_pipeline_view_season(recap_id):
+    """View a single season recap."""
+    db = get_db()
+    row = db.execute("""
+        SELECT sr.*, s.title AS show_title
+        FROM season_recaps sr
+        JOIN sonarr_shows s ON s.tmdb_id = sr.show_tmdb_id
+        WHERE sr.id = ?
+    """, (recap_id,)).fetchone()
+    if not row:
+        abort(404)
+    return render_template(
+        'admin_recap_pipeline.html',
+        title='View Season Recap',
+        view_recap=dict(row),
+        status={}, shows_with_subs=[],
+        recent_season_recaps=[], recent_episode_recaps=[],
+    )
