@@ -1966,6 +1966,36 @@ def test_jellyseer_connection_with_params(url, api_key):
         endpoint='/api/v1/settings/main'
     )
 
+def get_jellyseer_user_requests():
+    """
+    Fetch all Jellyseerr requests and return a dict mapping
+    plex_username (lowercase) -> request count.
+    Returns empty dict if Jellyseerr is not configured or the request fails.
+    """
+    jellyseer_url = database.get_setting('jellyseer_url')
+    jellyseer_api_key = database.get_setting('jellyseer_api_key')
+    if not jellyseer_url or not jellyseer_api_key:
+        return {}
+    try:
+        headers = {'X-Api-Key': jellyseer_api_key}
+        response = requests.get(
+            f"{jellyseer_url}/api/v1/request",
+            params={'take': 1000, 'filter': 'all', 'sort': 'added'},
+            headers=headers,
+            timeout=2
+        )
+        if response.status_code != 200:
+            return {}
+        counts = {}
+        for req in response.json().get('results', []):
+            requested_by = req.get('requestedBy', {})
+            plex_username = (requested_by.get('plexUsername') or requested_by.get('username') or '').lower()
+            if plex_username:
+                counts[plex_username] = counts.get(plex_username, 0) + 1
+        return counts
+    except Exception:
+        return {}
+
 def test_thetvdb_connection():
     """Tests the connection to TheTVDB API using the configured API key."""
     api_key = database.get_setting('thetvdb_api_key')

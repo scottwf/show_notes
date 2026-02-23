@@ -682,16 +682,76 @@ def watch_history_data():
                     row_dict['tmdb_id'] = sonarr_show['tmdb_id']
             plex_logs.append(row_dict)
     return jsonify({'sync_logs': sync_logs, 'plex_logs': plex_logs})
+
+@admin_bp.route('/users')
+@login_required
+@admin_required
+def admin_users():
+    """Admin users overview page showing activity, issues, favorites, and Jellyseerr requests per user."""
+    import time
+    t0 = time.monotonic()
     db = database.get_db()
-    users = db.execute('SELECT id, username, plex_username, plex_user_id, last_login_at FROM users').fetchall()
-    user_latest = {}
-    for u in users:
-        latest = db.execute('''SELECT title, season_episode FROM plex_activity_log
-                              WHERE plex_username = ? AND event_type IN ('media.stop','media.scrobble')
-                              ORDER BY event_timestamp DESC LIMIT 1''', (u['plex_username'],)).fetchone()
-        user_latest[u['id']] = latest
-    plex_token = database.get_setting('plex_token')
-    return render_template('admin_users.html', users=users, user_latest=user_latest, plex_token=plex_token)
+
+    users = db.execute('''
+        SELECT id, username, plex_username, plex_user_id, is_admin,
+               last_login_at, profile_photo_url
+        FROM users ORDER BY last_login_at DESC
+    ''').fetchall()
+    current_app.logger.debug(f"admin_users: users query {(time.monotonic()-t0)*1000:.0f}ms")
+
+    # Single query for last watched per user using window function (replaces N+1)
+    t1 = time.monotonic()
+    last_watched = {r['plex_username']: r for r in db.execute('''
+        SELECT plex_username, title, show_title, season_episode, media_type, event_timestamp
+        FROM (
+            SELECT plex_username, title, show_title, season_episode, media_type, event_timestamp,
+                   ROW_NUMBER() OVER (PARTITION BY plex_username ORDER BY event_timestamp DESC) as rn
+            FROM plex_activity_log
+            WHERE event_type IN ('media.stop', 'media.scrobble', 'watched')
+              AND plex_username IS NOT NULL
+        ) WHERE rn = 1
+    ''').fetchall()}
+    current_app.logger.debug(f"admin_users: last_watched query {(time.monotonic()-t1)*1000:.0f}ms")
+
+    t2 = time.monotonic()
+    watch_counts = {r['plex_username']: r['cnt'] for r in db.execute('''
+        SELECT plex_username, COUNT(*) as cnt FROM plex_activity_log
+        WHERE event_type IN ('media.scrobble', 'watched') AND plex_username IS NOT NULL
+        GROUP BY plex_username
+    ''').fetchall()}
+
+    issue_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM issue_reports
+        WHERE status != 'resolved' GROUP BY user_id
+    ''').fetchall()}
+
+    problem_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM problem_reports
+        WHERE status != 'resolved' GROUP BY user_id
+    ''').fetchall()}
+
+    fav_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM user_favorites
+        WHERE is_dropped = 0 GROUP BY user_id
+    ''').fetchall()}
+    current_app.logger.debug(f"admin_users: aggregate queries {(time.monotonic()-t2)*1000:.0f}ms")
+
+    t3 = time.monotonic()
+    from ..utils import get_jellyseer_user_requests
+    jellyseer_counts = get_jellyseer_user_requests()
+    current_app.logger.debug(f"admin_users: jellyseerr {(time.monotonic()-t3)*1000:.0f}ms")
+
+    current_app.logger.debug(f"admin_users: total {(time.monotonic()-t0)*1000:.0f}ms")
+
+    return render_template('admin_users.html',
+        users=users,
+        last_watched=last_watched,
+        watch_counts=watch_counts,
+        issue_counts=issue_counts,
+        problem_counts=problem_counts,
+        fav_counts=fav_counts,
+        jellyseer_counts=jellyseer_counts,
+    )
 
 @admin_bp.route('/logs/list', methods=['GET'])
 @login_required
