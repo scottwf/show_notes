@@ -14,7 +14,28 @@ import pytz  # For timezone conversion
 # current_app.logger is used for Flask specific logging within app context
 
 import os
+import time
 from flask import url_for
+
+# Tautulli API cache to avoid blocking page loads
+# Cache stores: {'key': {'data': ..., 'timestamp': ...}}
+_tautulli_cache = {}
+_TAUTULLI_CACHE_TTL = 30  # seconds - balance between freshness and performance
+
+def _get_cached_tautulli(cache_key):
+    """Get cached Tautulli data if still valid."""
+    if cache_key in _tautulli_cache:
+        cached = _tautulli_cache[cache_key]
+        if time.time() - cached['timestamp'] < _TAUTULLI_CACHE_TTL:
+            return cached['data']
+    return None
+
+def _set_cached_tautulli(cache_key, data):
+    """Cache Tautulli data with current timestamp."""
+    _tautulli_cache[cache_key] = {
+        'data': data,
+        'timestamp': time.time()
+    }
 
 """
 Utility functions for the ShowNotes application.
@@ -1885,33 +1906,58 @@ def get_tautulli_activity():
 
     Returns:
         int: Number of currently active streams, or 0 if unable to fetch
+
+    Note: Reuses the activity_sessions cache to avoid a redundant HTTP call when
+    get_tautulli_current_activity() has already fetched sessions this cycle.
     """
+    # Reuse the sessions cache (populated by get_tautulli_current_activity)
+    # so we don't make a second HTTP call on the same page load.
+    cached_sessions = _get_cached_tautulli('activity_sessions')
+    if cached_sessions is not None:
+        return len(cached_sessions)
+
+    # Sessions not cached yet — fetch them now and cache for both functions
+    sessions = _fetch_tautulli_sessions()
+    return len(sessions) if sessions else 0
+
+def _fetch_tautulli_sessions():
+    """
+    Fetch and cache Tautulli activity sessions. Single HTTP call shared by both
+    get_tautulli_activity() and get_tautulli_current_activity().
+
+    Returns:
+        list: Session dicts, or [] on error/no activity.
+    """
+    cached = _get_cached_tautulli('activity_sessions')
+    if cached is not None:
+        return cached
+
     try:
         tautulli_url = database.get_setting('tautulli_url')
         tautulli_api_key = database.get_setting('tautulli_api_key')
 
         if not tautulli_url or not tautulli_api_key:
-            return 0
+            _set_cached_tautulli('activity_sessions', [])
+            return []
 
-        # Call Tautulli API to get current activity
-        params = {
-            'apikey': tautulli_api_key,
-            'cmd': 'get_activity'
-        }
-
-        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
+        response = requests.get(
+            f"{tautulli_url}/api/v2",
+            params={'apikey': tautulli_api_key, 'cmd': 'get_activity'},
+            timeout=5
+        )
 
         if response.status_code == 200:
             data = response.json()
             if data.get('response', {}).get('result') == 'success':
-                # Get the stream_count from the response
-                stream_count = data.get('response', {}).get('data', {}).get('stream_count', 0)
-                return stream_count
+                sessions = data.get('response', {}).get('data', {}).get('sessions', [])
+                _set_cached_tautulli('activity_sessions', sessions)
+                return sessions
 
-        return 0
-    except Exception as e:
-        # Silently fail and return 0 - don't break the page if Tautulli is down
-        return 0
+    except Exception:
+        pass
+
+    _set_cached_tautulli('activity_sessions', [])
+    return []
 
 def get_tautulli_current_activity(username=None):
     """
@@ -1922,40 +1968,20 @@ def get_tautulli_current_activity(username=None):
 
     Returns:
         dict or None: Session data with real-time progress, or None if no activity/error
+
+    Note: Results are cached for 30 seconds to avoid blocking page loads.
     """
-    try:
-        tautulli_url = database.get_setting('tautulli_url')
-        tautulli_api_key = database.get_setting('tautulli_api_key')
+    cached_sessions = _fetch_tautulli_sessions()
 
-        if not tautulli_url or not tautulli_api_key:
-            return None
-
-        params = {
-            'apikey': tautulli_api_key,
-            'cmd': 'get_activity'
-        }
-
-        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('response', {}).get('result') == 'success':
-                sessions = data.get('response', {}).get('data', {}).get('sessions', [])
-
-                # If username provided, filter for that user
-                if username and sessions:
-                    for session in sessions:
-                        if session.get('user') == username:
-                            return session
-                    return None
-
-                # Otherwise return first session if any
-                return sessions[0] if sessions else None
-
+    # Filter by username if provided
+    if username and cached_sessions:
+        for session in cached_sessions:
+            if session.get('user') == username:
+                return session
         return None
-    except Exception as e:
-        # Silently fail - don't break the page if Tautulli is down
-        return None
+
+    # Otherwise return first session if any
+    return cached_sessions[0] if cached_sessions else None
 
 def parse_llm_markdown_sections(md):
     """
