@@ -2,6 +2,87 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- General Setup ---
     const form = document.getElementById('settings-form');
     const successBanner = document.getElementById('success-banner');
+    const tabButtons = document.querySelectorAll('[data-tab]');
+    const tabPanels = document.querySelectorAll('[data-panel]');
+
+    function initSummaryGeneration() {
+        const triggerBtn = document.getElementById('trigger-summary-btn');
+        const summaryStatus = document.getElementById('summary-status');
+        if (!triggerBtn || !summaryStatus) return;
+
+        triggerBtn.addEventListener('click', async () => {
+            triggerBtn.disabled = true;
+            triggerBtn.textContent = 'Starting...';
+            summaryStatus.textContent = '';
+
+            try {
+                const resp = await fetch('/admin/api/trigger-summary-generation', { method: 'POST' });
+                const data = await resp.json();
+                summaryStatus.textContent = data.message || 'Generation started';
+                triggerBtn.textContent = 'Running...';
+
+                const poll = setInterval(async () => {
+                    try {
+                        const statusResp = await fetch('/admin/api/summary-queue-status');
+                        const status = await statusResp.json();
+                        summaryStatus.textContent = `Completed: ${status.completed_count} | Pending: ${status.pending_count} | Failed: ${status.failed_count}`;
+                        if (status.generating_count === 0) {
+                            clearInterval(poll);
+                            triggerBtn.disabled = false;
+                            triggerBtn.textContent = 'Generate Now';
+                        }
+                    } catch (e) {
+                        clearInterval(poll);
+                    }
+                }, 5000);
+            } catch (e) {
+                summaryStatus.textContent = 'Error: ' + e.message;
+                triggerBtn.disabled = false;
+                triggerBtn.textContent = 'Generate Now';
+            }
+        });
+    }
+
+    function initTabs() {
+        if (!tabButtons.length || !tabPanels.length) return;
+
+        const activeClasses = ['bg-white', 'dark:bg-slate-800', 'text-sky-600', 'dark:text-sky-400', 'border-slate-200', 'dark:border-slate-700', 'border-b-white', 'dark:border-b-slate-800', 'shadow-sm', '-mb-px', 'z-10'];
+        const inactiveClasses = ['bg-slate-100', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-400', 'border-transparent', 'hover:bg-slate-200', 'dark:hover:bg-slate-800'];
+
+        function switchTab(targetPanel) {
+            tabButtons.forEach(btn => {
+                btn.classList.remove(...activeClasses);
+                btn.classList.add(...inactiveClasses);
+                btn.setAttribute('aria-selected', 'false');
+            });
+
+            tabPanels.forEach(panel => {
+                panel.classList.add('hidden');
+                panel.style.display = 'none';
+            });
+
+            const activeBtn = document.querySelector(`[data-tab="${targetPanel}"]`);
+            const activePanel = document.querySelector(`[data-panel="${targetPanel}"]`);
+
+            if (activeBtn) {
+                activeBtn.classList.remove(...inactiveClasses);
+                activeBtn.classList.add(...activeClasses);
+                activeBtn.setAttribute('aria-selected', 'true');
+            }
+
+            if (activePanel) {
+                activePanel.classList.remove('hidden');
+                activePanel.style.display = '';
+            }
+        }
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => switchTab(button.dataset.tab));
+        });
+
+        const firstTab = tabButtons[0]?.dataset.tab;
+        if (firstTab) switchTab(firstTab);
+    }
 
     // --- API Key Helper Links ---
     function setApiKeyLinks() {
@@ -34,8 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.test-btn').forEach(button => {
         button.addEventListener('click', async function() {
             const service = button.dataset.service;
-            const urlInput = document.getElementById(`${service}_url`);
-            const apiKeyInput = document.getElementById(`${service}_api_key`);
+            const urlInput = document.getElementById(`${service}_url`) || document.querySelector(`[name="${service}_url"]`);
+            const apiKeyInput = document.getElementById(`${service}_api_key`) || document.querySelector(`[name="${service}_api_key"]`);
             const statusDot = document.getElementById(`${service}_status_dot`);
 
             if (statusDot) {
@@ -69,32 +150,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const pushoverBtn = document.getElementById('pushover-test-btn');
     if (pushoverBtn) {
         pushoverBtn.addEventListener('click', async function() {
-            const tokenInput = document.getElementById('pushover_token');
-            const keyInput = document.getElementById('pushover_key');
+            const tokenInput = document.getElementById('pushover_token') || document.querySelector('[name="pushover_token"]');
+            const keyInput = document.getElementById('pushover_key') || document.querySelector('[name="pushover_key"]');
             const statusElem = document.getElementById('pushover_status');
 
-            statusElem.textContent = 'Testing...';
-            statusElem.className = 'ml-2 text-sm text-yellow-500';
             pushoverBtn.disabled = true;
+            if (statusElem) {
+                statusElem.textContent = 'Testing...';
+                statusElem.className = 'ml-2 text-sm text-yellow-500';
+            }
 
             try {
                 const response = await fetch('/admin/test-pushover', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: tokenInput.value, user_key: keyInput.value })
+                    body: JSON.stringify({ token: tokenInput ? tokenInput.value : '', user_key: keyInput ? keyInput.value : '' })
                 });
                 const data = await response.json();
-                if (data.success) {
+                if (data.success && statusElem) {
                     statusElem.textContent = 'Success!';
                     statusElem.className = 'ml-2 text-sm text-green-600';
-                } else {
+                } else if (statusElem) {
                     statusElem.textContent = 'Failed: ' + (data.error || 'Unknown error');
                     statusElem.className = 'ml-2 text-sm text-red-600';
                 }
             } catch (error) {
                 console.error('Error testing Pushover:', error);
-                statusElem.textContent = 'Failed: Client-side error.';
-                statusElem.className = 'ml-2 text-sm text-red-600';
+                if (statusElem) {
+                    statusElem.textContent = 'Failed: Client-side error.';
+                    statusElem.className = 'ml-2 text-sm text-red-600';
+                }
             } finally {
                 pushoverBtn.disabled = false;
             }
@@ -204,6 +289,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Initial Page Load Actions ---
+    initTabs();
+    initSummaryGeneration();
+
     setApiKeyLinks();
     ['radarr_url', 'sonarr_url', 'bazarr_url'].forEach(id => {
         const el = document.getElementById(id);

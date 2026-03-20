@@ -871,52 +871,52 @@ def sync_sonarr_library():
                 else:
                     current_app.logger.warning(f"Skipping image trigger for show '{show_data.get('title')}' due to missing TMDB ID.")
 
-                # TVMaze enrichment (non-blocking)
+                # Show enrichment (TVDB primary, TVMaze fallback)
                 try:
-                    from app.tvmaze_enrichment import tvmaze_enrichment_service
+                    from app.thetvdb_enrichment import thetvdb_enrichment_service
 
-                    # Fetch the show row for enrichment check (need to check tvmaze_enriched_at)
+                    # Fetch the show row for enrichment check
                     show_row = db.execute('SELECT * FROM sonarr_shows WHERE id = ?', (show_db_id,)).fetchone()
 
                     if show_row:
                         show_dict_for_check = dict(show_row)
                     else:
-                        # Fallback if row not found (shouldn't happen)
                         show_dict_for_check = {
                             'id': show_db_id,
                             'tvdb_id': show_values.get('tvdb_id'),
                             'title': show_values.get('title'),
+                            'tvdb_enriched_at': None,
                             'tvmaze_enriched_at': None
                         }
 
-                    if tvmaze_enrichment_service.should_enrich_show(show_dict_for_check):
-                        current_app.logger.info(f"TVMaze enrichment needed for '{show_data.get('title')}'")
+                    if thetvdb_enrichment_service.should_enrich_show(show_dict_for_check):
+                        current_app.logger.info(f"Enrichment needed for '{show_data.get('title')}'")
                         try:
                             from app.system_logger import syslog, SystemLogger
-                            syslog.info(SystemLogger.ENRICHMENT, f"Starting TVMaze enrichment: {show_data.get('title')}")
+                            syslog.info(SystemLogger.ENRICHMENT, f"Starting enrichment: {show_data.get('title')}")
 
-                            success = tvmaze_enrichment_service.enrich_show(show_dict_for_check)
+                            success = thetvdb_enrichment_service.enrich_show(show_dict_for_check)
 
                             if success:
-                                syslog.success(SystemLogger.ENRICHMENT, f"TVMaze enrichment complete: {show_data.get('title')}")
+                                syslog.success(SystemLogger.ENRICHMENT, f"Enrichment complete: {show_data.get('title')}")
                             else:
-                                syslog.warning(SystemLogger.ENRICHMENT, f"TVMaze enrichment failed: {show_data.get('title')}")
+                                syslog.warning(SystemLogger.ENRICHMENT, f"Enrichment failed: {show_data.get('title')}")
                         except Exception as e_enrich:
-                            current_app.logger.error(f"TVMaze enrichment failed: {e_enrich}")
+                            current_app.logger.error(f"Enrichment failed: {e_enrich}")
                             try:
                                 from app.system_logger import syslog, SystemLogger
-                                syslog.error(SystemLogger.ENRICHMENT, f"TVMaze enrichment error: {show_data.get('title')}", {
+                                syslog.error(SystemLogger.ENRICHMENT, f"Enrichment error: {show_data.get('title')}", {
                                     'error': str(e_enrich)
                                 })
                             except:
                                 pass
                 except ImportError:
-                    current_app.logger.warning("TVMaze enrichment service not available")
+                    current_app.logger.warning("Enrichment service not available")
                 except Exception as e:
-                    current_app.logger.error(f"TVMaze enrichment error: {e}")
+                    current_app.logger.error(f"Enrichment error: {e}")
                     try:
                         from app.system_logger import syslog, SystemLogger
-                        syslog.error(SystemLogger.ENRICHMENT, f"TVMaze enrichment setup error: {show_data.get('title')}", {
+                        syslog.error(SystemLogger.ENRICHMENT, f"Enrichment setup error: {show_data.get('title')}", {
                             'error': str(e)
                         })
                     except:
@@ -1011,7 +1011,9 @@ def sync_sonarr_library():
                         ep_tmdb_rating = ep_ratings_data.get("tmdb", {}) if ep_ratings_data else {}
 
                         episode_values = {
+                            "show_id": show_db_id,
                             "season_id": season_db_id,
+                            "season_number": season_number,
                             "sonarr_show_id": sonarr_show_id,  # Sonarr's seriesId
                             "sonarr_episode_id": episode_data.get("id"),  # Sonarr's episodeId
                             "episode_number": episode_data.get("episodeNumber"),
@@ -1103,7 +1105,9 @@ def sync_sonarr_library():
 
                     for episode_data in episodes_in_season: # episodes_in_season are from all_episodes_data, grouped
                         episode_values_fb = {
+                            "show_id": show_db_id,
                             "season_id": season_db_id_fb,
+                            "season_number": season_number,
                             "sonarr_show_id": sonarr_show_id,
                             "sonarr_episode_id": episode_data.get("id"),
                             "episode_number": episode_data.get("episodeNumber"),
@@ -1111,7 +1115,6 @@ def sync_sonarr_library():
                             "overview": episode_data.get("overview"),
                             "air_date_utc": episode_data.get("airDateUtc"),
                             "has_file": bool(episode_data.get("hasFile", False)),
-                            # "monitored": bool(episode_data.get("monitored", False)), # Removed
                         }
                         episode_values_fb_filtered = {k: v for k, v in episode_values_fb.items() if v is not None or k == 'sonarr_episode_id'}
                         sql_episode_fb = """
@@ -1162,7 +1165,7 @@ def sync_sonarr_library():
 
         return shows_synced_count
 
-def update_sonarr_episode(series_id, episode_ids):
+def update_sonarr_episode(series_id, episode_ids, force_has_file=False):
     """
     Updates a specific set of episodes for a given series from Sonarr.
 
@@ -1177,16 +1180,14 @@ def update_sonarr_episode(series_id, episode_ids):
     
     with current_app.app_context():
         db = database.get_db()
-        
+
         # Fetch show data first
         show_data = get_sonarr_show_details(series_id)
         if not show_data:
             current_app.logger.error(f"Could not fetch show details for series ID {series_id}. Aborting update.")
             return
 
-        # Upsert show data to ensure it's up-to-date
-        # (This part is similar to the full sync, but for a single show)
-        # This logic can be refactored into a helper if it becomes repetitive
+        # Keep show metadata fresh
         db.execute('''
             INSERT INTO sonarr_shows (sonarr_id, title, year, status, overview, seasons, tvdb_id, tmdb_id, imdb_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1211,44 +1212,98 @@ def update_sonarr_episode(series_id, episode_ids):
                 show_data.get('imdbId')
             )
         )
-        
-        # Now, fetch and update the specific episodes
+
+        show_row = db.execute(
+            'SELECT id FROM sonarr_shows WHERE sonarr_id = ?',
+            (series_id,)
+        ).fetchone()
+        if not show_row:
+            db.commit()
+            current_app.logger.error(f"Could not resolve local show row for Sonarr series ID {series_id}.")
+            return
+        show_id = show_row['id']
+
+        # Fetch all Sonarr episodes for this show, then target only requested IDs
         all_episodes_data = get_episodes_by_series_id(series_id)
         if not all_episodes_data:
             current_app.logger.warning(f"No episodes found for series ID {series_id}, but show was updated.")
             db.commit()
             return
-            
-        episodes_to_update = [ep for ep in all_episodes_data if ep.get('id') in episode_ids]
+
+        episode_id_set = set(episode_ids or [])
+        episodes_to_update = [ep for ep in all_episodes_data if ep.get('id') in episode_id_set]
+        if not episodes_to_update:
+            current_app.logger.warning(f"No matching episodes found for series ID {series_id} and IDs {episode_ids}.")
+            db.commit()
+            return
+
+        updated_count = 0
 
         for episode_data in episodes_to_update:
-            is_available = episode_data.get('hasFile', False)
+            season_number = episode_data.get('seasonNumber')
+            season_id = None
+
+            if season_number is not None:
+                season_row = db.execute(
+                    'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                    (show_id, season_number)
+                ).fetchone()
+                if season_row:
+                    season_id = season_row['id']
+                else:
+                    db.execute(
+                        'INSERT INTO sonarr_seasons (show_id, season_number) VALUES (?, ?)',
+                        (show_id, season_number)
+                    )
+                    season_id = db.execute(
+                        'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                        (show_id, season_number)
+                    ).fetchone()['id']
+
+            if season_id is None:
+                current_app.logger.warning(
+                    f"Skipping Sonarr episode {episode_data.get('id')} for series {series_id} due to missing season number."
+                )
+                continue
+
+            has_file = True if force_has_file else bool(episode_data.get('hasFile', False))
             db.execute('''
-                INSERT INTO sonarr_episodes (episode_id, sonarr_show_id, title, season_number, episode_number, overview, air_date, is_available)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(episode_id) DO UPDATE SET
-                    sonarr_show_id = excluded.sonarr_show_id,
-                    title = excluded.title,
+                INSERT INTO sonarr_episodes (
+                    sonarr_episode_id, show_id, season_id, season_number, episode_number,
+                    sonarr_show_id, title, overview, air_date_utc, has_file
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(sonarr_episode_id) DO UPDATE SET
+                    show_id = excluded.show_id,
+                    season_id = excluded.season_id,
                     season_number = excluded.season_number,
                     episode_number = excluded.episode_number,
+                    sonarr_show_id = excluded.sonarr_show_id,
+                    title = excluded.title,
                     overview = excluded.overview,
-                    air_date = excluded.air_date,
-                    is_available = excluded.is_available;
+                    air_date_utc = excluded.air_date_utc,
+                    has_file = excluded.has_file;
                 ''', (
                     episode_data.get('id'),
+                    show_id,
+                    season_id,
+                    season_number,
+                    episode_data.get('episodeNumber'),
                     series_id,
                     episode_data.get('title'),
-                    episode_data.get('seasonNumber'),
-                    episode_data.get('episodeNumber'),
                     episode_data.get('overview'),
                     episode_data.get('airDateUtc'),
-                    is_available
+                    has_file
                 )
             )
-            current_app.logger.info(f"Updated episode: {show_data.get('title')} S{episode_data.get('seasonNumber')}E{episode_data.get('episodeNumber')} (Available: {is_available})")
+            updated_count += 1
+            current_app.logger.info(
+                f"Updated episode: {show_data.get('title')} S{season_number}E{episode_data.get('episodeNumber')} (has_file={has_file})"
+            )
 
         db.commit()
-        current_app.logger.info(f"Finished targeted Sonarr update for series ID {series_id}.")
+        current_app.logger.info(f"Finished targeted Sonarr update for series ID {series_id}. Updated {updated_count} episodes.")
+        return updated_count
 
 
 def sync_radarr_library():
@@ -1614,20 +1669,19 @@ def sync_tautulli_watch_history(full_import=False, batch_size=1000, max_records=
                         duplicates += 1
                         continue
 
-                # Get show's TMDB ID from database using grandparent_rating_key (TVDB ID)
+                # Get show's TMDB ID from database
+                # grandparent_rating_key is Plex's internal ID, NOT TVDB ID,
+                # so we primarily match by show title
                 show_tmdb_id = None
-                grandparent_key = item.get('grandparent_rating_key')
-                if grandparent_key and item.get('media_type') == 'episode':
-                    try:
-                        tvdb_id = int(grandparent_key)
+                if item.get('media_type') == 'episode':
+                    show_title = item.get('grandparent_title')
+                    if show_title:
                         show_record = db_conn.execute(
-                            'SELECT tmdb_id FROM sonarr_shows WHERE tvdb_id = ?',
-                            (tvdb_id,)
+                            'SELECT tmdb_id FROM sonarr_shows WHERE LOWER(title) = LOWER(?)',
+                            (show_title,)
                         ).fetchone()
                         if show_record:
                             show_tmdb_id = show_record['tmdb_id']
-                    except (ValueError, TypeError):
-                        pass
 
                 db_conn.execute(
                     """INSERT INTO plex_activity_log (
@@ -1703,14 +1757,36 @@ def process_activity_log_for_watch_status():
 
     current_app.logger.info("Starting to process activity log for watch status...")
 
-    # Get all stop/scrobble events for episodes
+    # Backfill tmdb_id for activity log entries that are missing it (e.g., from Tautulli imports)
+    # This uses show_title matching against sonarr_shows to populate tmdb_id
+    try:
+        backfill_result = db.execute("""
+            UPDATE plex_activity_log
+            SET tmdb_id = (
+                SELECT s.tmdb_id FROM sonarr_shows s
+                WHERE LOWER(s.title) = LOWER(plex_activity_log.show_title)
+                LIMIT 1
+            )
+            WHERE tmdb_id IS NULL
+              AND show_title IS NOT NULL
+              AND media_type = 'episode'
+        """)
+        if backfill_result.rowcount > 0:
+            db.commit()
+            current_app.logger.info(f"Backfilled tmdb_id for {backfill_result.rowcount} activity log entries")
+    except Exception as e:
+        current_app.logger.warning(f"tmdb_id backfill failed (non-critical): {e}")
+
+    # Get all stop/scrobble/watched events for episodes
     activity_events = db.execute("""
         SELECT DISTINCT
+            pal.event_type,
             pal.plex_username,
             pal.grandparent_rating_key,
             pal.parent_rating_key,
             pal.rating_key,
             pal.tmdb_id,
+            pal.show_title,
             pal.season_episode,
             pal.view_offset_ms,
             pal.duration_ms,
@@ -1719,7 +1795,6 @@ def process_activity_log_for_watch_status():
         FROM plex_activity_log pal
         WHERE pal.media_type = 'episode'
           AND pal.event_type IN ('media.stop', 'media.scrobble', 'watched')
-          AND pal.duration_ms > 0
         ORDER BY pal.event_timestamp DESC
     """).fetchall()
 
@@ -1727,12 +1802,27 @@ def process_activity_log_for_watch_status():
 
     for event in activity_events:
         try:
-            # Calculate watch percentage
-            watch_percentage = (event['view_offset_ms'] / event['duration_ms'] * 100) if event['duration_ms'] > 0 else 0
+            # Determine if this event represents a completed watch.
+            # Tautulli-imported entries have event_type='watched' and NULL view_offset_ms,
+            # so we treat those as watched directly (Tautulli only records completed watches).
+            # For Plex webhook entries (media.stop/media.scrobble), use the percentage check.
+            event_type = event['event_type'] if 'event_type' in event.keys() else ''
 
-            # Only mark as watched if >= 95% complete
-            if watch_percentage < 95:
-                continue
+            if event_type == 'watched':
+                # Tautulli imports — these are already confirmed watched
+                pass
+            elif event_type == 'media.scrobble':
+                # Plex sends scrobble at ~90% watched — treat as watched
+                pass
+            else:
+                # For media.stop, check watch percentage
+                view_offset = event['view_offset_ms'] or 0
+                duration = event['duration_ms'] or 0
+                watch_percentage = (view_offset / duration * 100) if duration > 0 else 0
+
+                # Only mark as watched if >= 95% complete
+                if watch_percentage < 95:
+                    continue
 
             # Get user ID from plex_username
             user_row = db.execute('SELECT id FROM users WHERE plex_username = ?', (event['plex_username'],)).fetchone()
@@ -1741,16 +1831,16 @@ def process_activity_log_for_watch_status():
 
             user_id = user_row['id']
 
-            # Get show info from tmdb_id
-            if not event['tmdb_id']:
-                # Try to get from TVDB ID
-                try:
-                    tvdb_id = int(event['grandparent_rating_key'])
-                    show_row = db.execute('SELECT id, tmdb_id FROM sonarr_shows WHERE tvdb_id = ?', (tvdb_id,)).fetchone()
-                except:
-                    continue
-            else:
+            # Get show info — try tmdb_id first, then fall back to show title matching
+            show_row = None
+            if event['tmdb_id']:
                 show_row = db.execute('SELECT id FROM sonarr_shows WHERE tmdb_id = ?', (event['tmdb_id'],)).fetchone()
+
+            if not show_row and event['show_title']:
+                show_row = db.execute(
+                    'SELECT id FROM sonarr_shows WHERE LOWER(title) = LOWER(?)',
+                    (event['show_title'],)
+                ).fetchone()
 
             if not show_row:
                 continue
@@ -1900,6 +1990,65 @@ def test_jellyseer_connection_with_params(url, api_key):
         endpoint='/api/v1/settings/main'
     )
 
+def get_jellyseer_user_requests():
+    """
+    Fetch all Jellyseerr requests and return a dict mapping
+    plex_username (lowercase) -> request count.
+    Returns empty dict if Jellyseerr is not configured or the request fails.
+    """
+    jellyseer_url = database.get_setting('jellyseer_url')
+    jellyseer_api_key = database.get_setting('jellyseer_api_key')
+    if not jellyseer_url or not jellyseer_api_key:
+        return {}
+    try:
+        headers = {'X-Api-Key': jellyseer_api_key}
+        response = requests.get(
+            f"{jellyseer_url}/api/v1/request",
+            params={'take': 1000, 'filter': 'all', 'sort': 'added'},
+            headers=headers,
+            timeout=2
+        )
+        if response.status_code != 200:
+            return {}
+        counts = {}
+        for req in response.json().get('results', []):
+            requested_by = req.get('requestedBy', {})
+            plex_username = (requested_by.get('plexUsername') or requested_by.get('username') or '').lower()
+            if plex_username:
+                counts[plex_username] = counts.get(plex_username, 0) + 1
+        return counts
+    except Exception:
+        return {}
+
+def test_thetvdb_connection():
+    """Tests the connection to TheTVDB API using the configured API key."""
+    api_key = database.get_setting('thetvdb_api_key')
+    if not api_key:
+        return False, "TheTVDB API key not configured."
+    return test_thetvdb_connection_with_params(api_key)
+
+def test_thetvdb_connection_with_params(api_key):
+    """Tests TheTVDB API connection by attempting login."""
+    if not api_key:
+        return False, "TheTVDB API key is required."
+    try:
+        resp = requests.post(
+            "https://api4.thetvdb.com/v4/login",
+            json={"apikey": api_key},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('data', {}).get('token'):
+                return True, "Connected successfully."
+            return False, "Login succeeded but no token returned."
+        elif resp.status_code == 401:
+            return False, "Invalid API key."
+        else:
+            return False, f"Unexpected response (HTTP {resp.status_code})"
+    except requests.exceptions.RequestException as e:
+        return False, f"Connection error: {str(e)}"
+
 def get_tautulli_activity():
     """
     Get current activity (now playing) from Tautulli.
@@ -1958,6 +2107,53 @@ def _fetch_tautulli_sessions():
 
     _set_cached_tautulli('activity_sessions', [])
     return []
+
+def get_tautulli_data(username=None):
+    """
+    Fetch Tautulli activity in a single API call, returning both the user's current
+    session and the total stream count.
+
+    Args:
+        username (str, optional): Plex username to find the user's session
+
+    Returns:
+        tuple: (user_session_or_None, stream_count_int)
+    """
+    try:
+        tautulli_url = database.get_setting('tautulli_url')
+        tautulli_api_key = database.get_setting('tautulli_api_key')
+
+        if not tautulli_url or not tautulli_api_key:
+            return None, 0
+
+        params = {
+            'apikey': tautulli_api_key,
+            'cmd': 'get_activity'
+        }
+
+        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('response', {}).get('result') == 'success':
+                activity = data.get('response', {}).get('data', {})
+                sessions = activity.get('sessions', [])
+                stream_count = activity.get('stream_count', 0)
+
+                user_session = None
+                if username and sessions:
+                    for session in sessions:
+                        if session.get('user') == username:
+                            user_session = session
+                            break
+                elif sessions:
+                    user_session = sessions[0]
+
+                return user_session, stream_count
+
+        return None, 0
+    except Exception:
+        return None, 0
 
 def get_tautulli_current_activity(username=None):
     """

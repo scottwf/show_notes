@@ -2,22 +2,122 @@
 {% block admin_page_title %}Users{% endblock %}
 {% block admin_page_header %}Users{% endblock %}
 {% block admin_page_content %}
-<table class="min-w-full text-sm">
-  <tr class="font-bold text-left"><th class="pr-4">Avatar</th><th class="pr-4">Username</th><th class="pr-4">Last Login</th><th>Last Watched</th></tr>
-  {% for user in users %}
-  <tr class="border-t">
-    <td class="py-1">
-      {% if user.plex_user_id and plex_token %}
-      <img src="https://plex.tv/users/{{ user.plex_user_id }}/avatar?token={{ plex_token }}" class="h-8 w-8 rounded-full"/>
-      {% endif %}
-    </td>
-    <td>{{ user.username }}</td>
-    <td>{{ user.last_login_at or 'N/A' }}</td>
-    <td>
-      {% set latest = user_latest.get(user.id) %}
-      {% if latest %}{{ latest.season_episode }} {{ latest.title }}{% else %}N/A{% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
+      <thead class="bg-slate-50 dark:bg-slate-700">
+        <tr>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Login</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Watched</th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Watches</th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Favorites</th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Issues</th>
+          {% if jellyseer_counts is not none %}
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Requests</th>
+          {% endif %}
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+        {% if not users %}
+        <tr>
+          <td colspan="8" class="px-4 py-8 text-center text-slate-400 dark:text-slate-500">No users found.</td>
+        </tr>
+        {% endif %}
+        {% for user in users %}
+        {% set pn = user.plex_username %}
+        {% set watched = last_watched.get(pn) if pn else none %}
+        {% set wcount = watch_counts.get(pn, 0) if pn else 0 %}
+        {% set icount = (issue_counts.get(user.id, 0) or 0) + (problem_counts.get(user.id, 0) or 0) %}
+        {% set fcount = fav_counts.get(user.id, 0) or 0 %}
+        {% set jcount = jellyseer_counts.get((pn or '').lower()) if pn else none %}
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+          <!-- Avatar + Name -->
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-3">
+              {% if user.profile_photo_url %}
+              <img src="{{ user.profile_photo_url }}" alt="{{ user.username }}"
+                   class="h-9 w-9 rounded-full object-cover flex-shrink-0"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+              <div class="hidden h-9 w-9 rounded-full bg-sky-500 items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                {{ (user.username or '?')[0].upper() }}
+              </div>
+              {% else %}
+              <div class="flex h-9 w-9 rounded-full bg-sky-500 items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                {{ (user.username or '?')[0].upper() }}
+              </div>
+              {% endif %}
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-medium text-slate-900 dark:text-slate-100 truncate">{{ user.username }}</span>
+                  {% if user.is_admin %}
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">Admin</span>
+                  {% endif %}
+                </div>
+                {% if pn and pn != user.username %}
+                <div class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ pn }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <!-- Last Login -->
+          <td class="px-4 py-3 text-slate-600 dark:text-slate-300 whitespace-nowrap">
+            {% if user.last_login_at %}
+            {{ user.last_login_at[:16].replace('T', ' ') }}
+            {% else %}
+            <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+          <!-- Last Watched -->
+          <td class="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-xs">
+            {% if watched %}
+            <div class="truncate">
+              {% if watched.show_title %}
+              <span class="font-medium">{{ watched.show_title }}</span>
+              {% if watched.season_episode %} <span class="text-slate-400">{{ watched.season_episode }}</span>{% endif %}
+              {% else %}
+              {{ watched.title }}
+              {% endif %}
+            </div>
+            <div class="text-xs text-slate-400 dark:text-slate-500">{{ watched.event_timestamp[:10] if watched.event_timestamp else '' }}</div>
+            {% else %}
+            <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+          <!-- Watch count -->
+          <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300 font-medium">
+            {{ wcount if wcount else '—' }}
+          </td>
+          <!-- Favorites -->
+          <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300 font-medium">
+            {{ fcount if fcount else '—' }}
+          </td>
+          <!-- Issues (amber badge if any) -->
+          <td class="px-4 py-3 text-center">
+            {% if icount > 0 %}
+            <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{{ icount }}</span>
+            {% else %}
+            <span class="text-slate-400">—</span>
+            {% endif %}
+          </td>
+          <!-- Jellyseerr requests -->
+          {% if jellyseer_counts is not none %}
+          <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300 font-medium">
+            {{ jcount if jcount else '—' }}
+          </td>
+          {% endif %}
+          <!-- Actions -->
+          <td class="px-4 py-3">
+            <a href="{{ url_for('admin.watch_history_view') }}"
+               class="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 text-xs font-medium whitespace-nowrap">
+              Watch History →
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

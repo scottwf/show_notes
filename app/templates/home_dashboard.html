@@ -6,7 +6,7 @@
     {# Profile Header #}
     <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 mb-8">
       <div class="flex items-center justify-between flex-wrap gap-4">
-        <div class="flex items-center gap-4">
+        <a href="{{ url_for('main.profile') }}" class="group flex items-center gap-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800" aria-label="Open your profile page">
           <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-2xl sm:text-3xl font-bold shadow-lg overflow-hidden">
             {% if user.profile_photo_url %}
               <img src="{{ user.profile_photo_url }}" alt="{{ user.username }}" class="w-full h-full object-cover">
@@ -15,10 +15,10 @@
             {% endif %}
           </div>
           <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">{{ user.username }}</h1>
-            <p class="text-sm sm:text-base text-slate-600 dark:text-slate-400">Plex member since {{ user.plex_member_since | format_datetime('%B %Y') if user.plex_member_since else 'Unknown' }}</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">{{ user.username }}</h1>
+            <p class="text-sm sm:text-base text-slate-600 dark:text-slate-400 group-hover:text-sky-600/80 dark:group-hover:text-sky-300 transition-colors">Plex member since {{ user.plex_member_since | format_datetime('%B %Y') if user.plex_member_since else 'Unknown' }}</p>
           </div>
-        </div>
+        </a>
 
         {# Quick Stats #}
         <div class="flex gap-4 sm:gap-6">
@@ -160,7 +160,7 @@
             <svg class="w-6 h-6 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
             </svg>
-            Your Upcoming Season Premieres
+            New & Upcoming Season Premieres
           </h2>
           <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
             View All →
@@ -178,9 +178,15 @@
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
-                  <div class="absolute top-1 right-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded font-semibold shadow-lg">
-                    S{{ show.season_number }}
+                  {% if show.is_newly_aired %}
+                  <div class="absolute top-2 right-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    NEW
                   </div>
+                  {% else %}
+                  <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    {{ show.premiere_type }}
+                  </div>
+                  {% endif %}
 
                   {# Favorite or Requested Badge #}
                   {% if show.is_favorited %}
@@ -205,8 +211,8 @@
                     </a>
                   </h3>
                   {% if show.air_date_utc %}
-                  <p class="text-xs text-sky-600 dark:text-sky-400 mt-1">
-                    {{ show.air_date_utc | format_datetime('%b %d') }}
+                  <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
+                    {% if show.is_newly_aired %}Aired{% else %}Airs{% endif %} {{ show.air_date_utc | format_datetime('%b %d') }}
                   </p>
                   {% endif %}
                 </div>
@@ -225,7 +231,7 @@
             <svg class="w-6 h-6 mr-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
             </svg>
-            New Series Premieres
+            New & Upcoming Series Premieres
           </h2>
           <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
             View All →
@@ -243,9 +249,15 @@
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
-                  <div class="absolute top-1 right-1 bg-green-600 text-white text-xs px-1.5 py-0.5 rounded font-semibold shadow-lg">
-                    New
+                  {% if show.is_newly_aired %}
+                  <div class="absolute top-2 right-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    NEW
                   </div>
+                  {% else %}
+                  <div class="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                    New Series
+                  </div>
+                  {% endif %}
 
                   {# Requested Badge #}
                   {% if show.user_requested %}
@@ -264,8 +276,8 @@
                     </a>
                   </h3>
                   {% if show.premiere_date %}
-                  <p class="text-xs text-sky-600 dark:text-sky-400 mt-1">
-                    {{ show.premiere_date | format_datetime('%b %d') }}
+                  <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
+                    {% if show.is_newly_aired %}Premiered{% else %}Premieres{% endif %} {{ show.premiere_date | format_datetime('%b %d') }}
                   </p>
                   {% endif %}
                 </div>

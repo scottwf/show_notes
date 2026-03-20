@@ -122,20 +122,27 @@ def update_session_profile_photo():
     except Exception:
         pass  # Silently fail to avoid breaking the request
 
-def _get_profile_stats(db, user_id=None):
+def _get_profile_stats(db, user_id=None, now_playing_count=None):
     """
     Helper function to get consistent statistics for profile pages.
     Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
     favorite_count (if user_id provided), unread_notification_count (if user_id provided)
 
     Performance optimization: Consolidated queries to reduce database round-trips.
+
+    Args:
+        now_playing_count: Pre-fetched stream count to avoid a redundant Tautulli API call.
+                           If None, fetches from Tautulli directly.
     """
     from ..utils import get_tautulli_activity
 
     stats = {}
 
-    # Now Playing: get real-time activity from Tautulli (external API call, can't consolidate)
-    stats['now_playing_count'] = get_tautulli_activity()
+    # Now Playing: use pre-fetched count if provided, otherwise call Tautulli
+    if now_playing_count is not None:
+        stats['now_playing_count'] = now_playing_count
+    else:
+        stats['now_playing_count'] = get_tautulli_activity()
 
     # Consolidated query for all count statistics to reduce database round-trips
     # This single query replaces 5-6 separate COUNT queries
@@ -285,12 +292,13 @@ def home():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get currently playing/paused item from Tautulli (real-time data)
-    from ..utils import get_tautulli_current_activity
+    # Single API call returns both the user's session and total stream count
+    from ..utils import get_tautulli_data
 
     current_plex_event = None
     s_username = user['plex_username'] if user['plex_username'] else user['username']
 
-    tautulli_session = get_tautulli_current_activity(username=s_username)
+    tautulli_session, tautulli_stream_count = get_tautulli_data(username=s_username)
 
     if tautulli_session:
         # Convert Tautulli session data to our expected format
@@ -349,8 +357,8 @@ def home():
                 if episode and episode['overview']:
                     current_plex_event['overview'] = episode['overview']
 
-    # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    # Get profile statistics — pass pre-fetched stream count to avoid a second Tautulli call
+    stats = _get_profile_stats(db, user_id, now_playing_count=tautulli_stream_count)
 
     # Get recently watched shows from last 7 days (grouped by show/movie for homepage cards)
     recent_watched = db.execute("""
@@ -377,42 +385,38 @@ def home():
         LIMIT 20
     """, (s_username,)).fetchall()
 
-    # Enrich recently watched with show/movie data for cards
-    # Batch query approach to avoid N+1 queries
-    recent_shows_enriched = []
+    # Enrich recently watched with show/movie data — batch lookups to avoid N+1 queries
+    movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
+                      if dict(i)['media_type'] == 'movie' and dict(i).get('tmdb_id')]
+    show_titles = [dict(i)['display_title'].lower() for i in recent_watched
+                   if dict(i)['media_type'] == 'episode' and dict(i).get('display_title')]
 
-    # Collect all tmdb_ids for movies and show titles for episodes
-    movie_tmdb_ids = [item['tmdb_id'] for item in recent_watched
-                      if item['media_type'] == 'movie' and item['tmdb_id']]
-    show_titles = [item['display_title'].lower() for item in recent_watched
-                   if item['media_type'] == 'episode' and item['display_title']]
-
-    # Batch fetch movies
-    movies_map = {}
+    movies_by_id = {}
     if movie_tmdb_ids:
         placeholders = ','.join('?' * len(movie_tmdb_ids))
-        movies = db.execute(
+        for row in db.execute(
             f'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
             movie_tmdb_ids
-        ).fetchall()
-        movies_map = {m['tmdb_id']: dict(m) for m in movies}
+        ).fetchall():
+            movies_by_id[row['tmdb_id']] = dict(row)
 
-    # Batch fetch shows
-    shows_map = {}
+    shows_by_title = {}
     if show_titles:
         placeholders = ','.join('?' * len(show_titles))
-        shows = db.execute(
-            f'SELECT tmdb_id, title, year, status, poster_url, LOWER(title) as title_lower FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+        for row in db.execute(
+            f'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
             show_titles
-        ).fetchall()
-        shows_map = {s['title_lower']: dict(s) for s in shows}
+        ).fetchall():
+            shows_by_title[row['title'].lower()] = dict(row)
+
+    recent_shows_enriched = []
 
     # Now enrich items using the pre-fetched data
     for item in recent_watched:
         item_dict = dict(item)
 
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = movies_map.get(item_dict['tmdb_id'])
+            movie = movies_by_id.get(item_dict['tmdb_id'])
             if movie:
                 item_dict['title'] = movie['title']
                 item_dict['year'] = movie['year']
@@ -423,7 +427,7 @@ def home():
                 recent_shows_enriched.append(item_dict)
 
         elif item_dict['media_type'] == 'episode' and item_dict.get('display_title'):
-            show = shows_map.get(item_dict['display_title'].lower())
+            show = shows_by_title.get(item_dict['display_title'].lower())
             if show:
                 item_dict['title'] = show['title']
                 item_dict['year'] = show['year']
@@ -436,7 +440,8 @@ def home():
 
     # Get current date/time for filtering
     now = datetime.datetime.now(timezone.utc).isoformat()
-    
+    seven_days_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=7)).isoformat()
+
     # Get favorited show IDs
     favorited_show_ids = db.execute("""
         SELECT show_id FROM user_favorites
@@ -486,12 +491,13 @@ def home():
     # Combine favorited, watched, and requested show IDs (unique)
     tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
     
-    # Get upcoming episodes for favorited/watched/requested shows (season premieres, limit 10)
+    # Get new & upcoming episodes for favorited/watched/requested shows (season premieres)
+    # Includes last 7 days so recently aired premieres don't vanish immediately
     favorited_season_premieres = []
     if tracked_show_ids:
         placeholders = ','.join('?' * len(tracked_show_ids))
         favorited_season_premieres = db.execute(f"""
-            SELECT 
+            SELECT
                 e.id as episode_id,
                 e.episode_number,
                 e.title as episode_title,
@@ -513,12 +519,12 @@ def home():
                 AND ss.season_number > 0
                 AND e.air_date_utc IS NOT NULL
                 AND e.air_date_utc >= ?
-                AND e.has_file = 0
             ORDER BY e.air_date_utc ASC
-            LIMIT 10
-        """, (*tracked_show_ids, now)).fetchall()
-    
-    # Get upcoming series premieres (all shows, S01E01, limit 10)
+            LIMIT 20
+        """, (*tracked_show_ids, seven_days_ago)).fetchall()
+
+    # Get new & upcoming series premieres (all shows, S01E01)
+    # Includes last 7 days so recently aired premieres stay visible
     all_series_premieres = db.execute("""
         SELECT
             s.id as show_db_id,
@@ -538,10 +544,9 @@ def home():
             AND ss.season_number = 1
             AND e.air_date_utc IS NOT NULL
             AND e.air_date_utc >= ?
-            AND e.has_file = 0
         ORDER BY e.air_date_utc ASC
-        LIMIT 10
-    """, (now,)).fetchall()
+        LIMIT 20
+    """, (seven_days_ago,)).fetchall()
     
     # Format favorited/watched/requested season premieres
     formatted_favorited_premieres = []
@@ -555,15 +560,16 @@ def home():
                                          episode_number=ep['episode_number'])
         ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
         ep_dict['premiere_type'] = f"Season {ep['season_number']} Premiere"
-        
+        ep_dict['is_newly_aired'] = ep['air_date_utc'] and ep['air_date_utc'] < now
+
         # Check if user requested this show
         ep_dict['user_requested'] = False
         if user_tag_ids and ep['tags']:
             show_tag_ids = [int(tag_id) for tag_id in str(ep['tags']).split(',') if tag_id.strip().isdigit()]
             ep_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
-        
+
         formatted_favorited_premieres.append(ep_dict)
-    
+
     # Format series premieres
     formatted_series_premieres = []
     for show in all_series_premieres:
@@ -575,13 +581,14 @@ def home():
                                            season_number=show['season_number'],
                                            episode_number=show['episode_number'])
         show_dict['premiere_type'] = 'Series Premiere'
-        
+        show_dict['is_newly_aired'] = show['premiere_date'] and show['premiere_date'] < now
+
         # Check if user requested this show
         show_dict['user_requested'] = False
         if user_tag_ids and show['tags']:
             show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
             show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
-        
+
         formatted_series_premieres.append(show_dict)
     
     # Get recently synced movies (most recent 10 from Radarr)
@@ -1094,20 +1101,80 @@ def sonarr_webhook():
             'Test'                # Test event
         ]
         
+        run_full_sync = False
+
         if event_type == 'Download':
             current_app.logger.info(f"Sonarr webhook event 'Download' detected, triggering targeted episode update.")
             try:
                 # Extract necessary info from the payload
                 series_id = payload.get('series', {}).get('id')
                 series_title = payload.get('series', {}).get('title', 'Unknown Show')
-                episode_ids = [ep.get('id') for ep in payload.get('episodes', [])]
+                episode_ids = [ep.get('id') for ep in payload.get('episodes', []) if ep.get('id') is not None]
+                # Some Sonarr payload variants send a single `episode` object instead of `episodes[]`
+                single_episode_id = payload.get('episode', {}).get('id')
+                if single_episode_id is not None and single_episode_id not in episode_ids:
+                    episode_ids.append(single_episode_id)
                 episodes_info = payload.get('episodes', [])
+                if not episodes_info and payload.get('episode'):
+                    episodes_info = [payload.get('episode')]
 
                 if not series_id or not episode_ids:
-                    current_app.logger.error("Webhook 'Download' event missing series_id or episode_ids.")
+                    current_app.logger.warning("Webhook 'Download' event missing series_id or episode_ids; triggering full library sync fallback.")
+                    # Fall back to full sync so availability still updates even with partial webhook payloads.
+                    run_full_sync = True
                 else:
                     from ..utils import update_sonarr_episode
                     import threading
+
+                    # Optimistically mark downloaded episodes as available immediately.
+                    # Sonarr's episode endpoint can briefly lag right after a Download event.
+                    try:
+                        db_local = database.get_db()
+                        show_local = db_local.execute(
+                            'SELECT id FROM sonarr_shows WHERE sonarr_id = ?',
+                            (series_id,)
+                        ).fetchone()
+                        if show_local:
+                            show_local_id = show_local['id']
+                            marked_count = 0
+                            for ep in episodes_info:
+                                season_num = ep.get('seasonNumber')
+                                episode_num = ep.get('episodeNumber')
+                                if season_num is None or episode_num is None:
+                                    continue
+                                # Look up season_id first, then update by season_id + episode_number
+                                # This is more reliable than show_id + season_number which may be NULL
+                                # for episodes created by the full sync
+                                season_local = db_local.execute(
+                                    'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                                    (show_local_id, season_num)
+                                ).fetchone()
+                                if not season_local:
+                                    current_app.logger.warning(
+                                        f"No season row found for show_id={show_local_id} season={season_num} during optimistic mark"
+                                    )
+                                    continue
+                                result = db_local.execute(
+                                    '''
+                                    UPDATE sonarr_episodes
+                                    SET has_file = 1
+                                    WHERE season_id = ? AND episode_number = ?
+                                    ''',
+                                    (season_local['id'], episode_num)
+                                )
+                                marked_count += result.rowcount
+                            if marked_count:
+                                db_local.commit()
+                                current_app.logger.info(
+                                    f"Marked {marked_count} episode row(s) available immediately for series {series_id} from Download webhook."
+                                )
+                            else:
+                                current_app.logger.warning(
+                                    f"Optimistic mark matched 0 episodes for series {series_id}. "
+                                    f"Episodes may not exist in DB yet — background sync will create them."
+                                )
+                    except Exception as mark_err:
+                        current_app.logger.warning(f"Immediate has_file mark from Download webhook failed: {mark_err}")
 
                     # Capture the real application object to pass to the thread
                     app_instance = current_app._get_current_object()
@@ -1123,9 +1190,59 @@ def sonarr_webhook():
                             })
 
                             try:
-                                update_sonarr_episode(series_id, episode_ids)
+                                updated_count = update_sonarr_episode(series_id, episode_ids, force_has_file=True) or 0
                                 current_app.logger.info(f"Targeted episode sync for series {series_id} completed.")
                                 syslog.success(SystemLogger.SYNC, f"Episode sync complete: {series_title}")
+
+                                # Verify downloaded episodes are marked available in DB; if not, run full sync fallback.
+                                try:
+                                    expected_eps = [
+                                        (ep.get('seasonNumber'), ep.get('episodeNumber'))
+                                        for ep in episodes_info
+                                        if ep.get('seasonNumber') is not None and ep.get('episodeNumber') is not None
+                                    ]
+                                    if expected_eps:
+                                        db_check = database.get_db()
+                                        show_row_check = db_check.execute(
+                                            'SELECT id FROM sonarr_shows WHERE sonarr_id = ?',
+                                            (series_id,)
+                                        ).fetchone()
+                                        available_count = 0
+                                        if show_row_check:
+                                            show_id_check = show_row_check['id']
+                                            for season_num, episode_num in expected_eps:
+                                                # Use season_id lookup for reliable matching
+                                                season_check = db_check.execute(
+                                                    'SELECT id FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+                                                    (show_id_check, season_num)
+                                                ).fetchone()
+                                                if not season_check:
+                                                    continue
+                                                row = db_check.execute(
+                                                    '''
+                                                    SELECT has_file
+                                                    FROM sonarr_episodes
+                                                    WHERE season_id = ? AND episode_number = ?
+                                                    ''',
+                                                    (season_check['id'], episode_num)
+                                                ).fetchone()
+                                                if row and row['has_file']:
+                                                    available_count += 1
+
+                                        if available_count < len(expected_eps):
+                                            current_app.logger.warning(
+                                                f"Targeted Sonarr update left {len(expected_eps) - available_count}/{len(expected_eps)} episodes unavailable for series {series_id}; triggering full sync fallback."
+                                            )
+                                            syslog.warning(SystemLogger.SYNC, f"Targeted sync incomplete for {series_title}; running full sync fallback", {
+                                                'series_id': series_id,
+                                                'expected_episodes': len(expected_eps),
+                                                'available_after_targeted': available_count,
+                                                'updated_count': updated_count
+                                            })
+                                            from ..utils import sync_sonarr_library
+                                            sync_sonarr_library()
+                                except Exception as verify_err:
+                                    current_app.logger.warning(f"Targeted Sonarr availability verification failed: {verify_err}")
 
                                 # TVMaze enrichment for the show
                                 try:
@@ -1217,8 +1334,10 @@ def sonarr_webhook():
 
             except Exception as e:
                 current_app.logger.error(f"Failed to trigger targeted Sonarr sync from webhook: {e}", exc_info=True)
+                # Ensure we still attempt a full sync fallback
+                run_full_sync = True
         
-        elif event_type in sync_events:
+        if run_full_sync or (event_type in sync_events and event_type != 'Download'):
             current_app.logger.info(f"Sonarr webhook event '{event_type}' detected, triggering full library sync as a fallback.")
             
             # Import here to avoid circular imports
@@ -1728,7 +1847,8 @@ def onboarding_services():
         'openai_model': os.getenv('OPENAI_MODEL', ''),
         'pushover_key': os.getenv('PUSHOVER_USER_KEY', ''),
         'pushover_token': os.getenv('PUSHOVER_API_TOKEN', ''),
-        'plex_client_id': os.getenv('PLEX_CLIENT_ID', '')
+        'plex_client_id': os.getenv('PLEX_CLIENT_ID', ''),
+        'thetvdb_api_key': os.getenv('THETVDB_API_KEY', '')
     }
 
     if request.method == 'POST':
@@ -1746,8 +1866,8 @@ def onboarding_services():
                    ollama_url, ollama_model_name,
                    openai_api_key, openai_model_name,
                    pushover_key, pushover_token, plex_client_id,
-                   timezone)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   thetvdb_api_key, timezone)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (
                     request.form.get('radarr_url', ''),
                     request.form.get('radarr_api_key', ''),
@@ -1768,6 +1888,7 @@ def onboarding_services():
                     request.form.get('pushover_key', ''),
                     request.form.get('pushover_token', ''),
                     request.form.get('plex_client_id', ''),
+                    request.form.get('thetvdb_api_key', ''),
                     timezone
                 )
             )
@@ -1845,7 +1966,8 @@ def onboarding_test_service():
         test_ollama_connection_with_params,
         test_tautulli_connection_with_params,
         test_jellyseer_connection_with_params,
-        test_pushover_notification_with_params
+        test_pushover_notification_with_params,
+        test_thetvdb_connection_with_params
     )
 
     data = request.json
@@ -1874,6 +1996,8 @@ def onboarding_test_service():
         elif service == 'pushover':
             # For pushover, 'url' is user_key and 'key' is token
             success, error_message = test_pushover_notification_with_params(api_key, url)
+        elif service == 'thetvdb':
+            success, error_message = test_thetvdb_connection_with_params(api_key)
 
         if success:
             return jsonify({'success': True, 'message': 'Connection successful!'})
@@ -1902,9 +2026,21 @@ def search():
     """
     query = request.args.get('q', '').lower()
     if not query:
-        return jsonify([])
+        return jsonify({'results': [], 'jellyseer_url': None, 'query': ''})
 
     db = database.get_db()
+    
+    # Prefer remote/public Jellyseerr URL for browser links, fallback to local URL.
+    settings = db.execute(
+        'SELECT jellyseer_remote_url, jellyseer_url FROM settings LIMIT 1'
+    ).fetchone()
+    jellyseer_url = None
+    if settings:
+        jellyseer_url = (
+            settings['jellyseer_remote_url']
+            or settings['jellyseer_url']
+            or None
+        )
     
     # Search Sonarr
     sonarr_results = db.execute(
@@ -1931,7 +2067,11 @@ def search():
     # Sort results by title
     results.sort(key=lambda x: x['title'])
     
-    return jsonify(results)
+    return jsonify({
+        'results': results,
+        'jellyseer_url': jellyseer_url,
+        'query': request.args.get('q', '')
+    })
 
 @main_bp.route('/movie/<int:tmdb_id>')
 @login_required
@@ -2018,15 +2158,32 @@ def show_detail(tmdb_id):
             pass
     show_dict['genres_list'] = genres_list
 
-    # Fetch cast information
+    # Fetch cast information (try show_id, then tvdb_id, then tvmaze_id)
     cast_members = []
-    if show_dict.get('tvmaze_id'):
+    cast_rows = db.execute("""
+        SELECT * FROM show_cast
+        WHERE show_id = ?
+        ORDER BY cast_order ASC
+        LIMIT 20
+    """, (show_dict['id'],)).fetchall()
+
+    if not cast_rows and show_dict.get('tvdb_id'):
+        cast_rows = db.execute("""
+            SELECT * FROM show_cast
+            WHERE show_tvdb_id = ?
+            ORDER BY cast_order ASC
+            LIMIT 20
+        """, (show_dict['tvdb_id'],)).fetchall()
+
+    if not cast_rows and show_dict.get('tvmaze_id'):
         cast_rows = db.execute("""
             SELECT * FROM show_cast
             WHERE show_tvmaze_id = ?
             ORDER BY cast_order ASC
             LIMIT 20
         """, (show_dict['tvmaze_id'],)).fetchall()
+
+    if cast_rows:
         cast_members = [dict(row) for row in cast_rows]
 
     if show_dict.get('tmdb_id'):
@@ -2113,24 +2270,23 @@ def show_detail(tmdb_id):
     currently_watched_episode_info = None
     last_watched_episode_info = None
     plex_username = session.get('username')
-    show_tvdb_id = show_dict.get('tvdb_id') # This is from sonarr_shows.tvdb_id
+    show_tmdb_id_for_plex = show_dict.get('tmdb_id')
 
-    if plex_username and show_tvdb_id:
+    if plex_username and show_tmdb_id_for_plex:
         try:
-            # grandparent_rating_key in plex_activity_log is Plex's internal key, often related to tvdb_id but might be string.
-            # Convert show_tvdb_id to string for safer comparison if Plex stores it as string.
+            # Match by tmdb_id which is reliably set by both Plex webhooks and Tautulli sync
             plex_activity_row = db.execute(
                 """
                 SELECT title, season_episode, view_offset_ms, duration_ms, event_timestamp
                 FROM plex_activity_log
                 WHERE plex_username = ?
-                  AND grandparent_rating_key = ?
+                  AND tmdb_id = ?
                   AND media_type = 'episode'
                   AND event_type IN ('media.play', 'media.pause', 'media.resume')
                 ORDER BY event_timestamp DESC
                 LIMIT 1
                 """,
-                (plex_username, str(show_tvdb_id))
+                (plex_username, show_tmdb_id_for_plex)
             ).fetchone()
 
             if plex_activity_row:
@@ -2140,10 +2296,10 @@ def show_detail(tmdb_id):
                    currently_watched_episode_info['duration_ms'] > 0:
                     progress = (currently_watched_episode_info['view_offset_ms'] / currently_watched_episode_info['duration_ms']) * 100
                     currently_watched_episode_info['progress_percent'] = round(progress)
-        except sqlite3.Error as e_sql: # More specific for DB errors
-            current_app.logger.error(f"SQLite error fetching currently watched episode for show TVDB ID {show_tvdb_id} and user {plex_username}: {e_sql}")
+        except sqlite3.Error as e_sql:
+            current_app.logger.error(f"SQLite error fetching currently watched episode for show TMDB ID {show_tmdb_id_for_plex} and user {plex_username}: {e_sql}")
         except Exception as e_watched:
-            current_app.logger.error(f"Generic error fetching currently watched episode for show TVDB ID {show_tvdb_id} and user {plex_username}: {e_watched}")
+            current_app.logger.error(f"Generic error fetching currently watched episode for show TMDB ID {show_tmdb_id_for_plex} and user {plex_username}: {e_watched}")
 
         if not currently_watched_episode_info:
             last_row = db.execute(
@@ -2151,13 +2307,13 @@ def show_detail(tmdb_id):
                 SELECT title, season_episode, event_timestamp
                 FROM plex_activity_log
                 WHERE plex_username = ?
-                  AND grandparent_rating_key = ?
+                  AND tmdb_id = ?
                   AND media_type = 'episode'
-                  AND event_type IN ('media.stop', 'media.scrobble')
+                  AND event_type IN ('media.stop', 'media.scrobble', 'watched')
                 ORDER BY event_timestamp DESC
                 LIMIT 1
                 """,
-                (plex_username, str(show_tvdb_id))
+                (plex_username, show_tmdb_id_for_plex)
             ).fetchone()
             if last_row:
                 last_watched_episode_info = dict(last_row)
@@ -2173,17 +2329,18 @@ def show_detail(tmdb_id):
     settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
     jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
 
-    # Load AI-generated season recaps
+    # Fetch season summaries
+    show_summary = None
     season_recaps = {}
     try:
-        recap_rows = db.execute(
-            'SELECT season_number, summary_text FROM show_summaries WHERE show_id = ? AND episode_number IS NULL AND season_number IS NOT NULL',
-            (show_db_id,)
-        ).fetchall()
-        for row in recap_rows:
-            season_recaps[row['season_number']] = row['summary_text']
-    except Exception:
-        pass
+        from app.summary_services import get_season_summary, get_show_summary
+        for season_dict in seasons_with_episodes:
+            season_dict['summary'] = get_season_summary(tmdb_id, season_dict['season_number'])
+            if season_dict['summary']:
+                season_recaps[season_dict['season_number']] = season_dict['summary']
+        show_summary = get_show_summary(tmdb_id)
+    except Exception as e:
+        current_app.logger.debug(f"Could not fetch summaries: {e}")
 
     return render_template('show_detail.html',
                            show=show_dict,
@@ -2192,7 +2349,8 @@ def show_detail(tmdb_id):
                            next_up_episode=next_up_episode,
                            cast_members=cast_members,
                            jellyseer_url=jellyseer_url,
-                           season_recaps=season_recaps
+                           season_recaps=season_recaps,
+                           show_summary=show_summary
                            )
 
 def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes, user_prefs=None):
@@ -2345,6 +2503,26 @@ def episode_detail(tmdb_id, season_number, episode_number):
 
     episode_dict = dict(episode_row)
 
+    # Fetch previous and next episodes for navigation
+    prev_episode = None
+    next_episode = None
+    
+    # Get previous episode (highest episode number less than current)
+    prev_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number < ? ORDER BY episode_number DESC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if prev_row:
+        prev_episode = dict(prev_row)
+    
+    # Get next episode (lowest episode number greater than current)
+    next_row = db.execute(
+        'SELECT episode_number, title FROM sonarr_episodes WHERE season_id=? AND episode_number > ? ORDER BY episode_number ASC LIMIT 1',
+        (season_row['id'], episode_number)
+    ).fetchone()
+    if next_row:
+        next_episode = dict(next_row)
+
     # Try all possible IDs for cast lookup
     episode_characters = []
     # 1. Sonarr TVDB ID
@@ -2438,7 +2616,9 @@ def episode_detail(tmdb_id, season_number, episode_number):
                            show=show_dict,
                            episode=episode_dict,
                            season_number=season_number,
-                           episode_characters=episode_characters)
+                           episode_characters=episode_characters,
+                           prev_episode=prev_episode,
+                           next_episode=next_episode)
 
 @main_bp.route('/image_proxy/<string:type>/<int:id>')
 @login_required
@@ -5532,4 +5712,64 @@ def create_problem_report():
         return jsonify({
             'success': False,
             'error': str(e)
+        }), 500
+
+
+@main_bp.route('/api/generate-show-summary', methods=['POST'])
+@login_required
+def generate_show_summary_route():
+    """Generate or regenerate a show summary for the current user."""
+    from app.summary_services import generate_show_summary
+    
+    data = request.get_json()
+    tmdb_id = data.get('tmdb_id')
+    
+    if not tmdb_id:
+        return jsonify({"error": "tmdb_id required"}), 400
+    
+    try:
+        success, error = generate_show_summary(int(tmdb_id))
+    except Exception as e:
+        current_app.logger.error(f"Error generating show summary for tmdb_id={tmdb_id}: {e}", exc_info=True)
+        return jsonify({
+            "status": "failed",
+            "error": str(e)
+        }), 500
+    
+    if success:
+        return jsonify({
+            "status": "completed",
+            "message": f"Show summary generated successfully"
+        })
+    else:
+        return jsonify({
+            "status": "failed",
+            "error": error or "Unknown error"
+        }), 500
+
+
+@main_bp.route('/api/generate-season-summary', methods=['POST'])
+@login_required
+def generate_season_summary_route():
+    """Generate or regenerate a season summary for the current user."""
+    from app.summary_services import generate_season_summary
+    
+    data = request.get_json()
+    tmdb_id = data.get('tmdb_id')
+    season_number = data.get('season_number')
+    
+    if not tmdb_id or season_number is None:
+        return jsonify({"error": "tmdb_id and season_number required"}), 400
+    
+    success, error = generate_season_summary(int(tmdb_id), int(season_number))
+    
+    if success:
+        return jsonify({
+            "status": "completed",
+            "message": f"Season {season_number} summary generated successfully"
+        })
+    else:
+        return jsonify({
+            "status": "failed",
+            "error": error or "Unknown error"
         }), 500

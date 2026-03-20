@@ -156,6 +156,110 @@ def process_image_queue(limit, delay, max_attempts):
 
     click.echo("Image queue processing finished.")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Recap pipeline CLI
+# ─────────────────────────────────────────────────────────────────────────────
+
+recap_cli = AppGroup("recap", help="Subtitle-first recap pipeline commands.")
+
+
+@recap_cli.command("generate-episode")
+@with_appcontext
+@click.option("--tmdb-id", required=True, type=int, help="Show TMDB ID.")
+@click.option("--season", required=True, type=int, help="Season number.")
+@click.option("--episode", required=True, type=int, help="Episode number.")
+@click.option(
+    "--spoiler-cutoff", default=None, type=int,
+    help="Maximum episode number to include (spoiler cutoff).",
+)
+@click.option(
+    "--model", default="gpt-oss:20b", show_default=True,
+    help="Local Ollama model name.",
+)
+@click.option(
+    "--force", is_flag=True, default=False,
+    help="Regenerate even if a cached result exists.",
+)
+def generate_episode_recap_cmd(tmdb_id, season, episode, spoiler_cutoff, model, force):
+    """Generate a subtitle-backed episode summary using the local recap pipeline."""
+    from .recap_pipeline import generate_episode_recap
+
+    click.echo(
+        f"Generating episode recap: tmdb={tmdb_id} S{season:02d}E{episode:02d} "
+        f"model={model} spoiler_cutoff={spoiler_cutoff} force={force}"
+    )
+    summary, error = generate_episode_recap(
+        tmdb_id, season, episode,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=model,
+        force=force,
+    )
+    if error:
+        click.echo(f"Error: {error}", err=True)
+    else:
+        click.echo("\n── Episode Recap ──────────────────────────────────────────")
+        click.echo(summary)
+        click.echo("───────────────────────────────────────────────────────────")
+
+
+@recap_cli.command("generate-season")
+@with_appcontext
+@click.option("--tmdb-id", required=True, type=int, help="Show TMDB ID.")
+@click.option("--season", required=True, type=int, help="Season number.")
+@click.option(
+    "--spoiler-cutoff", default=None, type=int,
+    help="Maximum episode number to include (spoiler cutoff).",
+)
+@click.option(
+    "--model", default="gpt-oss:20b", show_default=True,
+    help="Local Ollama model name.",
+)
+@click.option(
+    "--polish", is_flag=True, default=False,
+    help="Run optional OpenAI polish step after local generation.",
+)
+@click.option(
+    "--force", is_flag=True, default=False,
+    help="Regenerate even if a cached result exists.",
+)
+@click.option(
+    "--user-importance", default=2, type=click.IntRange(0, 3), show_default=True,
+    help="OpenAI rubric: user importance score (0–3).",
+)
+@click.option(
+    "--freshness-risk", default=1, type=click.IntRange(0, 2), show_default=True,
+    help="OpenAI rubric: freshness/new-season risk score (0–2).",
+)
+def generate_season_recap_cmd(
+    tmdb_id, season, spoiler_cutoff, model, polish, force,
+    user_importance, freshness_risk
+):
+    """Generate a subtitle-backed season recap using the local recap pipeline."""
+    from .recap_pipeline import generate_season_recap
+
+    click.echo(
+        f"Generating season recap: tmdb={tmdb_id} S{season:02d} "
+        f"model={model} spoiler_cutoff={spoiler_cutoff} polish={polish} force={force}"
+    )
+    recap, error = generate_season_recap(
+        tmdb_id, season,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=model,
+        openai_polish=polish,
+        force=force,
+        user_importance=user_importance,
+        freshness_risk=freshness_risk,
+    )
+    if error:
+        click.echo(f"Error: {error}", err=True)
+    else:
+        click.echo("\n── Season Recap ───────────────────────────────────────────")
+        click.echo(recap)
+        click.echo("───────────────────────────────────────────────────────────")
+
+
 def init_app(app):
     """Register CLI commands with the Flask app."""
     app.cli.add_command(image_cli)
+    app.cli.add_command(recap_cli)

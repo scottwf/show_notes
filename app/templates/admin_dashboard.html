@@ -353,21 +353,25 @@ document.getElementById('admin-link-plex').addEventListener('click', async funct
     const statusEl = document.getElementById('plex-link-status');
     statusEl.textContent = 'Connecting to Plex...';
 
+    // Safari-safe popup flow: open synchronously in click handler.
+    const authWindow = window.open('', '_blank', 'width=600,height=700,scrollbars=yes');
+    if (!authWindow) {
+        statusEl.textContent = 'Could not open Plex login window. Please allow popups.';
+        return;
+    }
+    authWindow.document.write('<!doctype html><title>Plex Login</title><p style="font-family: sans-serif; padding: 1rem;">Connecting to Plex...</p>');
+
     try {
         const resp = await fetch('/login/plex/start');
         const data = await resp.json();
 
-        if (data.error) {
-            statusEl.textContent = 'Error: ' + data.error;
+        if (!resp.ok || data.error || !data.authUrl) {
+            statusEl.textContent = data.error ? ('Error: ' + data.error) : 'Error: Failed to start Plex authentication.';
+            authWindow.close();
             return;
         }
 
-        const authWindow = window.open(data.authUrl, '_blank', 'width=600,height=700,scrollbars=yes');
-
-        if (!authWindow) {
-            statusEl.textContent = 'Could not open Plex login window. Please allow popups.';
-            return;
-        }
+        authWindow.location.href = data.authUrl;
 
         statusEl.textContent = 'Complete the Plex login in the popup window. The window will close automatically or you can close it manually after authorizing.';
 

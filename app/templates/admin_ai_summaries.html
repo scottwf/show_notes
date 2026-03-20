@@ -1,0 +1,290 @@
+{% extends "admin_layout.html" %}
+
+{% block admin_page_title %}AI Summaries & LLM Usage{% endblock %}
+{% block admin_page_header %}AI Summaries & LLM Usage{% endblock %}
+
+{% block admin_page_content %}
+<div class="space-y-6">
+
+    <!-- ====================================================================
+         SECTION 1: USAGE OVERVIEW CARDS
+         ==================================================================== -->
+    <div>
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Usage Overview</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- Total API Calls -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total API Calls</p>
+                <p class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(total_calls) }}</p>
+            </div>
+            <!-- Total Tokens -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Tokens</p>
+                <p class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(total_tokens|int) }}</p>
+            </div>
+            <!-- Total Cost -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Cost</p>
+                <p class="text-2xl font-bold text-slate-800 dark:text-slate-100">${{ "%.4f"|format(total_cost) }}</p>
+            </div>
+            <!-- Avg Processing Time -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Avg Processing Time</p>
+                <p class="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                    {% if avg_processing_time %}{{ "{:,.0f}".format(avg_processing_time) }}ms{% else %}N/A{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Period breakdowns -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <!-- Last 7 Days -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3">Last 7 Days</h4>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Calls</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(calls_7d) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Tokens</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(tokens_7d|int) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Cost</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">${{ "%.4f"|format(cost_7d) }}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Last 30 Days -->
+            <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+                <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3">Last 30 Days</h4>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Calls</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(calls_30d) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Tokens</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">{{ "{:,}".format(tokens_30d|int) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Cost</p>
+                        <p class="text-lg font-bold text-slate-800 dark:text-slate-100">${{ "%.4f"|format(cost_30d) }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Provider Breakdown -->
+        {% if provider_stats %}
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+            <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3">By Provider</h4>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 dark:text-slate-400 uppercase border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                            <th class="pb-2 pr-4">Provider</th>
+                            <th class="pb-2 pr-4 text-right">Calls</th>
+                            <th class="pb-2 pr-4 text-right">Tokens</th>
+                            <th class="pb-2 pr-4 text-right">Cost</th>
+                            <th class="pb-2 text-right">Avg Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in provider_stats %}
+                        <tr class="border-b border-slate-100 dark:border-slate-700/50">
+                            <td class="py-2 pr-4 font-medium text-slate-800 dark:text-slate-200">{{ row['provider'] or 'Unknown' }}</td>
+                            <td class="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">{{ "{:,}".format(row['calls']) }}</td>
+                            <td class="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">{{ "{:,}".format(row['tokens']|default(0)|int) }}</td>
+                            <td class="py-2 pr-4 text-right text-slate-700 dark:text-slate-300">${{ "%.4f"|format(row['cost']|default(0)|float) }}</td>
+                            <td class="py-2 text-right text-slate-700 dark:text-slate-300">
+                                {% if row['avg_time'] %}{{ "{:,.0f}".format(row['avg_time']) }}ms{% else %}N/A{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ====================================================================
+         SECTION 2: SUMMARY QUEUE STATUS
+         ==================================================================== -->
+    <div>
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">Summary Queue</h3>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-4 border border-slate-200 dark:border-slate-700">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Pending</p>
+                    <p class="text-2xl font-bold text-slate-500 dark:text-slate-400">{{ queue_status.pending_count }}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Generating</p>
+                    <p class="text-2xl font-bold text-yellow-500">{{ queue_status.generating_count }}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Completed</p>
+                    <p class="text-2xl font-bold text-green-500">{{ queue_status.completed_count }}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Failed</p>
+                    <p class="text-2xl font-bold text-red-500">{{ queue_status.failed_count }}</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div class="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                    <p>Provider: <span class="font-medium text-slate-800 dark:text-slate-200">{{ queue_status.current_provider or 'Not configured' }}</span>
+                        {% if queue_status.current_model %} / {{ queue_status.current_model }}{% endif %}
+                    </p>
+                    {% if queue_status.last_generated_at %}
+                    <p>Last generated: <span class="font-medium text-slate-800 dark:text-slate-200">{{ queue_status.last_generated_at }}</span></p>
+                    {% endif %}
+                </div>
+                <button id="btn-generate-now"
+                    class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
+                    onclick="triggerSummaryGeneration()">
+                    Generate Now
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====================================================================
+         SECTION 3: SUMMARY LIST
+         ==================================================================== -->
+    <div x-data="{ expandedId: null }">
+        <h3 class="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-4">All Summaries</h3>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-700/50">
+                        <tr>
+                            <th class="px-4 py-3">Show</th>
+                            <th class="px-4 py-3">Season</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Provider / Model</th>
+                            <th class="px-4 py-3">Created</th>
+                            <th class="px-4 py-3">Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in show_summaries %}
+                        <tr class="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer"
+                            @click="expandedId = expandedId === 'show-{{ s['id'] }}' ? null : 'show-{{ s['id'] }}'">
+                            <td class="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{{ s['show_title'] or 'TMDB #' ~ s['tmdb_id'] }}</td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Overview</td>
+                            <td class="px-4 py-3">
+                                {% if s['status'] == 'completed' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Completed</span>
+                                {% elif s['status'] == 'generating' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Generating</span>
+                                {% elif s['status'] == 'failed' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Failed</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ s['llm_provider'] }} / {{ s['llm_model'] }}</td>
+                            <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ s['created_at'][:16] if s['created_at'] else '' }}</td>
+                            <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ s['updated_at'][:16] if s['updated_at'] else '' }}</td>
+                        </tr>
+                        <tr x-show="expandedId === 'show-{{ s['id'] }}'" x-cloak>
+                            <td colspan="6" class="px-4 py-3 bg-slate-50 dark:bg-slate-700/20">
+                                {% if s['status'] == 'failed' and s['error_message'] %}
+                                <p class="text-sm text-red-600 dark:text-red-400 mb-2"><strong>Error:</strong> {{ s['error_message'] }}</p>
+                                {% endif %}
+                                {% if s['summary_text'] %}
+                                <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">{{ s['summary_text'][:1000] }}{% if s['summary_text']|length > 1000 %}...{% endif %}</p>
+                                {% else %}
+                                <p class="text-sm text-slate-500 dark:text-slate-400 italic">No summary text available.</p>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for s in season_summaries %}
+                        <tr class="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer"
+                            @click="expandedId = expandedId === 'season-{{ s['id'] }}' ? null : 'season-{{ s['id'] }}'">
+                            <td class="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{{ s['show_title'] or 'TMDB #' ~ s['tmdb_id'] }}</td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Season {{ s['season_number'] }}</td>
+                            <td class="px-4 py-3">
+                                {% if s['status'] == 'completed' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Completed</span>
+                                {% elif s['status'] == 'generating' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Generating</span>
+                                {% elif s['status'] == 'failed' %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Failed</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ s['llm_provider'] }} / {{ s['llm_model'] }}</td>
+                            <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ s['created_at'][:16] if s['created_at'] else '' }}</td>
+                            <td class="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{{ s['updated_at'][:16] if s['updated_at'] else '' }}</td>
+                        </tr>
+                        <tr x-show="expandedId === 'season-{{ s['id'] }}'" x-cloak>
+                            <td colspan="6" class="px-4 py-3 bg-slate-50 dark:bg-slate-700/20">
+                                {% if s['status'] == 'failed' and s['error_message'] %}
+                                <p class="text-sm text-red-600 dark:text-red-400 mb-2"><strong>Error:</strong> {{ s['error_message'] }}</p>
+                                {% endif %}
+                                {% if s['summary_text'] %}
+                                <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">{{ s['summary_text'][:1000] }}{% if s['summary_text']|length > 1000 %}...{% endif %}</p>
+                                {% else %}
+                                <p class="text-sm text-slate-500 dark:text-slate-400 italic">No summary text available.</p>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% if not show_summaries and not season_summaries %}
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                                No summaries generated yet. Configure an LLM provider in
+                                <a href="{{ url_for('admin.settings') }}" class="text-sky-500 hover:text-sky-400 underline">Services</a>
+                                and trigger generation.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function triggerSummaryGeneration() {
+    const btn = document.getElementById('btn-generate-now');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    btn.classList.add('opacity-50');
+
+    fetch('{{ url_for("admin.trigger_summary_generation") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.textContent = data.status === 'started' ? 'Generation Started!' : (data.message || 'Done');
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'Generate Now';
+            btn.classList.remove('opacity-50');
+        }, 3000);
+    })
+    .catch(() => {
+        btn.textContent = 'Error';
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'Generate Now';
+            btn.classList.remove('opacity-50');
+        }, 3000);
+    });
+}
+</script>
+{% endblock %}

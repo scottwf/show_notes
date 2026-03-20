@@ -3,34 +3,7 @@
 {% block admin_page_title %}Service Settings{% endblock %}
 
 {% block admin_extra_js %}
-<script src="{{ url_for('static', filename='admin_settings.js') }}?v=3"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // Tab switching
-  const tabButtons = document.querySelectorAll('[data-tab]');
-  const tabPanels = document.querySelectorAll('[data-panel]');
-
-  tabButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const targetPanel = button.dataset.tab;
-
-      // Update button states - active vs inactive styling
-      tabButtons.forEach(btn => {
-        btn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-sky-600', 'dark:text-sky-400', 'border-slate-200', 'dark:border-slate-700', 'border-b-white', 'dark:border-b-slate-800', 'shadow-sm', '-mb-px', 'z-10');
-        btn.classList.add('bg-slate-100', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-400', 'border-transparent', 'hover:bg-slate-200', 'dark:hover:bg-slate-800');
-      });
-      button.classList.remove('bg-slate-100', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-400', 'border-transparent', 'hover:bg-slate-200', 'dark:hover:bg-slate-800');
-      button.classList.add('bg-white', 'dark:bg-slate-800', 'text-sky-600', 'dark:text-sky-400', 'border-slate-200', 'dark:border-slate-700', 'border-b-white', 'dark:border-b-slate-800', 'shadow-sm', '-mb-px', 'z-10');
-
-      // Update panel visibility
-      tabPanels.forEach(panel => {
-        panel.classList.add('hidden');
-      });
-      document.querySelector(`[data-panel="${targetPanel}"]`).classList.remove('hidden');
-    });
-  });
-});
-</script>
+<script src="{{ url_for('static', filename='admin_settings.js') }}?v=4" defer></script>
 {% endblock %}
 
 {% block admin_page_header %}Service Configuration{% endblock %}
@@ -74,6 +47,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <span class="flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
           AI/LLM
+        </span>
+      </button>
+      <button type="button" data-tab="scheduler" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          Scheduler
         </span>
       </button>
       <button type="button" data-tab="general" class="relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
@@ -127,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <!-- Notifications Panel -->
-    <div data-panel="notifications" class="hidden">
+    <div data-panel="notifications" class="hidden" style="display:none">
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
         <div class="flex items-center mb-4">
           <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover" class="w-8 h-8 mr-3 dark:hidden">
@@ -157,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <!-- Media Services Panel -->
-    <div data-panel="media" class="hidden">
+    <div data-panel="media" class="hidden" style="display:none">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Tautulli -->
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
@@ -250,11 +229,32 @@ document.addEventListener('DOMContentLoaded', function() {
             Test Connection
           </button>
         </div>
+
+        <!-- TheTVDB -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <span class="text-2xl mr-3">📺</span>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">TheTVDB</h3>
+            <span id="thetvdb_status_dot" class="ml-auto {% if thetvdb_status and thetvdb_status[0] %}text-green-500{% else %}text-red-500{% endif %}" title="{% if thetvdb_status and thetvdb_status[0] %}Connected{% else %}Not Connected{% endif %}">●</span>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">TV show metadata enrichment (cast, genres, network). Get a free API key at <a href="https://thetvdb.com/api-information" target="_blank" class="text-sky-500 hover:text-sky-600">thetvdb.com</a>.</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Key</label>
+              <input type="text" id="thetvdb_api_key" name="thetvdb_api_key" value="{{ settings.thetvdb_api_key or '' }}"
+                placeholder="Your TheTVDB API key"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" data-service="thetvdb" class="test-btn mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Test Connection
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Requests Panel -->
-    <div data-panel="requests" class="hidden">
+    <div data-panel="requests" class="hidden" style="display:none">
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
         <div class="flex items-center mb-4">
           <img src="{{ url_for('static', filename='logos/jellyseerr-light.png') }}" alt="Jellyseerr" class="w-8 h-8 mr-3 dark:hidden">
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <!-- Subtitles Panel -->
-    <div data-panel="subtitles" class="hidden">
+    <div data-panel="subtitles" class="hidden" style="display:none">
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
         <div class="flex items-center mb-4">
           <img src="{{ url_for('static', filename='logos/bazarr-light.png') }}" alt="Bazarr" class="w-8 h-8 mr-3 dark:hidden">
@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 
     <!-- AI/LLM Panel -->
-    <div data-panel="ai" class="hidden">
+    <div data-panel="ai" class="hidden" style="display:none">
       <!-- Ollama -->
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
         <div class="flex items-center mb-4">
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
 
       <!-- LLM Provider Preference -->
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
         <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">LLM Provider Preference</h3>
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Preferred Provider</label>
@@ -384,10 +384,142 @@ document.addEventListener('DOMContentLoaded', function() {
           </select>
         </div>
       </div>
+
+      <!-- Summary Generation Config -->
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Season Summary Generation</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Automatically generate season recaps using your LLM. Only seasons where all episodes are available
+          and aired before the model's knowledge cutoff will be summarized.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Model Knowledge Cutoff Date</label>
+            <input type="date" name="llm_knowledge_cutoff_date" value="{{ settings.llm_knowledge_cutoff_date or '' }}"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Seasons that finished airing before this date can be summarized reliably.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Enable Auto-Generation</label>
+            <label class="flex items-center gap-3 mt-2">
+              <input type="checkbox" name="summary_enabled" value="1" {% if settings.summary_enabled %}checked{% endif %}
+                class="w-4 h-4 text-sky-500 border-slate-300 dark:border-slate-600 rounded focus:ring-sky-500">
+              <span class="text-sm text-slate-700 dark:text-slate-300">Generate summaries during quiet hours</span>
+            </label>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Quiet Hours Window</label>
+            <div class="flex items-center gap-2">
+              <select name="summary_schedule_start_hour" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for h in range(24) %}
+                <option value="{{ h }}" {% if settings.summary_schedule_start_hour == h %}selected{% endif %}>{{ '%02d:00'|format(h) }}</option>
+                {% endfor %}
+              </select>
+              <span class="text-slate-500 dark:text-slate-400">to</span>
+              <select name="summary_schedule_end_hour" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for h in range(24) %}
+                <option value="{{ h }}" {% if settings.summary_schedule_end_hour == h %}selected{% endif %}>{{ '%02d:00'|format(h) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Delay Between Generations (seconds)</label>
+            <input type="number" name="summary_delay_seconds" value="{{ settings.summary_delay_seconds or 30 }}" min="5" max="300"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          </div>
+        </div>
+        <div class="mt-4 flex items-center gap-3">
+          <button type="button" id="trigger-summary-btn" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Generate Now
+          </button>
+          <span id="summary-status" class="text-sm text-slate-500 dark:text-slate-400"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scheduler Panel -->
+    <div data-panel="scheduler" class="hidden" style="display:none">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 mb-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Sync Schedule</h3>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Configure when background sync tasks run. Changes take effect after saving.
+        </p>
+        <div class="space-y-6">
+          <!-- Tautulli Schedule -->
+          <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
+            <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Tautulli Watch History (Daily)</h4>
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-slate-600 dark:text-slate-400">Run at</label>
+              <select name="schedule_tautulli_hour" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for h in range(24) %}
+                <option value="{{ h }}" {% if settings.schedule_tautulli_hour == h %}selected{% endif %}>{{ '%02d'|format(h) }}</option>
+                {% endfor %}
+              </select>
+              <span class="text-slate-500 dark:text-slate-400">:</span>
+              <select name="schedule_tautulli_minute" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for m in range(0, 60, 5) %}
+                <option value="{{ m }}" {% if settings.schedule_tautulli_minute == m %}selected{% endif %}>{{ '%02d'|format(m) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <!-- Sonarr Schedule -->
+          <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
+            <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Sonarr Library Sync (Weekly)</h4>
+            <div class="flex items-center gap-2 flex-wrap">
+              <label class="text-sm text-slate-600 dark:text-slate-400">Run on</label>
+              <select name="schedule_sonarr_day" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for day, label in [('mon','Monday'),('tue','Tuesday'),('wed','Wednesday'),('thu','Thursday'),('fri','Friday'),('sat','Saturday'),('sun','Sunday')] %}
+                <option value="{{ day }}" {% if settings.schedule_sonarr_day == day %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <label class="text-sm text-slate-600 dark:text-slate-400">at</label>
+              <select name="schedule_sonarr_hour" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for h in range(24) %}
+                <option value="{{ h }}" {% if settings.schedule_sonarr_hour == h %}selected{% endif %}>{{ '%02d'|format(h) }}</option>
+                {% endfor %}
+              </select>
+              <span class="text-slate-500 dark:text-slate-400">:</span>
+              <select name="schedule_sonarr_minute" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for m in range(0, 60, 5) %}
+                <option value="{{ m }}" {% if settings.schedule_sonarr_minute == m %}selected{% endif %}>{{ '%02d'|format(m) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <!-- Radarr Schedule -->
+          <div>
+            <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Radarr Library Sync (Weekly)</h4>
+            <div class="flex items-center gap-2 flex-wrap">
+              <label class="text-sm text-slate-600 dark:text-slate-400">Run on</label>
+              <select name="schedule_radarr_day" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for day, label in [('mon','Monday'),('tue','Tuesday'),('wed','Wednesday'),('thu','Thursday'),('fri','Friday'),('sat','Saturday'),('sun','Sunday')] %}
+                <option value="{{ day }}" {% if settings.schedule_radarr_day == day %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <label class="text-sm text-slate-600 dark:text-slate-400">at</label>
+              <select name="schedule_radarr_hour" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for h in range(24) %}
+                <option value="{{ h }}" {% if settings.schedule_radarr_hour == h %}selected{% endif %}>{{ '%02d'|format(h) }}</option>
+                {% endfor %}
+              </select>
+              <span class="text-slate-500 dark:text-slate-400">:</span>
+              <select name="schedule_radarr_minute" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+                {% for m in range(0, 60, 5) %}
+                <option value="{{ m }}" {% if settings.schedule_radarr_minute == m %}selected{% endif %}>{{ '%02d'|format(m) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- General Panel -->
-    <div data-panel="general" class="hidden">
+    <div data-panel="general" class="hidden" style="display:none">
       <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
         <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">General Settings</h3>
         <div class="space-y-4">

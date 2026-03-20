@@ -31,9 +31,18 @@
       }
     }
 
+    function positionMobileResultsPanel() {
+        // Anchor the mobile results panel directly below the search input,
+        // even if header height changes with responsive rows.
+        const rect = searchForm.getBoundingClientRect();
+        searchResultsDiv.style.top = `${Math.max(rect.bottom, 0)}px`;
+    }
+
     function applyMobileResultsStyle() {
         searchResultsDiv.classList.remove(...originalDesktopResultsClasses, 'hidden', 'sm:max-w-xl'); // Clear existing/desktop styles
-        searchResultsDiv.classList.add('fixed', 'inset-x-0', 'top-16', 'bottom-0', 'bg-white', 'dark:bg-gray-900', 'overflow-y-auto', 'z-[100]', 'p-4');
+        searchResultsDiv.classList.add('fixed', 'inset-x-0', 'bottom-0', 'bg-white', 'dark:bg-gray-900', 'overflow-y-auto', 'z-[100]', 'p-4');
+        searchResultsDiv.classList.remove('top-16');
+        positionMobileResultsPanel();
         document.body.classList.add('overflow-hidden'); // Prevent body scroll
         searchResultsDiv.classList.remove('hidden'); // Ensure it's visible
     }
@@ -41,6 +50,7 @@
     function applyDesktopResultsStyle() {
         searchResultsDiv.classList.remove('hidden', 'fixed', 'inset-x-0', 'top-16', 'bottom-0', 'bg-white', 'dark:bg-gray-900', 'overflow-y-auto', 'z-[100]', 'p-4'); // Clear mobile modal styles
         searchResultsDiv.classList.add(...originalDesktopResultsClasses);
+        searchResultsDiv.style.top = '';
          // Add sm:max-w-xl or similar if it was part of original logic for sizing within parent
         // For now, relying on md:max-w-xl on searchForm's parent and w-full on input
         document.body.classList.remove('overflow-hidden');
@@ -51,6 +61,7 @@
         searchResultsDiv.classList.add('hidden');
         searchResultsDiv.classList.remove('fixed', 'inset-x-0', 'top-16', 'bottom-0', 'overflow-y-auto', 'z-[100]', 'p-4'); // Clean mobile styles
         searchResultsDiv.classList.add(...originalDesktopResultsClasses); // Restore desktop classes in case of resize then hide
+        searchResultsDiv.style.top = '';
         document.body.classList.remove('overflow-hidden'); // Ensure body scroll is restored
         currentHighlightIndex = -1;
         updateHighlight();
@@ -71,7 +82,12 @@
         try{
             const resp = await fetch('/search?q=' + encodeURIComponent(query), {signal: controller.signal});
             if(!resp.ok) throw new Error('search failed');
-            const data = await resp.json();
+            const responseData = await resp.json();
+            
+            // Handle both old array format and new object format for backwards compatibility
+            const data = Array.isArray(responseData) ? responseData : (responseData.results || []);
+            const jellyseerUrl = responseData.jellyseer_url || null;
+            const searchQuery = responseData.query || query;
 
             if (data.length > 0) {
                 let html = '';
@@ -113,6 +129,23 @@
                     }
                     html += itemHtmlEntry;
                 });
+                
+                // Add "Request on Jellyseerr" link at the bottom if Jellyseerr is configured
+                if (jellyseerUrl && !restrictToShows) {
+                    const jellyseerSearchUrl = `${jellyseerUrl}/search?query=${encodeURIComponent(searchQuery)}`;
+                    html += `
+                        <div class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                            <a href="${jellyseerSearchUrl}" target="_blank" rel="noopener noreferrer" 
+                               class="flex items-center justify-center px-4 py-3 text-sm text-sky-600 dark:text-sky-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-md">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                                Request on Jellyseerr
+                            </a>
+                        </div>
+                    `;
+                }
+                
                 searchResultsDiv.innerHTML = html;
 
                 if (window.innerWidth < mobileBreakpoint) {
@@ -121,8 +154,26 @@
                     applyDesktopResultsStyle();
                 }
             } else {
-                // Show "No results found" message
-                searchResultsDiv.innerHTML = '<div class="px-4 py-2 text-gray-500 dark:text-gray-400">No results found.</div>';
+                // Show "No results found" message with link to request on Jellyseerr
+                let html = '<div class="px-4 py-2 text-gray-500 dark:text-gray-400">No results found.</div>';
+                
+                // Add "Request on Jellyseerr" link if Jellyseerr is configured
+                if (jellyseerUrl && !restrictToShows) {
+                    const jellyseerSearchUrl = `${jellyseerUrl}/search?query=${encodeURIComponent(searchQuery)}`;
+                    html += `
+                        <div class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+                            <a href="${jellyseerSearchUrl}" target="_blank" rel="noopener noreferrer" 
+                               class="flex items-center justify-center px-4 py-3 text-sm text-sky-600 dark:text-sky-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-md">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                </svg>
+                                Request on Jellyseerr
+                            </a>
+                        </div>
+                    `;
+                }
+                
+                searchResultsDiv.innerHTML = html;
                 if (window.innerWidth < mobileBreakpoint) {
                     applyMobileResultsStyle(); // Show it in mobile style
                 } else {
@@ -246,6 +297,12 @@
             }
         }
     });
+
+    window.addEventListener('scroll', function() {
+        if (!searchResultsDiv.classList.contains('hidden') && window.innerWidth < mobileBreakpoint) {
+            positionMobileResultsPanel();
+        }
+    }, { passive: true });
 
     // Optional: Mouse hover interaction for keyboard selection consistency
     searchResultsDiv.addEventListener('mouseover', function(e) {

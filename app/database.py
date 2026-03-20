@@ -7,7 +7,7 @@ import logging
 DATABASE = 'data/shownotes.db' # This will be updated by app.config['DATABASE']
 
 # Define the current schema version. Increment this when you make schema changes.
-CURRENT_SCHEMA_VERSION = 3 # Started at 1, incremented to 3 for notifications and reports
+CURRENT_SCHEMA_VERSION = 5 # Incremented for recap pipeline tables
 
 def get_db_connection():
     db_path = current_app.config['DATABASE']
@@ -142,7 +142,20 @@ def init_db():
                 openai_model_name TEXT,
                 openrouter_api_key TEXT,
                 openrouter_model_name TEXT,
-                preferred_llm_provider TEXT
+                preferred_llm_provider TEXT,
+                llm_knowledge_cutoff_date TEXT,
+                summary_schedule_start_hour INTEGER DEFAULT 2,
+                summary_schedule_end_hour INTEGER DEFAULT 6,
+                summary_delay_seconds INTEGER DEFAULT 30,
+                summary_enabled INTEGER DEFAULT 0,
+                schedule_tautulli_hour INTEGER DEFAULT 3,
+                schedule_tautulli_minute INTEGER DEFAULT 0,
+                schedule_sonarr_day TEXT DEFAULT 'sun',
+                schedule_sonarr_hour INTEGER DEFAULT 4,
+                schedule_sonarr_minute INTEGER DEFAULT 0,
+                schedule_radarr_day TEXT DEFAULT 'sun',
+                schedule_radarr_hour INTEGER DEFAULT 5,
+                schedule_radarr_minute INTEGER DEFAULT 0
             );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
@@ -180,6 +193,8 @@ def init_db():
                 runtime INTEGER,
                 tvmaze_rating REAL,
                 tvmaze_enriched_at DATETIME,
+                tvdb_enriched_at DATETIME,
+                enrichment_source TEXT DEFAULT 'tvmaze',
                 tags TEXT
             );
 
@@ -513,6 +528,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 show_id INTEGER,
                 show_tvmaze_id INTEGER,
+                show_tvdb_id INTEGER,
                 person_id INTEGER,
                 person_name TEXT,
                 person_image_url TEXT,
@@ -524,8 +540,11 @@ def init_db():
                 cast_order INTEGER,
                 is_voice BOOLEAN DEFAULT 0,
                 tmdb_person_id INTEGER,
+                enrichment_source TEXT DEFAULT 'tvmaze',
                 FOREIGN KEY (show_id) REFERENCES sonarr_shows(id)
             );
+            CREATE INDEX IF NOT EXISTS idx_show_cast_tvdb_id ON show_cast(show_tvdb_id);
+            CREATE INDEX IF NOT EXISTS idx_show_cast_show_id ON show_cast(show_id);
 
             CREATE TABLE episode_characters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -631,24 +650,95 @@ def init_db():
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE show_summaries (
+            CREATE TABLE season_summaries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                show_id INTEGER NOT NULL,
-                season_number INTEGER,
-                episode_number INTEGER,
-                summary_text TEXT NOT NULL,
-                provider TEXT,
-                model TEXT,
-                prompt_key TEXT,
-                generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id) ON DELETE CASCADE
+                tmdb_id INTEGER NOT NULL,
+                show_title TEXT,
+                season_number INTEGER NOT NULL,
+                summary_text TEXT,
+                raw_llm_response TEXT,
+                llm_provider TEXT NOT NULL,
+                llm_model TEXT NOT NULL,
+                prompt_text TEXT,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tmdb_id, season_number, llm_provider, llm_model)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_show_summaries_show ON show_summaries(show_id);
-            CREATE INDEX IF NOT EXISTS idx_show_summaries_lookup ON show_summaries(show_id, season_number, episode_number);
+            CREATE TABLE show_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tmdb_id INTEGER NOT NULL,
+                show_title TEXT,
+                summary_text TEXT,
+                raw_llm_response TEXT,
+                llm_provider TEXT NOT NULL,
+                llm_model TEXT NOT NULL,
+                prompt_text TEXT,
+                status TEXT DEFAULT 'pending',
+                error_message TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(tmdb_id, llm_provider, llm_model)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_llm_prompts_key ON llm_prompts(prompt_key);
+            CREATE INDEX IF NOT EXISTS idx_season_summaries_tmdb_season ON season_summaries(tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_season_summaries_status ON season_summaries(status);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_tmdb ON show_summaries(tmdb_id);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status);
             CREATE INDEX IF NOT EXISTS idx_api_usage_provider ON api_usage(provider);
             CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
+
+            CREATE TABLE episode_recaps (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_tmdb_id           INTEGER NOT NULL,
+                season_number          INTEGER NOT NULL,
+                episode_number         INTEGER NOT NULL,
+                spoiler_cutoff_episode INTEGER NOT NULL DEFAULT 0,
+                local_model            TEXT    NOT NULL,
+                prompt_version         TEXT    NOT NULL DEFAULT '1',
+                status                 TEXT    NOT NULL DEFAULT 'pending',
+                summary_text           TEXT,
+                raw_chunks_json        TEXT,
+                runtime_seconds        REAL,
+                error_message          TEXT,
+                created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (show_tmdb_id, season_number, episode_number,
+                        spoiler_cutoff_episode, local_model, prompt_version)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_episode_recaps_show_season
+                ON episode_recaps(show_tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_episode_recaps_status
+                ON episode_recaps(status);
+
+            CREATE TABLE season_recaps (
+                id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_tmdb_id           INTEGER NOT NULL,
+                season_number          INTEGER NOT NULL,
+                spoiler_cutoff_episode INTEGER NOT NULL DEFAULT 0,
+                local_model            TEXT    NOT NULL,
+                prompt_version         TEXT    NOT NULL DEFAULT '1',
+                openai_model_version   TEXT    NOT NULL DEFAULT '',
+                status                 TEXT    NOT NULL DEFAULT 'pending',
+                recap_text             TEXT,
+                openai_polished_text   TEXT,
+                openai_cost_usd        REAL,
+                runtime_seconds        REAL,
+                error_message          TEXT,
+                created_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (show_tmdb_id, season_number, spoiler_cutoff_episode,
+                        local_model, prompt_version, openai_model_version)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_season_recaps_show_season
+                ON season_recaps(show_tmdb_id, season_number);
+            CREATE INDEX IF NOT EXISTS idx_season_recaps_status
+                ON season_recaps(status);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))
@@ -657,6 +747,8 @@ def init_db():
         logger.info("Creating search indexes for sonarr_shows and radarr_movies...")
         db.execute('CREATE INDEX IF NOT EXISTS idx_sonarr_shows_title_lower ON sonarr_shows(LOWER(title));')
         db.execute('CREATE INDEX IF NOT EXISTS idx_radarr_movies_title_lower ON radarr_movies(LOWER(title));')
+        # Composite index for the homepage recent-activity query (filters on all three columns)
+        db.execute('CREATE INDEX IF NOT EXISTS idx_plex_activity_user_type_time ON plex_activity_log(plex_username, event_type, event_timestamp);')
         logger.info("Search indexes created.")
 
         # Add performance indexes for common query patterns

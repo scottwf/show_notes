@@ -55,6 +55,7 @@ from ..utils import (
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params,
     test_jellyseer_connection, test_jellyseer_connection_with_params,
+    test_thetvdb_connection, test_thetvdb_connection_with_params,
     get_ollama_models,
     convert_utc_to_user_timezone, get_user_timezone
 )
@@ -95,6 +96,8 @@ ADMIN_SEARCHABLE_ROUTES = [
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
     {'title': 'AI / LLM Settings', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_settings')},
+    {'title': 'AI Summaries & LLM Usage', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_summaries')},
+    {'title': 'Recap Pipeline (Subtitle-First)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.recap_pipeline')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -357,6 +360,94 @@ def tasks():
     return render_template('admin_tasks.html', title='Admin Tasks')
 
 # ============================================================================
+# AI SUMMARIES & LLM USAGE
+# ============================================================================
+
+@admin_bp.route('/ai-summaries')
+@login_required
+@admin_required
+def ai_summaries():
+    """Renders the AI Summaries & LLM Usage admin page."""
+    db = get_db()
+
+    def safe_value(query, params=None):
+        try:
+            result = db.execute(query, params or ()).fetchone()
+            return result[0] if result and result[0] is not None else 0
+        except Exception:
+            return 0
+
+    # --- Usage stats ---
+    total_calls = safe_value('SELECT COUNT(*) FROM api_usage')
+    total_tokens = safe_value('SELECT SUM(total_tokens) FROM api_usage')
+    total_cost = safe_value('SELECT SUM(cost_usd) FROM api_usage')
+    avg_processing_time = safe_value('SELECT AVG(processing_time_ms) FROM api_usage WHERE processing_time_ms IS NOT NULL')
+
+    # Last 7 days
+    calls_7d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+    tokens_7d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+    cost_7d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
+
+    # Last 30 days
+    calls_30d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+    tokens_30d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+    cost_30d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
+
+    # Per-provider breakdown
+    provider_stats = db.execute("""
+        SELECT provider,
+               COUNT(*) as calls,
+               SUM(total_tokens) as tokens,
+               SUM(cost_usd) as cost,
+               AVG(processing_time_ms) as avg_time
+        FROM api_usage
+        GROUP BY provider
+        ORDER BY calls DESC
+    """).fetchall()
+
+    # --- Summary queue status ---
+    try:
+        from ..summary_services import get_summary_queue_status
+        queue_status = get_summary_queue_status()
+    except Exception:
+        queue_status = {
+            'pending_count': 0, 'completed_count': 0, 'failed_count': 0,
+            'generating_count': 0, 'last_generated_at': None,
+            'current_provider': '', 'current_model': '',
+        }
+
+    # --- All summaries list ---
+    season_summaries = db.execute("""
+        SELECT ss.id, ss.tmdb_id, ss.show_title, ss.season_number, ss.status,
+               ss.llm_provider, ss.llm_model, ss.summary_text, ss.error_message,
+               ss.created_at, ss.updated_at
+        FROM season_summaries ss
+        ORDER BY ss.updated_at DESC
+    """).fetchall()
+
+    show_summaries = db.execute("""
+        SELECT sh.id, sh.tmdb_id, sh.show_title, sh.status,
+               sh.llm_provider, sh.llm_model, sh.summary_text, sh.error_message,
+               sh.created_at, sh.updated_at
+        FROM show_summaries sh
+        ORDER BY sh.updated_at DESC
+    """).fetchall()
+
+    return render_template('admin_ai_summaries.html',
+        title='AI Summaries & LLM Usage',
+        total_calls=total_calls,
+        total_tokens=total_tokens,
+        total_cost=total_cost,
+        avg_processing_time=avg_processing_time,
+        calls_7d=calls_7d, tokens_7d=tokens_7d, cost_7d=cost_7d,
+        calls_30d=calls_30d, tokens_30d=tokens_30d, cost_30d=cost_30d,
+        provider_stats=provider_stats,
+        queue_status=queue_status,
+        season_summaries=season_summaries,
+        show_summaries=show_summaries,
+    )
+
+# ============================================================================
 # LOG MANAGEMENT
 # ============================================================================
 
@@ -591,6 +682,78 @@ def watch_history_data():
 
     return jsonify({'sync_logs': sync_logs, 'plex_logs': plex_logs})
 
+
+@admin_bp.route('/users')
+@login_required
+@admin_required
+def admin_users():
+    """Admin users overview page showing activity, issues, favorites, and Jellyseerr requests per user."""
+    import time
+    t0 = time.monotonic()
+    db = database.get_db()
+
+    users = db.execute('''
+        SELECT id, username, plex_username, plex_user_id, is_admin,
+               last_login_at, profile_photo_url
+        FROM users ORDER BY last_login_at DESC
+    ''').fetchall()
+    current_app.logger.debug(f"admin_users: users query {(time.monotonic()-t0)*1000:.0f}ms")
+
+    # Single query for last watched per user using window function (replaces N+1)
+    t1 = time.monotonic()
+    last_watched = {r['plex_username']: r for r in db.execute('''
+        SELECT plex_username, title, show_title, season_episode, media_type, event_timestamp
+        FROM (
+            SELECT plex_username, title, show_title, season_episode, media_type, event_timestamp,
+                   ROW_NUMBER() OVER (PARTITION BY plex_username ORDER BY event_timestamp DESC) as rn
+            FROM plex_activity_log
+            WHERE event_type IN ('media.stop', 'media.scrobble', 'watched')
+              AND plex_username IS NOT NULL
+        ) WHERE rn = 1
+    ''').fetchall()}
+    current_app.logger.debug(f"admin_users: last_watched query {(time.monotonic()-t1)*1000:.0f}ms")
+
+    t2 = time.monotonic()
+    watch_counts = {r['plex_username']: r['cnt'] for r in db.execute('''
+        SELECT plex_username, COUNT(*) as cnt FROM plex_activity_log
+        WHERE event_type IN ('media.scrobble', 'watched') AND plex_username IS NOT NULL
+        GROUP BY plex_username
+    ''').fetchall()}
+
+    issue_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM issue_reports
+        WHERE status != 'resolved' GROUP BY user_id
+    ''').fetchall()}
+
+    problem_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM problem_reports
+        WHERE status != 'resolved' GROUP BY user_id
+    ''').fetchall()}
+
+    fav_counts = {r['user_id']: r['cnt'] for r in db.execute('''
+        SELECT user_id, COUNT(*) as cnt FROM user_favorites
+        WHERE is_dropped = 0 GROUP BY user_id
+    ''').fetchall()}
+    current_app.logger.debug(f"admin_users: aggregate queries {(time.monotonic()-t2)*1000:.0f}ms")
+
+    t3 = time.monotonic()
+    from ..utils import get_jellyseer_user_requests
+    jellyseer_counts = get_jellyseer_user_requests()
+    current_app.logger.debug(f"admin_users: jellyseerr {(time.monotonic()-t3)*1000:.0f}ms")
+
+    current_app.logger.debug(f"admin_users: total {(time.monotonic()-t0)*1000:.0f}ms")
+
+    return render_template('admin_users.html',
+        users=users,
+        last_watched=last_watched,
+        watch_counts=watch_counts,
+        issue_counts=issue_counts,
+        problem_counts=problem_counts,
+        fav_counts=fav_counts,
+        jellyseer_counts=jellyseer_counts,
+    )
+
+
 @admin_bp.route('/logs/list', methods=['GET'])
 @login_required
 @admin_required
@@ -730,7 +893,17 @@ def settings():
             bazarr_url=?, bazarr_api_key=?, bazarr_remote_url=?,
             pushover_key=?, pushover_token=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
-            thetvdb_api_key=?, timezone=?, jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=? WHERE id=?''', (
+            thetvdb_api_key=?, timezone=?,
+            jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=?,
+            ollama_url=?, ollama_model_name=?, openai_api_key=?, openai_model_name=?,
+            preferred_llm_provider=?,
+            schedule_tautulli_hour=?, schedule_tautulli_minute=?,
+            schedule_sonarr_day=?, schedule_sonarr_hour=?, schedule_sonarr_minute=?,
+            schedule_radarr_day=?, schedule_radarr_hour=?, schedule_radarr_minute=?,
+            llm_knowledge_cutoff_date=?,
+            summary_schedule_start_hour=?, summary_schedule_end_hour=?,
+            summary_delay_seconds=?, summary_enabled=?
+            WHERE id=?''', (
             request.form.get('radarr_url'),
             request.form.get('radarr_api_key'),
             request.form.get('radarr_remote_url'),
@@ -750,9 +923,35 @@ def settings():
             request.form.get('jellyseer_url'),
             request.form.get('jellyseer_api_key'),
             request.form.get('jellyseer_remote_url'),
-            settings['id'] if settings else 1 # Ensure settings table has an ID=1 row
+            request.form.get('ollama_url'),
+            request.form.get('ollama_model_name'),
+            request.form.get('openai_api_key'),
+            request.form.get('openai_model_name'),
+            request.form.get('preferred_llm_provider') or None,
+            request.form.get('schedule_tautulli_hour', 3, type=int),
+            request.form.get('schedule_tautulli_minute', 0, type=int),
+            request.form.get('schedule_sonarr_day', 'sun'),
+            request.form.get('schedule_sonarr_hour', 4, type=int),
+            request.form.get('schedule_sonarr_minute', 0, type=int),
+            request.form.get('schedule_radarr_day', 'sun'),
+            request.form.get('schedule_radarr_hour', 5, type=int),
+            request.form.get('schedule_radarr_minute', 0, type=int),
+            request.form.get('llm_knowledge_cutoff_date') or None,
+            request.form.get('summary_schedule_start_hour', 2, type=int),
+            request.form.get('summary_schedule_end_hour', 6, type=int),
+            request.form.get('summary_delay_seconds', 30, type=int),
+            1 if request.form.get('summary_enabled') else 0,
+            settings['id'] if settings else 1
         ))
         db.commit()
+
+        # Reschedule background jobs with new times
+        try:
+            from app.scheduler import reschedule_jobs
+            reschedule_jobs(current_app._get_current_object())
+        except Exception as e:
+            current_app.logger.warning(f"Could not reschedule jobs: {e}")
+
         flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin.settings'))
     
@@ -789,6 +988,7 @@ def settings():
     bazarr_status = test_bazarr_connection()
     tautulli_status = test_tautulli_connection()
     jellyseerr_status = test_jellyseer_connection()
+    thetvdb_status = test_thetvdb_connection()
 
     # Get list of timezones
     import pytz
@@ -807,9 +1007,9 @@ def settings():
         bazarr_status=bazarr_status,
         tautulli_status=tautulli_status,
         jellyseerr_status=jellyseerr_status,
-        ollama_models=[],  # Empty list since LLM features removed
-        saved_ollama_model=None,
-        openai_models=[],  # Empty list since LLM features removed
+        thetvdb_status=thetvdb_status,
+        ollama_models=[],
+        saved_ollama_model=merged_settings.get('ollama_model_name'),
         timezones=timezones
     )
 
@@ -847,6 +1047,49 @@ def test_ollama_models_route():
     """Debug route to test Ollama model fetching"""
     models = get_ollama_models()
     return jsonify({"models": models, "count": len(models)})
+
+@admin_bp.route('/api/summary-queue-status')
+@login_required
+@admin_required
+def summary_queue_status():
+    """API endpoint to get summary generation queue status."""
+    from app.summary_services import get_summary_queue_status
+    return jsonify(get_summary_queue_status())
+
+@admin_bp.route('/api/trigger-summary-generation', methods=['POST'])
+@login_required
+@admin_required
+def trigger_summary_generation():
+    """Manually trigger summary generation in a background thread."""
+    import threading
+    from app.summary_services import process_summary_queue
+
+    app = current_app._get_current_object()
+
+    def run_summaries():
+        process_summary_queue(app)
+
+    thread = threading.Thread(target=run_summaries)
+    thread.daemon = True
+    thread.start()
+    return jsonify({"status": "started", "message": "Summary generation started in background"})
+
+@admin_bp.route('/api/generate-season-summary', methods=['POST'])
+@login_required
+@admin_required
+def generate_single_season_summary():
+    """Generate summary for a specific show/season immediately."""
+    from app.summary_services import generate_season_summary
+    tmdb_id = request.json.get('tmdb_id')
+    season_number = request.json.get('season_number')
+    if not tmdb_id or season_number is None:
+        return jsonify({"error": "tmdb_id and season_number required"}), 400
+
+    success, error = generate_season_summary(int(tmdb_id), int(season_number))
+    if success:
+        return jsonify({"status": "completed", "message": f"Summary generated for tmdb_id={tmdb_id} S{season_number}"})
+    else:
+        return jsonify({"status": "failed", "error": error}), 500
 
 @admin_bp.route('/sync-sonarr', methods=['POST'])
 @login_required
@@ -1311,6 +1554,8 @@ def test_api_connection():
         success, error_message = test_tautulli_connection_with_params(url, api_key)
     elif service == 'jellyseer' or service == 'jellyseerr':  # Support both spellings
         success, error_message = test_jellyseer_connection_with_params(url, api_key)
+    elif service == 'thetvdb':
+        success, error_message = test_thetvdb_connection_with_params(api_key)
     
     if success:
         return jsonify({'success': True})
@@ -2366,3 +2611,163 @@ def ai_logs_data():
     return jsonify({
         'logs': [dict(row) for row in logs]
     })
+
+
+# ============================================================================
+# RECAP PIPELINE (subtitle-first, local model)
+# ============================================================================
+
+@admin_bp.route('/recap-pipeline')
+@login_required
+@admin_required
+def recap_pipeline():
+    """Renders the subtitle-first recap pipeline admin page."""
+    from ..recap_pipeline import get_recap_pipeline_status
+
+    db = get_db()
+    status = get_recap_pipeline_status()
+
+    # List all shows that have subtitles available
+    shows_with_subs = db.execute("""
+        SELECT s.tmdb_id, s.title,
+               COUNT(DISTINCT sub.season_number || '-' || sub.episode_number) AS subtitle_episode_count
+        FROM sonarr_shows s
+        JOIN subtitles sub ON sub.show_tmdb_id = s.tmdb_id
+        GROUP BY s.tmdb_id, s.title
+        ORDER BY s.title
+    """).fetchall()
+
+    # Recent recaps
+    recent_season_recaps = db.execute("""
+        SELECT sr.id, s.title AS show_title, sr.season_number,
+               sr.local_model, sr.openai_model_version, sr.status,
+               sr.spoiler_cutoff_episode, sr.runtime_seconds,
+               sr.openai_cost_usd, sr.updated_at,
+               sr.error_message
+        FROM season_recaps sr
+        JOIN sonarr_shows s ON s.tmdb_id = sr.show_tmdb_id
+        ORDER BY sr.updated_at DESC
+        LIMIT 50
+    """).fetchall()
+
+    recent_episode_recaps = db.execute("""
+        SELECT er.id, s.title AS show_title, er.season_number, er.episode_number,
+               er.local_model, er.status, er.runtime_seconds, er.updated_at,
+               er.error_message
+        FROM episode_recaps er
+        JOIN sonarr_shows s ON s.tmdb_id = er.show_tmdb_id
+        ORDER BY er.updated_at DESC
+        LIMIT 100
+    """).fetchall()
+
+    return render_template(
+        'admin_recap_pipeline.html',
+        title='Recap Pipeline',
+        status=status,
+        shows_with_subs=shows_with_subs,
+        recent_season_recaps=recent_season_recaps,
+        recent_episode_recaps=recent_episode_recaps,
+    )
+
+
+@admin_bp.route('/recap-pipeline/generate-season', methods=['POST'])
+@login_required
+@admin_required
+def recap_pipeline_generate_season():
+    """Trigger subtitle-first season recap generation."""
+    from ..recap_pipeline import generate_season_recap
+
+    tmdb_id = request.form.get('tmdb_id', type=int)
+    season_number = request.form.get('season_number', type=int)
+    spoiler_cutoff = request.form.get('spoiler_cutoff', type=int) or None
+    local_model = request.form.get('local_model', 'gpt-oss:20b').strip() or 'gpt-oss:20b'
+    openai_polish = bool(request.form.get('openai_polish'))
+    force = bool(request.form.get('force'))
+
+    if not tmdb_id or not season_number:
+        flash('tmdb_id and season_number are required.', 'danger')
+        return redirect(url_for('admin.recap_pipeline'))
+
+    current_app.logger.info(
+        f"Admin triggered season recap: tmdb={tmdb_id} S{season_number} "
+        f"model={local_model} polish={openai_polish} force={force}"
+    )
+
+    recap, error = generate_season_recap(
+        tmdb_id, season_number,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=local_model,
+        openai_polish=openai_polish,
+        force=force,
+    )
+
+    if error:
+        flash(f'Season recap generation failed: {error}', 'danger')
+    else:
+        flash(f'Season recap generated successfully for season {season_number}.', 'success')
+
+    return redirect(url_for('admin.recap_pipeline'))
+
+
+@admin_bp.route('/recap-pipeline/generate-episode', methods=['POST'])
+@login_required
+@admin_required
+def recap_pipeline_generate_episode():
+    """Trigger subtitle-first episode recap generation."""
+    from ..recap_pipeline import generate_episode_recap
+
+    tmdb_id = request.form.get('tmdb_id', type=int)
+    season_number = request.form.get('season_number', type=int)
+    episode_number = request.form.get('episode_number', type=int)
+    spoiler_cutoff = request.form.get('spoiler_cutoff', type=int) or None
+    local_model = request.form.get('local_model', 'gpt-oss:20b').strip() or 'gpt-oss:20b'
+    force = bool(request.form.get('force'))
+
+    if not tmdb_id or not season_number or not episode_number:
+        flash('tmdb_id, season_number, and episode_number are required.', 'danger')
+        return redirect(url_for('admin.recap_pipeline'))
+
+    current_app.logger.info(
+        f"Admin triggered episode recap: tmdb={tmdb_id} S{season_number}E{episode_number} "
+        f"model={local_model} force={force}"
+    )
+
+    summary, error = generate_episode_recap(
+        tmdb_id, season_number, episode_number,
+        spoiler_cutoff=spoiler_cutoff,
+        local_model=local_model,
+        force=force,
+    )
+
+    if error:
+        flash(f'Episode recap generation failed: {error}', 'danger')
+    else:
+        flash(
+            f'Episode recap generated for S{season_number:02d}E{episode_number:02d}.',
+            'success',
+        )
+
+    return redirect(url_for('admin.recap_pipeline'))
+
+
+@admin_bp.route('/recap-pipeline/season/<int:recap_id>', methods=['GET'])
+@login_required
+@admin_required
+def recap_pipeline_view_season(recap_id):
+    """View a single season recap."""
+    db = get_db()
+    row = db.execute("""
+        SELECT sr.*, s.title AS show_title
+        FROM season_recaps sr
+        JOIN sonarr_shows s ON s.tmdb_id = sr.show_tmdb_id
+        WHERE sr.id = ?
+    """, (recap_id,)).fetchone()
+    if not row:
+        abort(404)
+    return render_template(
+        'admin_recap_pipeline.html',
+        title='View Season Recap',
+        view_recap=dict(row),
+        status={}, shows_with_subs=[],
+        recent_season_recaps=[], recent_episode_recaps=[],
+    )
