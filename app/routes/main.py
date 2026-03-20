@@ -32,7 +32,7 @@ import markdown as md
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for, session, jsonify,
-    flash, current_app, Response, abort
+    flash, current_app, Response, abort, g
 )
 from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -94,58 +94,80 @@ def update_session_profile_photo():
     Update session with profile photo URL if it has changed.
     This ensures the session always reflects the current profile photo from the database,
     even when users upload a new photo.
+
+    Performance optimization: Skip for static file requests and use request-level caching.
     """
-    if session.get('user_id'):
-        try:
-            db = database.get_db()
-            user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-            if user_record:
-                db_photo_url = user_record['profile_photo_url']
-                session_photo_url = session.get('profile_photo_url')
-                # Update session if database value is different
-                if db_photo_url != session_photo_url:
-                    session['profile_photo_url'] = db_photo_url
-        except Exception:
-            pass  # Silently fail to avoid breaking the request
+    # Skip for static file requests to improve performance
+    if request.endpoint and ('static' in request.endpoint or request.endpoint.startswith('_')):
+        return
+
+    # Skip if no user logged in
+    if not session.get('user_id'):
+        return
+
+    # Use request-level cache (g object) to avoid multiple lookups per request
+    if hasattr(g, '_profile_photo_checked'):
+        return
+    g._profile_photo_checked = True
+
+    try:
+        db = database.get_db()
+        user_record = db.execute('SELECT profile_photo_url FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if user_record:
+            db_photo_url = user_record['profile_photo_url']
+            session_photo_url = session.get('profile_photo_url')
+            # Update session if database value is different
+            if db_photo_url != session_photo_url:
+                session['profile_photo_url'] = db_photo_url
+    except Exception:
+        pass  # Silently fail to avoid breaking the request
 
 def _get_profile_stats(db, user_id=None):
     """
     Helper function to get consistent statistics for profile pages.
     Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
     favorite_count (if user_id provided), unread_notification_count (if user_id provided)
+
+    Performance optimization: Consolidated queries to reduce database round-trips.
     """
     from ..utils import get_tautulli_activity
 
     stats = {}
 
-    # Now Playing: get real-time activity from Tautulli
+    # Now Playing: get real-time activity from Tautulli (external API call, can't consolidate)
     stats['now_playing_count'] = get_tautulli_activity()
 
-    # Players Today: count unique users who have played something today
-    stats['players_today'] = db.execute(
-        "SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log WHERE DATE(event_timestamp) = DATE('now', 'localtime')"
-    ).fetchone()[0] or 0
-
-    # Total shows
-    stats['total_shows'] = db.execute('SELECT COUNT(*) FROM sonarr_shows').fetchone()[0] or 0
-
-    # Total episodes
-    stats['total_episodes'] = db.execute('SELECT COUNT(DISTINCT id) FROM sonarr_episodes').fetchone()[0] or 0
-
-    # Total movies
-    stats['total_movies'] = db.execute('SELECT COUNT(*) FROM radarr_movies').fetchone()[0] or 0
-
-    # User-specific stats
+    # Consolidated query for all count statistics to reduce database round-trips
+    # This single query replaces 5-6 separate COUNT queries
     if user_id:
-        stats['favorite_count'] = db.execute(
-            'SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0',
-            (user_id,)
-        ).fetchone()[0] or 0
+        consolidated_stats = db.execute('''
+            SELECT
+                (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
+                (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
+                (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
+                 WHERE DATE(event_timestamp) = DATE('now', 'localtime')) as players_today,
+                (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
+                (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0) as unread_notification_count
+        ''', (user_id, user_id)).fetchone()
+    else:
+        consolidated_stats = db.execute('''
+            SELECT
+                (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
+                (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
+                (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
+                 WHERE DATE(event_timestamp) = DATE('now', 'localtime')) as players_today
+        ''').fetchone()
 
-        stats['unread_notification_count'] = db.execute(
-            'SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0',
-            (user_id,)
-        ).fetchone()[0] or 0
+    stats['total_shows'] = consolidated_stats['total_shows'] or 0
+    stats['total_episodes'] = consolidated_stats['total_episodes'] or 0
+    stats['total_movies'] = consolidated_stats['total_movies'] or 0
+    stats['players_today'] = consolidated_stats['players_today'] or 0
+
+    if user_id:
+        stats['favorite_count'] = consolidated_stats['favorite_count'] or 0
+        stats['unread_notification_count'] = consolidated_stats['unread_notification_count'] or 0
     else:
         stats['favorite_count'] = 0
         stats['unread_notification_count'] = 0
@@ -356,16 +378,41 @@ def home():
     """, (s_username,)).fetchall()
 
     # Enrich recently watched with show/movie data for cards
+    # Batch query approach to avoid N+1 queries
     recent_shows_enriched = []
+
+    # Collect all tmdb_ids for movies and show titles for episodes
+    movie_tmdb_ids = [item['tmdb_id'] for item in recent_watched
+                      if item['media_type'] == 'movie' and item['tmdb_id']]
+    show_titles = [item['display_title'].lower() for item in recent_watched
+                   if item['media_type'] == 'episode' and item['display_title']]
+
+    # Batch fetch movies
+    movies_map = {}
+    if movie_tmdb_ids:
+        placeholders = ','.join('?' * len(movie_tmdb_ids))
+        movies = db.execute(
+            f'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
+            movie_tmdb_ids
+        ).fetchall()
+        movies_map = {m['tmdb_id']: dict(m) for m in movies}
+
+    # Batch fetch shows
+    shows_map = {}
+    if show_titles:
+        placeholders = ','.join('?' * len(show_titles))
+        shows = db.execute(
+            f'SELECT tmdb_id, title, year, status, poster_url, LOWER(title) as title_lower FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+            show_titles
+        ).fetchall()
+        shows_map = {s['title_lower']: dict(s) for s in shows}
+
+    # Now enrich items using the pre-fetched data
     for item in recent_watched:
         item_dict = dict(item)
 
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = db.execute(
-                'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id = ?',
-                (item_dict['tmdb_id'],)
-            ).fetchone()
-
+            movie = movies_map.get(item_dict['tmdb_id'])
             if movie:
                 item_dict['title'] = movie['title']
                 item_dict['year'] = movie['year']
@@ -376,11 +423,7 @@ def home():
                 recent_shows_enriched.append(item_dict)
 
         elif item_dict['media_type'] == 'episode' and item_dict.get('display_title'):
-            show = db.execute(
-                'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
-                (item_dict['display_title'].lower(),)
-            ).fetchone()
-
+            show = shows_map.get(item_dict['display_title'].lower())
             if show:
                 item_dict['title'] = show['title']
                 item_dict['year'] = show['year']
@@ -420,21 +463,25 @@ def home():
         """, (f"%{current_user.plex_username}%",)).fetchall()
         user_tag_ids = [tag['id'] for tag in user_tags]
     
-    # Get show IDs for user-requested shows
+    # Get show IDs for user-requested shows (using SQL filtering instead of Python loop)
     user_requested_ids = []
     if user_tag_ids:
-        user_requested_shows = db.execute("""
-            SELECT DISTINCT s.id, s.tags
-            FROM sonarr_shows s
-            WHERE s.tags IS NOT NULL
-        """).fetchall()
-        
-        for show in user_requested_shows:
-            if show['tags']:
-                # Parse the comma-separated tag IDs
-                show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
-                if any(tag_id in user_tag_ids for tag_id in show_tag_ids):
-                    user_requested_ids.append(show['id'])
+        # Build SQL conditions to match any of the user's tag IDs in the comma-separated tags column
+        # Uses SQLite's INSTR function to check if the tag ID appears in the tags string
+        tag_conditions = []
+        tag_params = []
+        for tag_id in user_tag_ids:
+            # Match tag_id at start, end, or surrounded by commas
+            tag_conditions.append("(s.tags = ? OR s.tags LIKE ? OR s.tags LIKE ? OR s.tags LIKE ?)")
+            tag_params.extend([str(tag_id), f"{tag_id},%", f"%,{tag_id}", f"%,{tag_id},%"])
+
+        if tag_conditions:
+            user_requested_shows = db.execute(f"""
+                SELECT DISTINCT s.id
+                FROM sonarr_shows s
+                WHERE s.tags IS NOT NULL AND ({' OR '.join(tag_conditions)})
+            """, tag_params).fetchall()
+            user_requested_ids = [row['id'] for row in user_requested_shows]
     
     # Combine favorited, watched, and requested show IDs (unique)
     tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
@@ -657,27 +704,48 @@ def watch_history():
     """, (s_username,)).fetchall()
 
     # Enrich watch history with show/movie data
+    # Batch query approach to avoid N+1 queries
     enriched_history = []
+
+    # Collect all tmdb_ids for movies and show titles for episodes
+    movie_tmdb_ids = [item['tmdb_id'] for item in watch_history
+                      if item['media_type'] == 'movie' and item['tmdb_id']]
+    show_titles = [item['show_title'].lower() for item in watch_history
+                   if item['media_type'] == 'episode' and item['show_title']]
+
+    # Batch fetch movies
+    movies_map = {}
+    if movie_tmdb_ids:
+        placeholders = ','.join('?' * len(movie_tmdb_ids))
+        movies = db.execute(
+            f'SELECT tmdb_id, title, year, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
+            movie_tmdb_ids
+        ).fetchall()
+        movies_map = {m['tmdb_id']: dict(m) for m in movies}
+
+    # Batch fetch shows
+    shows_map = {}
+    if show_titles:
+        placeholders = ','.join('?' * len(show_titles))
+        shows = db.execute(
+            f'SELECT tmdb_id, title, poster_url, LOWER(title) as title_lower FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+            show_titles
+        ).fetchall()
+        shows_map = {s['title_lower']: dict(s) for s in shows}
+
+    # Now enrich items using the pre-fetched data
     for item in watch_history:
         item_dict = dict(item)
 
         # Try to get additional metadata
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = db.execute(
-                'SELECT title, year, poster_url FROM radarr_movies WHERE tmdb_id = ?',
-                (item_dict['tmdb_id'],)
-            ).fetchone()
-
+            movie = movies_map.get(item_dict['tmdb_id'])
             if movie:
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
 
         elif item_dict['media_type'] == 'episode' and item_dict.get('show_title'):
-            show = db.execute(
-                'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
-                (item_dict['show_title'].lower(),)
-            ).fetchone()
-
+            show = shows_map.get(item_dict['show_title'].lower())
             if show:
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
@@ -1969,9 +2037,28 @@ def show_detail(tmdb_id):
         show_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
     show_db_id = show_dict['id']
 
+    # Fetch seasons and episodes in batch to avoid N+1 queries
     seasons_rows = db.execute(
         'SELECT * FROM sonarr_seasons WHERE show_id = ? ORDER BY season_number DESC', (show_db_id,)
     ).fetchall()
+
+    # Get all season IDs (excluding Season 0)
+    season_ids = [s['id'] for s in seasons_rows if s['season_number'] != 0]
+
+    # Batch fetch all episodes for all seasons at once
+    episodes_by_season = {}
+    if season_ids:
+        placeholders = ','.join('?' * len(season_ids))
+        all_episodes = db.execute(
+            f'SELECT * FROM sonarr_episodes WHERE season_id IN ({placeholders}) ORDER BY season_id, episode_number DESC',
+            season_ids
+        ).fetchall()
+        # Group episodes by season_id
+        for ep in all_episodes:
+            season_id = ep['season_id']
+            if season_id not in episodes_by_season:
+                episodes_by_season[season_id] = []
+            episodes_by_season[season_id].append(dict(ep))
 
     seasons_with_episodes = []
     all_show_episodes_for_next_aired_check = []
@@ -1983,11 +2070,8 @@ def show_detail(tmdb_id):
         season_dict = dict(season_row)
         season_db_id = season_dict['id']
 
-        episodes_rows = db.execute(
-            'SELECT * FROM sonarr_episodes WHERE season_id = ? ORDER BY episode_number DESC', (season_db_id,)
-        ).fetchall()
-
-        current_season_episodes = [dict(ep_row) for ep_row in episodes_rows]
+        # Get episodes from pre-fetched map
+        current_season_episodes = episodes_by_season.get(season_db_id, [])
         season_dict['episodes'] = current_season_episodes
         seasons_with_episodes.append(season_dict)
         all_show_episodes_for_next_aired_check.extend(current_season_episodes)
@@ -2089,13 +2173,26 @@ def show_detail(tmdb_id):
     settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
     jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
 
+    # Load AI-generated season recaps
+    season_recaps = {}
+    try:
+        recap_rows = db.execute(
+            'SELECT season_number, summary_text FROM show_summaries WHERE show_id = ? AND episode_number IS NULL AND season_number IS NOT NULL',
+            (show_db_id,)
+        ).fetchall()
+        for row in recap_rows:
+            season_recaps[row['season_number']] = row['summary_text']
+    except Exception:
+        pass
+
     return render_template('show_detail.html',
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
                            next_aired_episode_info=next_aired_episode_info,
                            next_up_episode=next_up_episode,
                            cast_members=cast_members,
-                           jellyseer_url=jellyseer_url
+                           jellyseer_url=jellyseer_url,
+                           season_recaps=season_recaps
                            )
 
 def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes, user_prefs=None):
@@ -2679,27 +2776,46 @@ def profile():
         LIMIT 50
     """, (s_username,)).fetchall()
 
-    # Enrich watch history with show/movie data
+    # Enrich watch history with show/movie data using batch queries to avoid N+1
     enriched_history = []
+
+    # Collect all tmdb_ids for movies and show titles for episodes
+    movie_tmdb_ids = [item['tmdb_id'] for item in watch_history
+                      if item['media_type'] == 'movie' and item['tmdb_id']]
+    show_titles = [item['show_title'].lower() for item in watch_history
+                   if item['media_type'] == 'episode' and item['show_title']]
+
+    # Batch fetch movies
+    movies_map = {}
+    if movie_tmdb_ids:
+        placeholders = ','.join('?' * len(movie_tmdb_ids))
+        movies = db.execute(
+            f'SELECT tmdb_id, title, year, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
+            movie_tmdb_ids
+        ).fetchall()
+        movies_map = {m['tmdb_id']: dict(m) for m in movies}
+
+    # Batch fetch shows
+    shows_map = {}
+    if show_titles:
+        placeholders = ','.join('?' * len(show_titles))
+        shows = db.execute(
+            f'SELECT tmdb_id, title, poster_url, LOWER(title) as title_lower FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+            show_titles
+        ).fetchall()
+        shows_map = {s['title_lower']: dict(s) for s in shows}
+
     for item in watch_history:
         item_dict = dict(item)
 
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = db.execute(
-                'SELECT title, year, poster_url FROM radarr_movies WHERE tmdb_id = ?',
-                (item_dict['tmdb_id'],)
-            ).fetchone()
-
+            movie = movies_map.get(item_dict['tmdb_id'])
             if movie:
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
 
         elif item_dict['media_type'] == 'episode' and item_dict.get('show_title'):
-            show = db.execute(
-                'SELECT tmdb_id, title, poster_url FROM sonarr_shows WHERE LOWER(title) = ?',
-                (item_dict['show_title'].lower(),)
-            ).fetchone()
-
+            show = shows_map.get(item_dict['show_title'].lower())
             if show:
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
@@ -3286,52 +3402,36 @@ def _get_genre_distribution(user_id):
 
     plex_username = user['plex_username']
 
-    # Get all watched shows and movies from activity log
-    watched_media = db.execute('''
-        SELECT DISTINCT
+    # OPTIMIZED: Single query with JOINs instead of N+1 queries
+    # Fetch all watched media with genres in one query
+    watched_with_genres = db.execute('''
+        SELECT
             pal.media_type,
             pal.tmdb_id,
-            COUNT(*) as watch_count
+            COUNT(*) as watch_count,
+            CASE
+                WHEN pal.media_type = 'episode' THEN ss.genres
+                WHEN pal.media_type = 'movie' THEN rm.genres
+            END as genres
         FROM plex_activity_log pal
+        LEFT JOIN sonarr_shows ss ON pal.media_type = 'episode' AND pal.tmdb_id = ss.tmdb_id
+        LEFT JOIN radarr_movies rm ON pal.media_type = 'movie' AND pal.tmdb_id = rm.tmdb_id
         WHERE pal.plex_username = ?
             AND pal.event_type IN ('media.stop', 'media.scrobble')
             AND pal.tmdb_id IS NOT NULL
         GROUP BY pal.media_type, pal.tmdb_id
     ''', (plex_username,)).fetchall()
 
-    # Collect genres
+    # Collect genres from the joined results
     genre_counts = {}
 
-    for media in watched_media:
+    for media in watched_with_genres:
         genres = []
-
-        if media['media_type'] == 'episode' and media['tmdb_id']:
-            # For episodes, tmdb_id is the show's TMDB ID
-            show = db.execute('''
-                SELECT genres
-                FROM sonarr_shows
-                WHERE tmdb_id = ?
-            ''', (media['tmdb_id'],)).fetchone()
-
-            if show and show['genres']:
-                try:
-                    genres = json.loads(show['genres']) if isinstance(show['genres'], str) else show['genres']
-                except:
-                    pass
-
-        elif media['media_type'] == 'movie' and media['tmdb_id']:
-            # For movies, tmdb_id is the movie's TMDB ID
-            movie = db.execute('''
-                SELECT genres
-                FROM radarr_movies
-                WHERE tmdb_id = ?
-            ''', (media['tmdb_id'],)).fetchone()
-
-            if movie and movie['genres']:
-                try:
-                    genres = json.loads(movie['genres']) if isinstance(movie['genres'], str) else movie['genres']
-                except:
-                    pass
+        if media['genres']:
+            try:
+                genres = json.loads(media['genres']) if isinstance(media['genres'], str) else media['genres']
+            except:
+                pass
 
         # Count genres
         for genre in genres:

@@ -44,6 +44,7 @@
                     <a href="{{ item.detail_url or '#' }}">
                         <img src="{{ item.cached_poster_url }}" alt="{{ item.title or item.show_title }}"
                             class="w-16 h-24 object-cover rounded shadow-sm"
+                            loading="lazy"
                             onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
                     </a>
                     {% else %}

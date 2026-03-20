@@ -135,5 +135,38 @@ def create_app(test_config=None):
     from app.scheduler import init_scheduler
     init_scheduler(app)
 
+    # --- Static File Cache Headers ---
+    # Add cache headers for static files to improve page load performance
+    @app.after_request
+    def add_cache_headers(response):
+        from flask import request
+
+        # Use request.path for reliable detection instead of Content-Location header
+        request_path = request.path
+
+        # Cache static assets (CSS, JS, fonts, images in /static/)
+        if request_path.startswith('/static/'):
+            if app.config.get('ENVIRONMENT') == 'production':
+                response.cache_control.max_age = 604800  # 1 week
+                response.cache_control.public = True
+            else:
+                response.cache_control.max_age = 3600  # 1 hour
+                response.cache_control.public = True
+            return response
+
+        # Cache image proxy responses (poster, background, cast images)
+        if '/image-proxy/' in request_path or '/cast-image/' in request_path:
+            response.cache_control.max_age = 604800  # 1 week - images rarely change
+            response.cache_control.public = True
+            return response
+
+        # Cache calendar API responses (already cached server-side, but add browser cache)
+        if request_path == '/api/calendar':
+            response.cache_control.max_age = 300  # 5 minutes
+            response.cache_control.public = True
+            return response
+
+        return response
+
     app.logger.info('ShowNotes application successfully created.')
     return app

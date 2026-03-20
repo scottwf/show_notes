@@ -117,6 +117,137 @@ def scheduled_radarr_sync():
         except:
             pass
 
+def scheduled_ai_summaries():
+    """
+    Scheduled AI summary generation.
+    Finds shows with upcoming new seasons and generates episode summaries
+    and season recaps for completed seasons that don't have them yet.
+    Runs weekly on Mondays at 6 AM.
+    """
+    import time as time_mod
+    from app.database import get_db, get_setting
+    from app.llm_services import generate_episode_summary, generate_season_recap
+
+    try:
+        provider = get_setting('preferred_llm_provider')
+        if not provider:
+            current_app.logger.info("Scheduled AI summaries: No LLM provider configured, skipping.")
+            return
+
+        model = get_setting(f'{provider}_model_name') or 'default'
+        db = get_db()
+
+        # Find continuing shows that have episodes with future air dates (upcoming season)
+        shows = db.execute('''
+            SELECT DISTINCT s.id, s.title, s.season_count
+            FROM sonarr_shows s
+            JOIN sonarr_episodes e ON s.id = e.show_id
+            WHERE s.status = 'continuing'
+              AND e.season_number > 0
+              AND e.episode_number = 1
+              AND e.air_date_utc > DATETIME('now')
+              AND e.air_date_utc <= DATETIME('now', '+60 days')
+        ''').fetchall()
+
+        if not shows:
+            current_app.logger.info("Scheduled AI summaries: No shows with upcoming new seasons found.")
+            return
+
+        current_app.logger.info(f"Scheduled AI summaries: Found {len(shows)} shows with upcoming seasons")
+        total_episodes = 0
+        total_seasons = 0
+
+        for show in shows:
+            # Get completed seasons (all episodes have files, not season 0)
+            seasons = db.execute('''
+                SELECT ss.season_number
+                FROM sonarr_seasons ss
+                WHERE ss.show_id = ? AND ss.season_number > 0
+                  AND ss.episode_file_count > 0
+                  AND ss.episode_file_count = ss.episode_count
+                ORDER BY ss.season_number
+            ''', (show['id'],)).fetchall()
+
+            for season in seasons:
+                sn = season['season_number']
+
+                # Check if season recap already exists
+                existing_recap = db.execute(
+                    'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number IS NULL',
+                    (show['id'], sn)
+                ).fetchone()
+                if existing_recap:
+                    continue
+
+                # Generate episode summaries for this season
+                episodes = db.execute('''
+                    SELECT * FROM sonarr_episodes
+                    WHERE show_id = ? AND season_number = ? AND episode_number > 0
+                    ORDER BY episode_number
+                ''', (show['id'], sn)).fetchall()
+
+                episode_texts = []
+                for ep in episodes:
+                    existing = db.execute(
+                        'SELECT summary_text FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number = ?',
+                        (show['id'], sn, ep['episode_number'])
+                    ).fetchone()
+
+                    if existing:
+                        episode_texts.append(f"E{ep['episode_number']}: {existing['summary_text']}")
+                        continue
+
+                    summary, error = generate_episode_summary(
+                        show['title'], sn, ep['episode_number'], ep['title'], ep['overview']
+                    )
+                    if summary:
+                        db.execute(
+                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                            (show['id'], sn, ep['episode_number'], summary, provider, model, 'episode_summary')
+                        )
+                        db.commit()
+                        total_episodes += 1
+                        episode_texts.append(f"E{ep['episode_number']}: {summary}")
+                    time_mod.sleep(2)  # Rate limit
+
+                # Generate season recap
+                if episode_texts:
+                    recap, error = generate_season_recap(show['title'], sn, "\n\n".join(episode_texts))
+                    if recap:
+                        db.execute(
+                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
+                               VALUES (?, ?, NULL, ?, ?, ?, ?)''',
+                            (show['id'], sn, recap, provider, model, 'season_recap')
+                        )
+                        db.commit()
+                        total_seasons += 1
+                    time_mod.sleep(2)
+
+        current_app.logger.info(f"Scheduled AI summaries completed: {total_episodes} episodes, {total_seasons} season recaps")
+
+        try:
+            from app.system_logger import syslog, SystemLogger
+            syslog.success(SystemLogger.SYNC, f"AI summary generation: {total_episodes} episodes, {total_seasons} seasons", {
+                'episode_count': total_episodes,
+                'season_count': total_seasons,
+                'type': 'scheduled'
+            })
+        except:
+            pass
+
+    except Exception as e:
+        current_app.logger.error(f"Error in scheduled AI summaries: {e}", exc_info=True)
+        try:
+            from app.system_logger import syslog, SystemLogger
+            syslog.error(SystemLogger.SYNC, f"Scheduled AI summary generation failed: {str(e)}", {
+                'error': str(e),
+                'type': 'scheduled'
+            })
+        except:
+            pass
+
+
 def init_scheduler(app):
     """
     Initialize the background scheduler with the Flask app context.
@@ -178,6 +309,18 @@ def init_scheduler(app):
         replace_existing=True
     )
     app.logger.info("Scheduled weekly Radarr sync on Sundays at 5:00 AM")
+
+    # Weekly AI summary generation on Mondays at 6 AM
+    scheduler.add_job(
+        wrap_with_context(scheduled_ai_summaries),
+        'cron',
+        day_of_week='mon',
+        hour=6,
+        minute=0,
+        id='ai_summaries',
+        replace_existing=True
+    )
+    app.logger.info("Scheduled weekly AI summary generation on Mondays at 6:00 AM")
 
     # Start the scheduler
     scheduler.start()

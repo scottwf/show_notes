@@ -63,6 +63,7 @@
             <img class="w-32 sm:w-40 md:w-48 aspect-[2/3] object-cover rounded-md border border-slate-300 dark:border-slate-700 shadow-sm hover:shadow-lg transition-shadow duration-150"
                  src="{{ current_plex_event.cached_poster_url if current_plex_event.cached_poster_url else url_for('static', filename='logos/placeholder_poster.png') }}"
                  alt="Poster for {{ current_plex_event.title if current_plex_event.media_type == 'movie' else current_plex_event.episode_title }}"
+                 loading="lazy"
                  onerror="this.onerror=null; this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
           </a>
           <div class="flex-1 min-w-0">
@@ -128,6 +129,7 @@
                 <a href="{{ show.detail_url }}" class="block">
                   <img src="{{ show.cached_poster_url }}" alt="{{ show.title }}"
                       class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      loading="lazy"
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
                 </a>
 
@@ -172,6 +174,7 @@
                 <a href="{{ show.show_url }}" class="block relative">
                   <img src="{{ show.cached_poster_url }}" alt="{{ show.show_title }}"
                       class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      loading="lazy"
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
@@ -236,6 +239,7 @@
                 <a href="{{ show.show_url }}" class="block relative">
                   <img src="{{ show.cached_poster_url }}" alt="{{ show.show_title }}"
                       class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      loading="lazy"
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Premiere Badge #}
@@ -294,6 +298,7 @@
                 <a href="{{ movie.movie_url }}" class="block">
                   <img src="{{ movie.cached_poster_url }}" alt="{{ movie.title }}"
                       class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      loading="lazy"
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
                 </a>
 
@@ -336,6 +341,7 @@
                 <a href="{{ movie.movie_url }}" class="block relative">
                   <img src="{{ movie.cached_poster_url }}" alt="{{ movie.title }}"
                       class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                      loading="lazy"
                       onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                   {# Coming Soon Badge #}

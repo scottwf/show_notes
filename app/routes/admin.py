@@ -34,6 +34,8 @@ import glob
 import time
 import secrets
 import socket
+import requests
+from openai import OpenAI
 from flask import (
     Blueprint, render_template, request, redirect, url_for, session, jsonify, flash,
     current_app, Response, stream_with_context, abort
@@ -92,6 +94,7 @@ ADMIN_SEARCHABLE_ROUTES = [
 
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
+    {'title': 'AI / LLM Settings', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_settings')},
 ]
 
 @admin_bp.route('/search', methods=['GET'])
@@ -249,7 +252,7 @@ def dashboard():
             (SELECT SUM(cost_usd) FROM api_usage) as total_api_cost,
             (SELECT SUM(cost_usd) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')) as openai_cost_week,
             (SELECT COUNT(*) FROM api_usage WHERE provider='openai' AND timestamp >= DATETIME('now', '-7 days')) as openai_call_count_week,
-            (SELECT NULL) as ollama_avg_ms,
+            (SELECT AVG(processing_time_ms) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')) as ollama_avg_ms,
             (SELECT COUNT(*) FROM api_usage WHERE provider='ollama' AND timestamp >= DATETIME('now', '-7 days')) as ollama_call_count_week
     """).fetchone()
 
@@ -2010,3 +2013,356 @@ def api_update_problem_report(report_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# AI / LLM MANAGEMENT
+# ============================================================================
+
+@admin_bp.route('/ai')
+@login_required
+@admin_required
+def ai_settings():
+    """AI admin page with settings, prompts, generate, and logs tabs."""
+    db = get_db()
+
+    # Load current settings
+    settings_row = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
+    settings = dict(settings_row) if settings_row else {}
+
+    # Load prompts
+    prompts = db.execute('SELECT * FROM llm_prompts ORDER BY id').fetchall()
+
+    # Load shows for generate tab
+    shows = db.execute(
+        'SELECT id, title, season_count, status FROM sonarr_shows ORDER BY title'
+    ).fetchall()
+
+    # Summary counts per show
+    summary_counts = db.execute('''
+        SELECT
+            s.id as show_id, s.title,
+            SUM(CASE WHEN sm.episode_number IS NOT NULL THEN 1 ELSE 0 END) as episode_count,
+            SUM(CASE WHEN sm.episode_number IS NULL AND sm.season_number IS NOT NULL THEN 1 ELSE 0 END) as season_count
+        FROM show_summaries sm
+        JOIN sonarr_shows s ON sm.show_id = s.id
+        GROUP BY sm.show_id
+        ORDER BY s.title
+    ''').fetchall()
+
+    # API usage logs (most recent 100)
+    logs = db.execute(
+        'SELECT * FROM api_usage ORDER BY timestamp DESC LIMIT 100'
+    ).fetchall()
+
+    # Log stats
+    log_stats = db.execute('''
+        SELECT
+            (SELECT COUNT(*) FROM api_usage) as total_calls,
+            (SELECT COALESCE(SUM(cost_usd), 0) FROM api_usage) as total_cost,
+            (SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')) as week_calls,
+            (SELECT COALESCE(SUM(cost_usd), 0) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')) as week_cost
+    ''').fetchone()
+
+    return render_template('admin_ai.html',
+                           settings=settings,
+                           prompts=prompts,
+                           shows=shows,
+                           summary_counts=summary_counts,
+                           logs=logs,
+                           log_stats=log_stats)
+
+
+@admin_bp.route('/ai/save-settings', methods=['POST'])
+@login_required
+@admin_required
+def ai_save_settings():
+    """Save AI/LLM provider settings."""
+    fields = ['preferred_llm_provider', 'ollama_url', 'ollama_model_name',
+              'openai_api_key', 'openai_model_name',
+              'openrouter_api_key', 'openrouter_model_name']
+
+    for field in fields:
+        value = request.form.get(field, '').strip()
+        set_setting(field, value if value else None)
+
+    flash('AI settings saved successfully.', 'success')
+    return redirect(url_for('admin.ai_settings'))
+
+
+@admin_bp.route('/ai/save-prompt', methods=['POST'])
+@login_required
+@admin_required
+def ai_save_prompt():
+    """Save an edited prompt template."""
+    prompt_key = request.form.get('prompt_key')
+    prompt_template = request.form.get('prompt_template', '').strip()
+
+    if not prompt_key or not prompt_template:
+        flash('Prompt key and template are required.', 'error')
+        return redirect(url_for('admin.ai_settings'))
+
+    db = get_db()
+    db.execute(
+        'UPDATE llm_prompts SET prompt_template = ?, updated_at = CURRENT_TIMESTAMP WHERE prompt_key = ?',
+        (prompt_template, prompt_key)
+    )
+    db.commit()
+    flash(f'Prompt "{prompt_key}" saved.', 'success')
+    return redirect(url_for('admin.ai_settings'))
+
+
+@admin_bp.route('/ai/reset-prompt', methods=['POST'])
+@login_required
+@admin_required
+def ai_reset_prompt():
+    """Reset a prompt to its default template."""
+    data = request.json
+    prompt_key = data.get('prompt_key')
+
+    defaults = {
+        "episode_summary": """Write a concise summary (2-3 paragraphs) of {show_title} Season {season_number}, Episode {episode_number}: "{episode_title}".
+
+Here is the episode description for context: {episode_overview}
+
+Focus on the key plot developments, character moments, and how this episode connects to the larger season arc. Write in past tense as a recap for someone who has already watched the episode. Do not include spoiler warnings.""",
+        "season_recap": """Write a comprehensive season recap (3-5 paragraphs) for {show_title} Season {season_number}.
+
+Here are summaries of the individual episodes for reference:
+{episode_summaries}
+
+Provide an engaging recap that covers the major storylines, character development, and key turning points of the season. Write in past tense as a recap for someone who has already watched the season. End with how the season concludes and any cliffhangers or setups for the next season. Do not include spoiler warnings."""
+    }
+
+    if prompt_key not in defaults:
+        return jsonify({'success': False, 'error': 'Unknown prompt key'})
+
+    db = get_db()
+    db.execute(
+        'UPDATE llm_prompts SET prompt_template = ?, updated_at = CURRENT_TIMESTAMP WHERE prompt_key = ?',
+        (defaults[prompt_key], prompt_key)
+    )
+    db.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/ai/test-connection', methods=['POST'])
+@login_required
+@admin_required
+def ai_test_connection():
+    """Test connection to an LLM provider."""
+    data = request.json
+    service = data.get('service')
+
+    if service == 'ollama':
+        url = data.get('url', '').strip()
+        if not url:
+            return jsonify({'success': False, 'error': 'URL is required'})
+        try:
+            resp = requests.get(url.rstrip('/') + '/api/tags', timeout=10)
+            if resp.status_code == 200:
+                models = [m.get('name') for m in resp.json().get('models', []) if m.get('name')]
+                return jsonify({'success': True, 'models': models})
+            return jsonify({'success': False, 'error': f'HTTP {resp.status_code}'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+    elif service == 'openai':
+        api_key = data.get('api_key', '').strip()
+        if not api_key:
+            return jsonify({'success': False, 'error': 'API key is required'})
+        try:
+            client = OpenAI(api_key=api_key)
+            client.models.list()
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+    elif service == 'openrouter':
+        api_key = data.get('api_key', '').strip()
+        if not api_key:
+            return jsonify({'success': False, 'error': 'API key is required'})
+        try:
+            resp = requests.get('https://openrouter.ai/api/v1/models',
+                                headers={'Authorization': f'Bearer {api_key}'}, timeout=10)
+            if resp.status_code == 200:
+                return jsonify({'success': True})
+            return jsonify({'success': False, 'error': f'HTTP {resp.status_code}'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+    return jsonify({'success': False, 'error': 'Unknown service'})
+
+
+@admin_bp.route('/ai/generate', methods=['POST'])
+@login_required
+@admin_required
+def ai_generate():
+    """Generate AI summaries for a show's episodes and seasons."""
+    import time as time_mod
+    from ..llm_services import generate_episode_summary, generate_season_recap
+
+    data = request.json
+    show_id = data.get('show_id')
+    target_season = data.get('season_number')
+
+    if not show_id:
+        return jsonify({'success': False, 'error': 'show_id is required'})
+
+    db = get_db()
+    show = db.execute('SELECT * FROM sonarr_shows WHERE id = ?', (show_id,)).fetchone()
+    if not show:
+        return jsonify({'success': False, 'error': 'Show not found'})
+
+    # Get the active provider info for logging
+    provider = get_setting('preferred_llm_provider')
+    if not provider:
+        return jsonify({'success': False, 'error': 'No LLM provider configured. Set one in Settings tab.'})
+
+    model_setting = f'{provider}_model_name'
+    model = get_setting(model_setting) or 'default'
+
+    log_lines = []
+    episode_count = 0
+    season_count = 0
+
+    # Get seasons (skip season 0 = specials)
+    if target_season:
+        seasons = db.execute(
+            'SELECT * FROM sonarr_seasons WHERE show_id = ? AND season_number = ?',
+            (show_id, target_season)
+        ).fetchall()
+    else:
+        seasons = db.execute(
+            'SELECT * FROM sonarr_seasons WHERE show_id = ? AND season_number > 0 ORDER BY season_number',
+            (show_id,)
+        ).fetchall()
+
+    for season in seasons:
+        sn = season['season_number']
+
+        # Get episodes for this season
+        episodes = db.execute('''
+            SELECT * FROM sonarr_episodes
+            WHERE show_id = ? AND season_number = ? AND episode_number > 0
+            ORDER BY episode_number
+        ''', (show_id, sn)).fetchall()
+
+        if not episodes:
+            log_lines.append(f"Season {sn}: No episodes found, skipping.")
+            continue
+
+        # Generate episode summaries
+        episode_summary_texts = []
+        for ep in episodes:
+            # Check if summary already exists
+            existing = db.execute(
+                'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number = ?',
+                (show_id, sn, ep['episode_number'])
+            ).fetchone()
+
+            if existing:
+                # Load existing for season recap context
+                existing_text = db.execute(
+                    'SELECT summary_text FROM show_summaries WHERE id = ?', (existing['id'],)
+                ).fetchone()
+                if existing_text:
+                    episode_summary_texts.append(f"E{ep['episode_number']}: {existing_text['summary_text']}")
+                log_lines.append(f"S{sn}E{ep['episode_number']}: Already exists, skipping.")
+                continue
+
+            log_lines.append(f"S{sn}E{ep['episode_number']}: Generating summary for \"{ep['title']}\"...")
+            summary, error = generate_episode_summary(
+                show['title'], sn, ep['episode_number'],
+                ep['title'], ep['overview']
+            )
+
+            if error:
+                log_lines.append(f"  Error: {error}")
+                continue
+
+            # Save to database
+            db.execute(
+                '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (show_id, sn, ep['episode_number'], summary, provider, model, 'episode_summary')
+            )
+            db.commit()
+            episode_count += 1
+            episode_summary_texts.append(f"E{ep['episode_number']}: {summary}")
+            log_lines.append(f"  Done ({len(summary)} chars)")
+
+            # Small delay to avoid rate limits
+            time_mod.sleep(1)
+
+        # Generate season recap if we have episode summaries
+        existing_recap = db.execute(
+            'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number IS NULL',
+            (show_id, sn)
+        ).fetchone()
+
+        if existing_recap:
+            log_lines.append(f"Season {sn} recap: Already exists, skipping.")
+            continue
+
+        if episode_summary_texts:
+            log_lines.append(f"Season {sn}: Generating season recap...")
+            recap_text = "\n\n".join(episode_summary_texts)
+            recap, error = generate_season_recap(show['title'], sn, recap_text)
+
+            if error:
+                log_lines.append(f"  Error: {error}")
+            else:
+                db.execute(
+                    '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
+                       VALUES (?, ?, NULL, ?, ?, ?, ?)''',
+                    (show_id, sn, recap, provider, model, 'season_recap')
+                )
+                db.commit()
+                season_count += 1
+                log_lines.append(f"  Done ({len(recap)} chars)")
+                time_mod.sleep(1)
+
+    return jsonify({
+        'success': True,
+        'log': "\n".join(log_lines),
+        'episode_count': episode_count,
+        'season_count': season_count
+    })
+
+
+@admin_bp.route('/ai/delete-summaries', methods=['POST'])
+@login_required
+@admin_required
+def ai_delete_summaries():
+    """Delete all AI summaries for a show."""
+    data = request.json
+    show_id = data.get('show_id')
+    if not show_id:
+        return jsonify({'success': False, 'error': 'show_id required'})
+
+    db = get_db()
+    db.execute('DELETE FROM show_summaries WHERE show_id = ?', (show_id,))
+    db.commit()
+    return jsonify({'success': True})
+
+
+@admin_bp.route('/ai/logs-data')
+@login_required
+@admin_required
+def ai_logs_data():
+    """Return API usage logs as JSON for AJAX refresh."""
+    provider_filter = request.args.get('provider', '')
+    db = get_db()
+
+    if provider_filter:
+        logs = db.execute(
+            'SELECT * FROM api_usage WHERE provider = ? ORDER BY timestamp DESC LIMIT 100',
+            (provider_filter,)
+        ).fetchall()
+    else:
+        logs = db.execute('SELECT * FROM api_usage ORDER BY timestamp DESC LIMIT 100').fetchall()
+
+    return jsonify({
+        'logs': [dict(row) for row in logs]
+    })

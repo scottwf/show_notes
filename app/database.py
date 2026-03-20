@@ -78,7 +78,7 @@ def init_db():
 
             -- CREATE TABLE character_summaries ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, season_limit INTEGER, episode_limit INTEGER, raw_summary TEXT, parsed_traits TEXT, parsed_events TEXT, parsed_relationships TEXT, parsed_importance TEXT, parsed_quote TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
             -- CREATE TABLE character_chats ( id INTEGER PRIMARY KEY AUTOINCREMENT, character_name TEXT NOT NULL, show_title TEXT NOT NULL, user_message TEXT NOT NULL, character_reply TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP );
-            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL );
+            CREATE TABLE api_usage ( id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp DATETIME NOT NULL, endpoint TEXT NOT NULL, provider TEXT, prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER, cost_usd REAL, processing_time_ms INTEGER );
             -- CREATE TABLE shows ( id INTEGER PRIMARY KEY AUTOINCREMENT, tmdb_id INTEGER UNIQUE, title TEXT NOT NULL, description TEXT, poster_path TEXT, backdrop_path TEXT );
             -- CREATE TABLE season_metadata ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, season_number INTEGER NOT NULL, name TEXT, overview TEXT, poster_path TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id), UNIQUE (show_id, season_number) );
             -- CREATE TABLE top_characters ( id INTEGER PRIMARY KEY AUTOINCREMENT, show_id INTEGER NOT NULL, character_name TEXT NOT NULL, actor_name TEXT, episode_count INTEGER, FOREIGN KEY (show_id) REFERENCES shows (id) );
@@ -135,7 +135,14 @@ def init_db():
                 jellyseer_api_key TEXT,
                 jellyseer_remote_url TEXT,
                 thetvdb_api_key TEXT,
-                timezone TEXT DEFAULT 'UTC'
+                timezone TEXT DEFAULT 'UTC',
+                ollama_url TEXT,
+                ollama_model_name TEXT,
+                openai_api_key TEXT,
+                openai_model_name TEXT,
+                openrouter_api_key TEXT,
+                openrouter_model_name TEXT,
+                preferred_llm_provider TEXT
             );
             CREATE TABLE schema_version ( id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL );
             CREATE TABLE IF NOT EXISTS service_sync_status ( id INTEGER PRIMARY KEY AUTOINCREMENT, service_name TEXT UNIQUE NOT NULL, status TEXT NOT NULL, last_successful_sync_at DATETIME, last_attempted_sync_at DATETIME NOT NULL, message TEXT );
@@ -614,6 +621,34 @@ def init_db():
             );
 
             CREATE INDEX IF NOT EXISTS idx_tvmaze_cache_lookup ON tvmaze_cache(request_type, request_key);
+
+            CREATE TABLE llm_prompts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prompt_key TEXT UNIQUE NOT NULL,
+                prompt_name TEXT NOT NULL,
+                prompt_template TEXT NOT NULL,
+                description TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE show_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                show_id INTEGER NOT NULL,
+                season_number INTEGER,
+                episode_number INTEGER,
+                summary_text TEXT NOT NULL,
+                provider TEXT,
+                model TEXT,
+                prompt_key TEXT,
+                generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_show ON show_summaries(show_id);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_lookup ON show_summaries(show_id, season_number, episode_number);
+            CREATE INDEX IF NOT EXISTS idx_llm_prompts_key ON llm_prompts(prompt_key);
+            CREATE INDEX IF NOT EXISTS idx_api_usage_provider ON api_usage(provider);
+            CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
         """)
         # Insert the current schema version into the new table
         db.execute('INSERT INTO schema_version (id, version) VALUES (1, ?)', (CURRENT_SCHEMA_VERSION,))
@@ -623,6 +658,37 @@ def init_db():
         db.execute('CREATE INDEX IF NOT EXISTS idx_sonarr_shows_title_lower ON sonarr_shows(LOWER(title));')
         db.execute('CREATE INDEX IF NOT EXISTS idx_radarr_movies_title_lower ON radarr_movies(LOWER(title));')
         logger.info("Search indexes created.")
+
+        # Add performance indexes for common query patterns
+        logger.info("Creating performance indexes...")
+        performance_indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_sonarr_shows_tvdb_id ON sonarr_shows(tvdb_id);',
+            'CREATE INDEX IF NOT EXISTS idx_sonarr_shows_tmdb_id ON sonarr_shows(tmdb_id);',
+            'CREATE INDEX IF NOT EXISTS idx_radarr_movies_tmdb_id ON radarr_movies(tmdb_id);',
+            'CREATE INDEX IF NOT EXISTS idx_radarr_movies_title ON radarr_movies(title);',
+            'CREATE INDEX IF NOT EXISTS idx_sonarr_episodes_lookup ON sonarr_episodes(season_id, episode_number);',
+            'CREATE INDEX IF NOT EXISTS idx_sonarr_episodes_show_season_ep ON sonarr_episodes(show_id, season_number, episode_number);',
+            'CREATE INDEX IF NOT EXISTS idx_episode_characters_tmdb_lookup ON episode_characters(show_tmdb_id, season_number, episode_number);',
+            'CREATE INDEX IF NOT EXISTS idx_episode_characters_tvdb_lookup ON episode_characters(show_tvdb_id, season_number, episode_number);',
+            'CREATE INDEX IF NOT EXISTS idx_user_favorites_user_dropped ON user_favorites(user_id, is_dropped);',
+            'CREATE INDEX IF NOT EXISTS idx_user_favorites_show ON user_favorites(user_id, show_id);',
+            'CREATE INDEX IF NOT EXISTS idx_plex_activity_user_event ON plex_activity_log(plex_username, event_type);',
+            'CREATE INDEX IF NOT EXISTS idx_plex_activity_user_event_time ON plex_activity_log(plex_username, event_type, event_timestamp);',
+            'CREATE INDEX IF NOT EXISTS idx_plex_activity_media_type ON plex_activity_log(media_type);',
+            'CREATE INDEX IF NOT EXISTS idx_user_episode_progress_show ON user_episode_progress(user_id, show_id);',
+            'CREATE INDEX IF NOT EXISTS idx_user_show_progress_user ON user_show_progress(user_id);',
+            'CREATE INDEX IF NOT EXISTS idx_user_notifications_user_read ON user_notifications(user_id, is_read);',
+            'CREATE INDEX IF NOT EXISTS idx_show_cast_show ON show_cast(show_id);',
+            'CREATE INDEX IF NOT EXISTS idx_show_cast_person ON show_cast(person_id);',
+            # Additional performance indexes for comprehensive query coverage
+            'CREATE INDEX IF NOT EXISTS idx_plex_activity_user_comprehensive ON plex_activity_log(plex_username, event_type, event_timestamp DESC);',
+            'CREATE INDEX IF NOT EXISTS idx_problem_reports_status_created ON problem_reports(status, created_at DESC);',
+            'CREATE INDEX IF NOT EXISTS idx_announcements_active_dates ON announcements(is_active, start_date, end_date);',
+            'CREATE INDEX IF NOT EXISTS idx_user_episode_progress_watched ON user_episode_progress(user_id, is_watched);',
+        ]
+        for idx_sql in performance_indexes:
+            db.execute(idx_sql)
+        logger.info("Performance indexes created.")
 
         db.commit() # Explicit commit
         logger.info(f"init_db: All tables dropped and recreated successfully. Schema version set to {CURRENT_SCHEMA_VERSION}. Commit executed.")

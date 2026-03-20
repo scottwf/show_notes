@@ -11,6 +11,7 @@
             <a href="{{ show.detail_url }}" class="block">
                 <img src="{{ show.cached_poster_url }}" alt="{{ show.title }}"
                     class="w-full aspect-[2/3] object-cover rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+                    loading="lazy"
                     onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
 
                 <!-- Remove favorite button -->
