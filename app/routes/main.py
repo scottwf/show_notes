@@ -24,6 +24,7 @@ import requests
 import re
 import sqlite3
 import time
+import threading
 import datetime # Added
 from datetime import timezone # Added
 import urllib.parse
@@ -42,6 +43,39 @@ from .. import database
 main_bp = Blueprint('main', __name__)
 
 last_plex_event = None
+_homepage_cache = {}
+_homepage_cache_lock = threading.Lock()
+_IMAGE_ROUTE_ENDPOINTS = {'main.image_proxy', 'main.cast_image_proxy'}
+
+def _get_cached_value(cache_key, ttl_seconds, loader):
+    now = time.time()
+    with _homepage_cache_lock:
+        cached = _homepage_cache.get(cache_key)
+        if cached and now - cached['timestamp'] < ttl_seconds:
+            return cached['value']
+
+    value = loader()
+
+    with _homepage_cache_lock:
+        _homepage_cache[cache_key] = {
+            'timestamp': now,
+            'value': value,
+        }
+
+    return value
+
+def _get_media_image_url(image_type, tmdb_id):
+    if not tmdb_id:
+        placeholder = f'logos/placeholder_{image_type}.png'
+        if os.path.exists(os.path.join(current_app.static_folder, placeholder)):
+            return url_for('static', filename=placeholder)
+        return url_for('static', filename='logos/placeholder_poster.png')
+
+    cached_filename = f'{image_type}/{tmdb_id}.jpg'
+    cached_path = os.path.join(current_app.static_folder, image_type, f'{tmdb_id}.jpg')
+    if os.path.exists(cached_path):
+        return url_for('static', filename=cached_filename)
+    return url_for('main.image_proxy', type=image_type, id=tmdb_id)
 
 def is_onboarding_complete():
     """
@@ -73,6 +107,9 @@ def check_onboarding():
     critical endpoints like the onboarding page itself, login/logout routes, and
     static file requests to prevent a redirect loop.
     """
+    if request.endpoint in _IMAGE_ROUTE_ENDPOINTS:
+        return
+
     if request.endpoint and 'static' not in request.endpoint:
         # Allow access to specific endpoints even if onboarding is not complete
         exempt_endpoints = [
@@ -98,6 +135,9 @@ def update_session_profile_photo():
     Performance optimization: Skip for static file requests and use request-level caching.
     """
     # Skip for static file requests to improve performance
+    if request.endpoint in _IMAGE_ROUTE_ENDPOINTS:
+        return
+
     if request.endpoint and ('static' in request.endpoint or request.endpoint.startswith('_')):
         return
 
@@ -333,7 +373,7 @@ def home():
                 current_plex_event['tmdb_id'] = movie['tmdb_id']
                 current_plex_event['link_tmdb_id'] = movie['tmdb_id']
                 current_plex_event['item_type_for_url'] = 'movie'
-                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
+                current_plex_event['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
         elif current_plex_event['media_type'] == 'episode' and current_plex_event['show_title']:
             show = db.execute('SELECT id, tmdb_id FROM sonarr_shows WHERE LOWER(title) = ?',
                             (current_plex_event['show_title'].lower(),)).fetchone()
@@ -341,7 +381,7 @@ def home():
                 current_plex_event['show_tmdb_id'] = show['tmdb_id']
                 current_plex_event['link_tmdb_id'] = show['tmdb_id']
                 current_plex_event['item_type_for_url'] = 'show'
-                current_plex_event['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
+                current_plex_event['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'])
                 # Set episode title (from Tautulli's title field, which has the episode name)
                 current_plex_event['episode_title'] = tautulli_session.get('title')
                 # Build episode detail URL
@@ -357,304 +397,297 @@ def home():
                 if episode and episode['overview']:
                     current_plex_event['overview'] = episode['overview']
 
-    # Get profile statistics — pass pre-fetched stream count to avoid a second Tautulli call
-    stats = _get_profile_stats(db, user_id, now_playing_count=tautulli_stream_count)
+    def load_stats():
+        cached_stats = _get_profile_stats(db, user_id, now_playing_count=0)
+        cached_stats['now_playing_count'] = tautulli_stream_count
+        return cached_stats
 
-    # Get recently watched shows from last 7 days (grouped by show/movie for homepage cards)
-    recent_watched = db.execute("""
-        SELECT
-            media_type,
-            CASE
-                WHEN media_type = 'episode' THEN show_title
-                ELSE title
-            END as display_title,
-            tmdb_id,
-            MAX(event_timestamp) as latest_timestamp
-        FROM plex_activity_log
-        WHERE plex_username = ?
-        AND event_type IN ('media.stop', 'media.scrobble')
-        AND (duration_ms IS NULL OR duration_ms >= 600000)
-        AND event_timestamp >= datetime('now', '-7 days')
-        GROUP BY
-            CASE
-                WHEN media_type = 'episode' THEN show_title
-                WHEN media_type = 'movie' THEN tmdb_id
-                ELSE title
-            END
-        ORDER BY latest_timestamp DESC
-        LIMIT 20
-    """, (s_username,)).fetchall()
+    def load_recent_shows():
+        recent_watched = db.execute("""
+            SELECT
+                media_type,
+                CASE
+                    WHEN media_type = 'episode' THEN show_title
+                    ELSE title
+                END as display_title,
+                tmdb_id,
+                MAX(event_timestamp) as latest_timestamp
+            FROM plex_activity_log
+            WHERE plex_username = ?
+            AND event_type IN ('media.stop', 'media.scrobble')
+            AND (duration_ms IS NULL OR duration_ms >= 600000)
+            AND event_timestamp >= datetime('now', '-7 days')
+            GROUP BY
+                CASE
+                    WHEN media_type = 'episode' THEN show_title
+                    WHEN media_type = 'movie' THEN tmdb_id
+                    ELSE title
+                END
+            ORDER BY latest_timestamp DESC
+            LIMIT 20
+        """, (s_username,)).fetchall()
 
-    # Enrich recently watched with show/movie data — batch lookups to avoid N+1 queries
-    movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
-                      if dict(i)['media_type'] == 'movie' and dict(i).get('tmdb_id')]
-    show_titles = [dict(i)['display_title'].lower() for i in recent_watched
-                   if dict(i)['media_type'] == 'episode' and dict(i).get('display_title')]
+        movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
+                          if dict(i)['media_type'] == 'movie' and dict(i).get('tmdb_id')]
+        show_titles = [dict(i)['display_title'].lower() for i in recent_watched
+                       if dict(i)['media_type'] == 'episode' and dict(i).get('display_title')]
 
-    movies_by_id = {}
-    if movie_tmdb_ids:
-        placeholders = ','.join('?' * len(movie_tmdb_ids))
-        for row in db.execute(
-            f'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
-            movie_tmdb_ids
-        ).fetchall():
-            movies_by_id[row['tmdb_id']] = dict(row)
+        movies_by_id = {}
+        if movie_tmdb_ids:
+            placeholders = ','.join('?' * len(movie_tmdb_ids))
+            for row in db.execute(
+                f'SELECT tmdb_id, title, year, status, poster_url FROM radarr_movies WHERE tmdb_id IN ({placeholders})',
+                movie_tmdb_ids
+            ).fetchall():
+                movies_by_id[row['tmdb_id']] = dict(row)
 
-    shows_by_title = {}
-    if show_titles:
-        placeholders = ','.join('?' * len(show_titles))
-        for row in db.execute(
-            f'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
-            show_titles
-        ).fetchall():
-            shows_by_title[row['title'].lower()] = dict(row)
+        shows_by_title = {}
+        if show_titles:
+            placeholders = ','.join('?' * len(show_titles))
+            for row in db.execute(
+                f'SELECT tmdb_id, title, year, status, poster_url FROM sonarr_shows WHERE LOWER(title) IN ({placeholders})',
+                show_titles
+            ).fetchall():
+                shows_by_title[row['title'].lower()] = dict(row)
 
-    recent_shows_enriched = []
+        recent_shows_enriched = []
+        for item in recent_watched:
+            item_dict = dict(item)
 
-    # Now enrich items using the pre-fetched data
-    for item in recent_watched:
-        item_dict = dict(item)
+            if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
+                movie = movies_by_id.get(item_dict['tmdb_id'])
+                if movie:
+                    item_dict['title'] = movie['title']
+                    item_dict['year'] = movie['year']
+                    item_dict['status'] = movie['status']
+                    item_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+                    item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
+                    item_dict['item_type'] = 'movie'
+                    recent_shows_enriched.append(item_dict)
 
-        if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
-            movie = movies_by_id.get(item_dict['tmdb_id'])
-            if movie:
-                item_dict['title'] = movie['title']
-                item_dict['year'] = movie['year']
-                item_dict['status'] = movie['status']
-                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
-                item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
-                item_dict['item_type'] = 'movie'
-                recent_shows_enriched.append(item_dict)
+            elif item_dict['media_type'] == 'episode' and item_dict.get('display_title'):
+                show = shows_by_title.get(item_dict['display_title'].lower())
+                if show:
+                    item_dict['title'] = show['title']
+                    item_dict['year'] = show['year']
+                    item_dict['status'] = show['status']
+                    item_dict['show_db_id'] = show['tmdb_id']
+                    item_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'])
+                    item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+                    item_dict['item_type'] = 'show'
+                    recent_shows_enriched.append(item_dict)
 
-        elif item_dict['media_type'] == 'episode' and item_dict.get('display_title'):
-            show = shows_by_title.get(item_dict['display_title'].lower())
-            if show:
-                item_dict['title'] = show['title']
-                item_dict['year'] = show['year']
-                item_dict['status'] = show['status']
-                item_dict['show_db_id'] = show['tmdb_id']
-                item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
-                item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
-                item_dict['item_type'] = 'show'
-                recent_shows_enriched.append(item_dict)
+        return recent_shows_enriched
 
-    # Get current date/time for filtering
-    now = datetime.datetime.now(timezone.utc).isoformat()
-    seven_days_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=7)).isoformat()
+    def load_premieres():
+        now = datetime.datetime.now(timezone.utc).isoformat()
+        seven_days_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=7)).isoformat()
 
-    # Get favorited show IDs
-    favorited_show_ids = db.execute("""
-        SELECT show_id FROM user_favorites
-        WHERE user_id = ? AND is_dropped = 0
-    """, (user_id,)).fetchall()
-    favorited_ids = [row['show_id'] for row in favorited_show_ids]
-    
-    # Get watched show IDs from plex_activity_log
-    watched_show_ids = db.execute("""
-        SELECT DISTINCT s.id
-        FROM plex_activity_log pal
-        JOIN sonarr_shows s ON s.tvdb_id = CAST(pal.grandparent_rating_key AS INTEGER)
-        WHERE pal.plex_username = ?
-            AND pal.media_type = 'episode'
-    """, (s_username,)).fetchall()
-    watched_ids = [row['id'] for row in watched_show_ids]
-    
-    # Get user tag IDs (shows requested by this user via Jellyseerr)
-    user_tag_ids = []
-    if current_user.plex_username:
-        user_tags = db.execute("""
-            SELECT id FROM sonarr_tags
-            WHERE label LIKE ?
-        """, (f"%{current_user.plex_username}%",)).fetchall()
-        user_tag_ids = [tag['id'] for tag in user_tags]
-    
-    # Get show IDs for user-requested shows (using SQL filtering instead of Python loop)
-    user_requested_ids = []
-    if user_tag_ids:
-        # Build SQL conditions to match any of the user's tag IDs in the comma-separated tags column
-        # Uses SQLite's INSTR function to check if the tag ID appears in the tags string
-        tag_conditions = []
-        tag_params = []
-        for tag_id in user_tag_ids:
-            # Match tag_id at start, end, or surrounded by commas
-            tag_conditions.append("(s.tags = ? OR s.tags LIKE ? OR s.tags LIKE ? OR s.tags LIKE ?)")
-            tag_params.extend([str(tag_id), f"{tag_id},%", f"%,{tag_id}", f"%,{tag_id},%"])
+        favorited_show_ids = db.execute("""
+            SELECT show_id FROM user_favorites
+            WHERE user_id = ? AND is_dropped = 0
+        """, (user_id,)).fetchall()
+        favorited_ids = [row['show_id'] for row in favorited_show_ids]
 
-        if tag_conditions:
+        watched_show_ids = db.execute("""
+            SELECT DISTINCT s.id
+            FROM plex_activity_log pal
+            JOIN sonarr_shows s ON s.tvdb_id = CAST(pal.grandparent_rating_key AS INTEGER)
+            WHERE pal.plex_username = ?
+                AND pal.media_type = 'episode'
+        """, (s_username,)).fetchall()
+        watched_ids = [row['id'] for row in watched_show_ids]
+
+        user_tag_ids = []
+        if current_user.plex_username:
+            user_tags = db.execute("""
+                SELECT id FROM sonarr_tags
+                WHERE label LIKE ?
+            """, (f"%{current_user.plex_username}%",)).fetchall()
+            user_tag_ids = [tag['id'] for tag in user_tags]
+
+        user_requested_ids = []
+        if user_tag_ids:
+            tag_conditions = []
+            tag_params = []
+            for tag_id in user_tag_ids:
+                tag_conditions.append("(s.tags = ? OR s.tags LIKE ? OR s.tags LIKE ? OR s.tags LIKE ?)")
+                tag_params.extend([str(tag_id), f"{tag_id},%", f"%,{tag_id}", f"%,{tag_id},%"])
+
             user_requested_shows = db.execute(f"""
                 SELECT DISTINCT s.id
                 FROM sonarr_shows s
                 WHERE s.tags IS NOT NULL AND ({' OR '.join(tag_conditions)})
             """, tag_params).fetchall()
             user_requested_ids = [row['id'] for row in user_requested_shows]
-    
-    # Combine favorited, watched, and requested show IDs (unique)
-    tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
-    
-    # Get new & upcoming episodes for favorited/watched/requested shows (season premieres)
-    # Includes last 7 days so recently aired premieres don't vanish immediately
-    favorited_season_premieres = []
-    if tracked_show_ids:
-        placeholders = ','.join('?' * len(tracked_show_ids))
-        favorited_season_premieres = db.execute(f"""
+
+        tracked_show_ids = list(set(favorited_ids + watched_ids + user_requested_ids))
+
+        favorited_season_premieres = []
+        if tracked_show_ids:
+            placeholders = ','.join('?' * len(tracked_show_ids))
+            favorited_season_premieres = db.execute(f"""
+                SELECT
+                    e.id as episode_id,
+                    e.episode_number,
+                    e.title as episode_title,
+                    e.air_date_utc,
+                    e.has_file,
+                    e.overview,
+                    ss.season_number,
+                    s.id as show_db_id,
+                    s.tmdb_id,
+                    s.title as show_title,
+                    s.poster_url,
+                    s.year,
+                    s.tags
+                FROM sonarr_episodes e
+                JOIN sonarr_seasons ss ON e.season_id = ss.id
+                JOIN sonarr_shows s ON ss.show_id = s.id
+                WHERE s.id IN ({placeholders})
+                    AND e.episode_number = 1
+                    AND ss.season_number > 0
+                    AND e.air_date_utc IS NOT NULL
+                    AND e.air_date_utc >= ?
+                ORDER BY e.air_date_utc ASC
+                LIMIT 20
+            """, (*tracked_show_ids, seven_days_ago)).fetchall()
+
+        all_series_premieres = db.execute("""
             SELECT
-                e.id as episode_id,
-                e.episode_number,
-                e.title as episode_title,
-                e.air_date_utc,
-                e.has_file,
-                e.overview,
-                ss.season_number,
                 s.id as show_db_id,
                 s.tmdb_id,
                 s.title as show_title,
                 s.poster_url,
                 s.year,
+                s.overview,
+                ss.season_number,
+                e.episode_number,
+                e.air_date_utc as premiere_date,
                 s.tags
-            FROM sonarr_episodes e
-            JOIN sonarr_seasons ss ON e.season_id = ss.id
-            JOIN sonarr_shows s ON ss.show_id = s.id
-            WHERE s.id IN ({placeholders})
-                AND e.episode_number = 1
-                AND ss.season_number > 0
+            FROM sonarr_shows s
+            JOIN sonarr_seasons ss ON ss.show_id = s.id
+            JOIN sonarr_episodes e ON e.season_id = ss.id
+            WHERE e.episode_number = 1
+                AND ss.season_number = 1
                 AND e.air_date_utc IS NOT NULL
                 AND e.air_date_utc >= ?
             ORDER BY e.air_date_utc ASC
             LIMIT 20
-        """, (*tracked_show_ids, seven_days_ago)).fetchall()
+        """, (seven_days_ago,)).fetchall()
 
-    # Get new & upcoming series premieres (all shows, S01E01)
-    # Includes last 7 days so recently aired premieres stay visible
-    all_series_premieres = db.execute("""
-        SELECT
-            s.id as show_db_id,
-            s.tmdb_id,
-            s.title as show_title,
-            s.poster_url,
-            s.year,
-            s.overview,
-            ss.season_number,
-            e.episode_number,
-            e.air_date_utc as premiere_date,
-            s.tags
-        FROM sonarr_shows s
-        JOIN sonarr_seasons ss ON ss.show_id = s.id
-        JOIN sonarr_episodes e ON e.season_id = ss.id
-        WHERE e.episode_number = 1
-            AND ss.season_number = 1
-            AND e.air_date_utc IS NOT NULL
-            AND e.air_date_utc >= ?
-        ORDER BY e.air_date_utc ASC
-        LIMIT 20
-    """, (seven_days_ago,)).fetchall()
-    
-    # Format favorited/watched/requested season premieres
-    formatted_favorited_premieres = []
-    for ep in favorited_season_premieres:
-        ep_dict = dict(ep)
-        ep_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=ep['tmdb_id'])
-        ep_dict['show_url'] = url_for('main.show_detail', tmdb_id=ep['tmdb_id'])
-        ep_dict['episode_url'] = url_for('main.episode_detail', 
-                                         tmdb_id=ep['tmdb_id'],
-                                         season_number=ep['season_number'],
-                                         episode_number=ep['episode_number'])
-        ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
-        ep_dict['premiere_type'] = f"Season {ep['season_number']} Premiere"
-        ep_dict['is_newly_aired'] = ep['air_date_utc'] and ep['air_date_utc'] < now
+        formatted_favorited_premieres = []
+        for ep in favorited_season_premieres:
+            ep_dict = dict(ep)
+            ep_dict['cached_poster_url'] = _get_media_image_url('poster', ep['tmdb_id'])
+            ep_dict['show_url'] = url_for('main.show_detail', tmdb_id=ep['tmdb_id'])
+            ep_dict['episode_url'] = url_for('main.episode_detail',
+                                             tmdb_id=ep['tmdb_id'],
+                                             season_number=ep['season_number'],
+                                             episode_number=ep['episode_number'])
+            ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
+            ep_dict['premiere_type'] = f"Season {ep['season_number']} Premiere"
+            ep_dict['is_newly_aired'] = ep['air_date_utc'] and ep['air_date_utc'] < now
+            ep_dict['user_requested'] = False
+            if user_tag_ids and ep['tags']:
+                show_tag_ids = [int(tag_id) for tag_id in str(ep['tags']).split(',') if tag_id.strip().isdigit()]
+                ep_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+            formatted_favorited_premieres.append(ep_dict)
 
-        # Check if user requested this show
-        ep_dict['user_requested'] = False
-        if user_tag_ids and ep['tags']:
-            show_tag_ids = [int(tag_id) for tag_id in str(ep['tags']).split(',') if tag_id.strip().isdigit()]
-            ep_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+        formatted_series_premieres = []
+        for show in all_series_premieres:
+            show_dict = dict(show)
+            show_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'])
+            show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
+            show_dict['episode_url'] = url_for('main.episode_detail',
+                                               tmdb_id=show['tmdb_id'],
+                                               season_number=show['season_number'],
+                                               episode_number=show['episode_number'])
+            show_dict['premiere_type'] = 'Series Premiere'
+            show_dict['is_newly_aired'] = show['premiere_date'] and show['premiere_date'] < now
+            show_dict['user_requested'] = False
+            if user_tag_ids and show['tags']:
+                show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
+                show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+            formatted_series_premieres.append(show_dict)
 
-        formatted_favorited_premieres.append(ep_dict)
+        return {
+            'favorited_season_premieres': formatted_favorited_premieres,
+            'all_series_premieres': formatted_series_premieres,
+        }
 
-    # Format series premieres
-    formatted_series_premieres = []
-    for show in all_series_premieres:
-        show_dict = dict(show)
-        show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
-        show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
-        show_dict['episode_url'] = url_for('main.episode_detail',
-                                           tmdb_id=show['tmdb_id'],
-                                           season_number=show['season_number'],
-                                           episode_number=show['episode_number'])
-        show_dict['premiere_type'] = 'Series Premiere'
-        show_dict['is_newly_aired'] = show['premiere_date'] and show['premiere_date'] < now
+    def load_movies():
+        recently_synced = db.execute("""
+            SELECT
+                m.tmdb_id,
+                m.title,
+                m.year,
+                m.overview,
+                m.poster_url,
+                m.status,
+                m.release_date,
+                m.has_file,
+                m.last_synced_at
+            FROM radarr_movies m
+            WHERE m.release_date IS NOT NULL
+                AND m.release_date <= date('now')
+            ORDER BY m.last_synced_at DESC
+            LIMIT 10
+        """).fetchall()
 
-        # Check if user requested this show
-        show_dict['user_requested'] = False
-        if user_tag_ids and show['tags']:
-            show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]
-            show_dict['user_requested'] = any(tag_id in user_tag_ids for tag_id in show_tag_ids)
+        coming_soon_movies = db.execute("""
+            SELECT
+                m.tmdb_id,
+                m.title,
+                m.year,
+                m.overview,
+                m.poster_url,
+                m.status,
+                m.release_date,
+                m.has_file,
+                m.last_synced_at
+            FROM radarr_movies m
+            WHERE m.release_date IS NOT NULL
+                AND m.release_date > date('now')
+            ORDER BY m.release_date ASC
+            LIMIT 10
+        """).fetchall()
 
-        formatted_series_premieres.append(show_dict)
-    
-    # Get recently synced movies (most recent 10 from Radarr)
-    recently_synced = db.execute("""
-        SELECT
-            m.tmdb_id,
-            m.title,
-            m.year,
-            m.overview,
-            m.poster_url,
-            m.status,
-            m.release_date,
-            m.has_file,
-            m.last_synced_at
-        FROM radarr_movies m
-        WHERE m.release_date IS NOT NULL
-            AND m.release_date <= date('now')
-        ORDER BY m.last_synced_at DESC
-        LIMIT 10
-    """).fetchall()
-    
-    # Get coming soon movies (future releases, limit 10)
-    coming_soon_movies = db.execute("""
-        SELECT
-            m.tmdb_id,
-            m.title,
-            m.year,
-            m.overview,
-            m.poster_url,
-            m.status,
-            m.release_date,
-            m.has_file,
-            m.last_synced_at
-        FROM radarr_movies m
-        WHERE m.release_date IS NOT NULL
-            AND m.release_date > date('now')
-        ORDER BY m.release_date ASC
-        LIMIT 10
-    """).fetchall()
-    
-    # Format recently synced movies
-    formatted_recently_downloaded = []
-    for movie in recently_synced:
-        movie_dict = dict(movie)
-        movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
-        movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
-        movie_dict['badge_text'] = 'In Library'
-        formatted_recently_downloaded.append(movie_dict)
-    
-    # Format coming soon movies
-    formatted_coming_soon = []
-    for movie in coming_soon_movies:
-        movie_dict = dict(movie)
-        movie_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=movie['tmdb_id'])
-        movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
-        movie_dict['badge_text'] = 'Coming Soon'
-        formatted_coming_soon.append(movie_dict)
+        formatted_recently_downloaded = []
+        for movie in recently_synced:
+            movie_dict = dict(movie)
+            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+            movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
+            movie_dict['badge_text'] = 'In Library'
+            formatted_recently_downloaded.append(movie_dict)
+
+        formatted_coming_soon = []
+        for movie in coming_soon_movies:
+            movie_dict = dict(movie)
+            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+            movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
+            movie_dict['badge_text'] = 'Coming Soon'
+            formatted_coming_soon.append(movie_dict)
+
+        return {
+            'recently_downloaded': formatted_recently_downloaded,
+            'coming_soon_movies': formatted_coming_soon,
+        }
+
+    stats = dict(_get_cached_value(f'homepage:stats:{user_id}', 120, load_stats))
+    stats['now_playing_count'] = tautulli_stream_count
+    recent_shows_enriched = _get_cached_value(f'homepage:recent:{user_id}', 120, load_recent_shows)
+    premieres_payload = _get_cached_value(f'homepage:premieres:{user_id}', 300, load_premieres)
+    movies_payload = _get_cached_value('homepage:movies', 600, load_movies)
 
     return render_template('home_dashboard.html',
                          user=user_dict,
                          current_plex_event=current_plex_event,
                          recent_shows=recent_shows_enriched,
-                         favorited_season_premieres=formatted_favorited_premieres,
-                         all_series_premieres=formatted_series_premieres,
-                         recently_downloaded=formatted_recently_downloaded,
-                         coming_soon_movies=formatted_coming_soon,
+                         favorited_season_premieres=premieres_payload['favorited_season_premieres'],
+                         all_series_premieres=premieres_payload['all_series_premieres'],
+                         recently_downloaded=movies_payload['recently_downloaded'],
+                         coming_soon_movies=movies_payload['coming_soon_movies'],
                          **stats)
 
 @main_bp.route('/profile/history')

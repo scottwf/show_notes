@@ -2120,38 +2120,21 @@ def get_tautulli_data(username=None):
         tuple: (user_session_or_None, stream_count_int)
     """
     try:
-        tautulli_url = database.get_setting('tautulli_url')
-        tautulli_api_key = database.get_setting('tautulli_api_key')
-
-        if not tautulli_url or not tautulli_api_key:
+        sessions = _fetch_tautulli_sessions()
+        if sessions is None:
             return None, 0
 
-        params = {
-            'apikey': tautulli_api_key,
-            'cmd': 'get_activity'
-        }
+        stream_count = len(sessions)
+        user_session = None
+        if username and sessions:
+            for session in sessions:
+                if session.get('user') == username:
+                    user_session = session
+                    break
+        elif sessions:
+            user_session = sessions[0]
 
-        response = requests.get(f"{tautulli_url}/api/v2", params=params, timeout=5)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('response', {}).get('result') == 'success':
-                activity = data.get('response', {}).get('data', {})
-                sessions = activity.get('sessions', [])
-                stream_count = activity.get('stream_count', 0)
-
-                user_session = None
-                if username and sessions:
-                    for session in sessions:
-                        if session.get('user') == username:
-                            user_session = session
-                            break
-                elif sessions:
-                    user_session = sessions[0]
-
-                return user_session, stream_count
-
-        return None, 0
+        return user_session, stream_count
     except Exception:
         return None, 0
 

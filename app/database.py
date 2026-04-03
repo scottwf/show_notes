@@ -1,10 +1,18 @@
 import sqlite3
+import time
+import threading
 import click
 from flask import current_app, g
 from flask.cli import with_appcontext
 import logging
 
 DATABASE = 'data/shownotes.db' # This will be updated by app.config['DATABASE']
+_SETTINGS_CACHE_TTL = 60
+_settings_cache = {
+    'row': None,
+    'timestamp': 0,
+}
+_settings_cache_lock = threading.Lock()
 
 # Define the current schema version. Increment this when you make schema changes.
 CURRENT_SCHEMA_VERSION = 5 # Incremented for recap pipeline tables
@@ -34,6 +42,34 @@ def close_db(e=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
+
+def _invalidate_settings_cache():
+    with _settings_cache_lock:
+        _settings_cache['row'] = None
+        _settings_cache['timestamp'] = 0
+    if hasattr(g, 'settings_row_cache'):
+        delattr(g, 'settings_row_cache')
+
+def _get_settings_row():
+    if hasattr(g, 'settings_row_cache'):
+        return g.settings_row_cache
+
+    now = time.time()
+    with _settings_cache_lock:
+        if _settings_cache['row'] is not None and now - _settings_cache['timestamp'] < _SETTINGS_CACHE_TTL:
+            g.settings_row_cache = _settings_cache['row']
+            return g.settings_row_cache
+
+    db = get_db()
+    row = db.execute('SELECT * FROM settings LIMIT 1').fetchone()
+    row_dict = dict(row) if row else None
+
+    with _settings_cache_lock:
+        _settings_cache['row'] = row_dict
+        _settings_cache['timestamp'] = now
+
+    g.settings_row_cache = row_dict
+    return row_dict
 
 def init_db():
     db = get_db()
@@ -796,12 +832,11 @@ def init_db_command():
     click.echo('Database initialized with the correct schema.')
 
 def get_setting(key):
-    db = get_db()
     logger = current_app.logger if hasattr(current_app, 'logger') and current_app.logger.hasHandlers() else logging.getLogger(__name__)
     try:
-        row = db.execute('SELECT {} FROM settings LIMIT 1'.format(key)).fetchone()
+        row = _get_settings_row()
         if row:
-            return row[key]
+            return row.get(key)
     except sqlite3.OperationalError as e:
         logger.warning(f"Could not retrieve setting '{key}' (table might not exist or other DB issue): {e}")
     return None
@@ -812,6 +847,7 @@ def set_setting(key, value):
     try:
         db.execute('UPDATE settings SET {}=?'.format(key), (value,))
         db.commit()
+        _invalidate_settings_cache()
     except sqlite3.OperationalError as e:
         logger.error(f"Could not set setting '{key}': {e}", exc_info=True)
 
