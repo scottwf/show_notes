@@ -10,3 +10,4 @@ markdown
 pytz
 gunicorn
 APScheduler
+Pillow

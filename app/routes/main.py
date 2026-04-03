@@ -46,6 +46,8 @@ last_plex_event = None
 _homepage_cache = {}
 _homepage_cache_lock = threading.Lock()
 _IMAGE_ROUTE_ENDPOINTS = {'main.image_proxy', 'main.cast_image_proxy'}
+_POSTER_THUMBNAIL_SIZE = (240, 360)
+_POSTER_THUMBNAIL_QUALITY = 78
 
 def _get_cached_value(cache_key, ttl_seconds, loader):
     now = time.time()
@@ -64,7 +66,12 @@ def _get_cached_value(cache_key, ttl_seconds, loader):
 
     return value
 
-def _get_media_image_url(image_type, tmdb_id):
+def _get_cached_image_path(image_type, tmdb_id, variant='full'):
+    if variant == 'thumb':
+        return os.path.join(current_app.static_folder, image_type, 'thumbs', f'{tmdb_id}.jpg')
+    return os.path.join(current_app.static_folder, image_type, f'{tmdb_id}.jpg')
+
+def _get_media_image_url(image_type, tmdb_id, variant='full'):
     if not tmdb_id:
         placeholder = f'logos/placeholder_{image_type}.png'
         if os.path.exists(os.path.join(current_app.static_folder, placeholder)):
@@ -72,10 +79,13 @@ def _get_media_image_url(image_type, tmdb_id):
         return url_for('static', filename='logos/placeholder_poster.png')
 
     cached_filename = f'{image_type}/{tmdb_id}.jpg'
-    cached_path = os.path.join(current_app.static_folder, image_type, f'{tmdb_id}.jpg')
+    if variant == 'thumb':
+        cached_filename = f'{image_type}/thumbs/{tmdb_id}.jpg'
+
+    cached_path = _get_cached_image_path(image_type, tmdb_id, variant=variant)
     if os.path.exists(cached_path):
         return url_for('static', filename=cached_filename)
-    return url_for('main.image_proxy', type=image_type, id=tmdb_id)
+    return url_for('main.image_proxy', type=image_type, id=tmdb_id, variant=variant)
 
 def is_onboarding_complete():
     """
@@ -316,15 +326,27 @@ def home():
 
     This is the homepage/landing page displaying currently playing media and watch history.
     """
+    route_started_at = time.perf_counter()
+    timings = []
+
+    def mark_timing(label, started_at):
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        timings.append((label, elapsed_ms))
+        return elapsed_ms
+
     user_id = session.get('user_id')
     if not user_id:
         flash('Please log in to view your profile.', 'warning')
         return redirect(url_for('main.login'))
 
+    step_started_at = time.perf_counter()
     db = database.get_db()
+    mark_timing('db_connection', step_started_at)
 
     # Get user info
+    step_started_at = time.perf_counter()
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    mark_timing('load_user', step_started_at)
 
     # Convert user row to dict so we can add the plex_member_since field
     user_dict = dict(user)
@@ -338,7 +360,9 @@ def home():
     current_plex_event = None
     s_username = user['plex_username'] if user['plex_username'] else user['username']
 
+    step_started_at = time.perf_counter()
     tautulli_session, tautulli_stream_count = get_tautulli_data(username=s_username)
+    mark_timing('tautulli_activity', step_started_at)
 
     if tautulli_session:
         # Convert Tautulli session data to our expected format
@@ -424,7 +448,7 @@ def home():
                     ELSE title
                 END
             ORDER BY latest_timestamp DESC
-            LIMIT 20
+            LIMIT 8
         """, (s_username,)).fetchall()
 
         movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
@@ -460,7 +484,7 @@ def home():
                     item_dict['title'] = movie['title']
                     item_dict['year'] = movie['year']
                     item_dict['status'] = movie['status']
-                    item_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+                    item_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'], variant='thumb')
                     item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
                     item_dict['item_type'] = 'movie'
                     recent_shows_enriched.append(item_dict)
@@ -472,7 +496,7 @@ def home():
                     item_dict['year'] = show['year']
                     item_dict['status'] = show['status']
                     item_dict['show_db_id'] = show['tmdb_id']
-                    item_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'])
+                    item_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'], variant='thumb')
                     item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
                     item_dict['item_type'] = 'show'
                     recent_shows_enriched.append(item_dict)
@@ -550,7 +574,7 @@ def home():
                     AND e.air_date_utc IS NOT NULL
                     AND e.air_date_utc >= ?
                 ORDER BY e.air_date_utc ASC
-                LIMIT 20
+                LIMIT 8
             """, (*tracked_show_ids, seven_days_ago)).fetchall()
 
         all_series_premieres = db.execute("""
@@ -573,13 +597,13 @@ def home():
                 AND e.air_date_utc IS NOT NULL
                 AND e.air_date_utc >= ?
             ORDER BY e.air_date_utc ASC
-            LIMIT 20
+            LIMIT 8
         """, (seven_days_ago,)).fetchall()
 
         formatted_favorited_premieres = []
         for ep in favorited_season_premieres:
             ep_dict = dict(ep)
-            ep_dict['cached_poster_url'] = _get_media_image_url('poster', ep['tmdb_id'])
+            ep_dict['cached_poster_url'] = _get_media_image_url('poster', ep['tmdb_id'], variant='thumb')
             ep_dict['show_url'] = url_for('main.show_detail', tmdb_id=ep['tmdb_id'])
             ep_dict['episode_url'] = url_for('main.episode_detail',
                                              tmdb_id=ep['tmdb_id'],
@@ -597,7 +621,7 @@ def home():
         formatted_series_premieres = []
         for show in all_series_premieres:
             show_dict = dict(show)
-            show_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'])
+            show_dict['cached_poster_url'] = _get_media_image_url('poster', show['tmdb_id'], variant='thumb')
             show_dict['show_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
             show_dict['episode_url'] = url_for('main.episode_detail',
                                                tmdb_id=show['tmdb_id'],
@@ -632,7 +656,7 @@ def home():
             WHERE m.release_date IS NOT NULL
                 AND m.release_date <= date('now')
             ORDER BY m.last_synced_at DESC
-            LIMIT 10
+            LIMIT 6
         """).fetchall()
 
         coming_soon_movies = db.execute("""
@@ -650,13 +674,13 @@ def home():
             WHERE m.release_date IS NOT NULL
                 AND m.release_date > date('now')
             ORDER BY m.release_date ASC
-            LIMIT 10
+            LIMIT 6
         """).fetchall()
 
         formatted_recently_downloaded = []
         for movie in recently_synced:
             movie_dict = dict(movie)
-            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'], variant='thumb')
             movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
             movie_dict['badge_text'] = 'In Library'
             formatted_recently_downloaded.append(movie_dict)
@@ -664,7 +688,7 @@ def home():
         formatted_coming_soon = []
         for movie in coming_soon_movies:
             movie_dict = dict(movie)
-            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'])
+            movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'], variant='thumb')
             movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
             movie_dict['badge_text'] = 'Coming Soon'
             formatted_coming_soon.append(movie_dict)
@@ -674,21 +698,37 @@ def home():
             'coming_soon_movies': formatted_coming_soon,
         }
 
+    step_started_at = time.perf_counter()
     stats = dict(_get_cached_value(f'homepage:stats:{user_id}', 120, load_stats))
+    mark_timing('homepage_stats', step_started_at)
     stats['now_playing_count'] = tautulli_stream_count
+    step_started_at = time.perf_counter()
     recent_shows_enriched = _get_cached_value(f'homepage:recent:{user_id}', 120, load_recent_shows)
+    mark_timing('homepage_recent', step_started_at)
+    step_started_at = time.perf_counter()
     premieres_payload = _get_cached_value(f'homepage:premieres:{user_id}', 300, load_premieres)
+    mark_timing('homepage_premieres', step_started_at)
+    step_started_at = time.perf_counter()
     movies_payload = _get_cached_value('homepage:movies', 600, load_movies)
+    mark_timing('homepage_movies', step_started_at)
 
-    return render_template('home_dashboard.html',
-                         user=user_dict,
-                         current_plex_event=current_plex_event,
-                         recent_shows=recent_shows_enriched,
-                         favorited_season_premieres=premieres_payload['favorited_season_premieres'],
-                         all_series_premieres=premieres_payload['all_series_premieres'],
-                         recently_downloaded=movies_payload['recently_downloaded'],
-                         coming_soon_movies=movies_payload['coming_soon_movies'],
-                         **stats)
+    step_started_at = time.perf_counter()
+    response = render_template('home_dashboard.html',
+                               user=user_dict,
+                               current_plex_event=current_plex_event,
+                               recent_shows=recent_shows_enriched,
+                               favorited_season_premieres=premieres_payload['favorited_season_premieres'],
+                               all_series_premieres=premieres_payload['all_series_premieres'],
+                               recently_downloaded=movies_payload['recently_downloaded'],
+                               coming_soon_movies=movies_payload['coming_soon_movies'],
+                               **stats)
+    mark_timing('render_template', step_started_at)
+
+    total_ms = round((time.perf_counter() - route_started_at) * 1000, 2)
+    timing_summary = ', '.join(f'{label}={elapsed_ms}ms' for label, elapsed_ms in timings)
+    print(f"homepage_timing user_id={user_id} total={total_ms}ms {timing_summary}", flush=True)
+
+    return response
 
 @main_bp.route('/profile/history')
 @login_required
@@ -2680,12 +2720,18 @@ def image_proxy(type, id):
                         image if the original is not found, or a 404 error for
                         invalid requests.
     """
+    variant = request.args.get('variant', 'full')
+
     # Validate type
     if type not in ['poster', 'background']:
+        abort(404)
+    if variant not in ['full', 'thumb']:
         abort(404)
 
     # Define cache path
     cache_folder = os.path.join(current_app.static_folder, type)
+    if variant == 'thumb':
+        cache_folder = os.path.join(cache_folder, 'thumbs')
     # Sanitize ID to prevent directory traversal
     safe_filename = f"{str(id)}.jpg"
     cached_image_path = os.path.join(cache_folder, safe_filename)
@@ -2693,9 +2739,23 @@ def image_proxy(type, id):
     # Create directory if it doesn't exist
     os.makedirs(cache_folder, exist_ok=True)
 
-    # 1. Check if image is already cached
+    # 1. Check if the requested image variant is already cached
     if os.path.exists(cached_image_path):
-        return current_app.send_static_file(f'{type}/{safe_filename}')
+        static_path = f'{type}/{safe_filename}' if variant == 'full' else f'{type}/thumbs/{safe_filename}'
+        return current_app.send_static_file(static_path)
+
+    full_image_path = _get_cached_image_path(type, id, variant='full')
+    if variant == 'thumb' and os.path.exists(full_image_path):
+        try:
+            from PIL import Image
+
+            with Image.open(full_image_path) as img:
+                img = img.convert('RGB')
+                img.thumbnail(_POSTER_THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
+                img.save(cached_image_path, format='JPEG', quality=_POSTER_THUMBNAIL_QUALITY, optimize=True)
+            return current_app.send_static_file(f'{type}/thumbs/{safe_filename}')
+        except Exception as e:
+            current_app.logger.warning(f"Failed to generate cached thumbnail for {type}/{id}: {e}")
 
     # 2. If not cached, find the image URL from the database
     db = database.get_db()
@@ -2740,14 +2800,33 @@ def image_proxy(type, id):
             resp = s.get(external_url, stream=True, timeout=10)
             resp.raise_for_status() # Raise an exception for bad status codes
 
-        # 4. Save the image to the cache
-        with open(cached_image_path, 'wb') as f:
+        # 4. Save the full image to the cache
+        target_full_path = full_image_path if type == 'poster' else cached_image_path
+        with open(target_full_path, 'wb') as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
-        
-        current_app.logger.info(f"Cached image: {cached_image_path}")
 
-        # 5. Serve the newly cached image
+        if type == 'poster':
+            try:
+                from PIL import Image
+
+                thumb_dir = os.path.dirname(_get_cached_image_path(type, id, variant='thumb'))
+                os.makedirs(thumb_dir, exist_ok=True)
+                thumb_path = _get_cached_image_path(type, id, variant='thumb')
+                with Image.open(target_full_path) as img:
+                    img = img.convert('RGB')
+                    img.thumbnail(_POSTER_THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
+                    img.save(thumb_path, format='JPEG', quality=_POSTER_THUMBNAIL_QUALITY, optimize=True)
+            except Exception as e:
+                current_app.logger.warning(f"Failed to generate thumbnail for poster/{id}: {e}")
+
+        current_app.logger.info(f"Cached image: {target_full_path}")
+
+        # 5. Serve the newly cached image variant
+        if variant == 'thumb' and type == 'poster':
+            thumb_path = _get_cached_image_path(type, id, variant='thumb')
+            if os.path.exists(thumb_path):
+                return current_app.send_static_file(f'{type}/thumbs/{safe_filename}')
         return current_app.send_static_file(f'{type}/{safe_filename}')
 
     except (requests.RequestException, ValueError, IOError) as e:
