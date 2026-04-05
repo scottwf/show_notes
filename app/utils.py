@@ -1189,14 +1189,14 @@ def update_sonarr_episode(series_id, episode_ids, force_has_file=False):
 
         # Keep show metadata fresh
         db.execute('''
-            INSERT INTO sonarr_shows (sonarr_id, title, year, status, overview, seasons, tvdb_id, tmdb_id, imdb_id)
+            INSERT INTO sonarr_shows (sonarr_id, title, year, status, overview, season_count, tvdb_id, tmdb_id, imdb_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(sonarr_id) DO UPDATE SET
                 title = excluded.title,
                 year = excluded.year,
                 status = excluded.status,
                 overview = excluded.overview,
-                seasons = excluded.seasons,
+                season_count = excluded.season_count,
                 tvdb_id = excluded.tvdb_id,
                 tmdb_id = excluded.tmdb_id,
                 imdb_id = excluded.imdb_id;

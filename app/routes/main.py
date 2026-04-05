@@ -203,7 +203,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None):
                 (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
                 (SELECT COUNT(*) FROM radarr_movies) as total_movies,
                 (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                 WHERE DATE(event_timestamp) = DATE('now', 'localtime')) as players_today,
+                 WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
                 (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
                 (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0) as unread_notification_count
         ''', (user_id, user_id)).fetchone()
@@ -516,9 +516,10 @@ def home():
         watched_show_ids = db.execute("""
             SELECT DISTINCT s.id
             FROM plex_activity_log pal
-            JOIN sonarr_shows s ON s.tvdb_id = CAST(pal.grandparent_rating_key AS INTEGER)
+            JOIN sonarr_shows s ON LOWER(s.title) = LOWER(pal.show_title)
             WHERE pal.plex_username = ?
                 AND pal.media_type = 'episode'
+                AND pal.show_title IS NOT NULL
         """, (s_username,)).fetchall()
         watched_ids = [row['id'] for row in watched_show_ids]
 
