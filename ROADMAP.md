@@ -13,8 +13,10 @@ Get prod solid before opening to friends.
 - [x] Sonarr webhook crash fix (`seasons` → `season_count` column)
 - [x] Auth hardening — `SECRET_KEY` from env, `SESSION_COOKIE_SECURE`, Plex OAuth `session.permanent`
 - [x] Prod/dev split — `shownotes.chitekmedia.club` / `sn.chitekmedia.club`
-- [ ] Calendar page perf audit (agent running)
-- [ ] Any other pages with slow queries (agent running)
+- [x] Calendar page perf audit — CAST join in `get_calendar_data_for_user` (utils.py:2543) fixed
+- [x] Remaining `DATE(event_timestamp)` in non-auth stats path (main.py:217) fixed
+- [ ] N+1 season summary queries in `show_detail` (main.py:2413) — batch fetch needed
+- [ ] LIKE `%title%` search (main.py:2123) — no index can help; needs FTS5 or prefix-only
 
 ---
 

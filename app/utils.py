@@ -2536,13 +2536,15 @@ def get_calendar_data_for_user(db, user_id, plex_username=None):
     ).fetchall()
     favorited_show_ids = {f['show_id'] for f in favorites}
 
-    # Get user's watched shows from Plex activity
+    # Get user's watched shows from Plex activity (join by title — grandparent_rating_key
+    # is a Plex internal ID, not a TVDB ID, so CAST join always returns 0 results)
     watched = db.execute("""
         SELECT DISTINCT s.id
         FROM plex_activity_log pal
-        JOIN sonarr_shows s ON CAST(pal.grandparent_rating_key AS INTEGER) = s.tvdb_id
+        JOIN sonarr_shows s ON LOWER(s.title) = LOWER(pal.show_title)
         WHERE pal.plex_username = ?
           AND pal.media_type = 'episode'
+          AND pal.show_title IS NOT NULL
     """, (plex_username or '',)).fetchall()
     watched_show_ids = {w['id'] for w in watched}
 

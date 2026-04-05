@@ -214,7 +214,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None):
                 (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
                 (SELECT COUNT(*) FROM radarr_movies) as total_movies,
                 (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                 WHERE DATE(event_timestamp) = DATE('now', 'localtime')) as players_today
+                 WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today
         ''').fetchone()
 
     stats['total_shows'] = consolidated_stats['total_shows'] or 0
