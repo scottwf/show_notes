@@ -17,19 +17,20 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
     # --- Configuration ---
+    is_production = os.environ.get('ENVIRONMENT', 'development') == 'production'
     app.config.from_mapping(
-        SECRET_KEY='dev',  # IMPORTANT: Change this for production!
+        SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
         DATABASE=os.path.join(app.instance_path, 'shownotes.sqlite3'),
-        ENVIRONMENT=os.environ.get('ENVIRONMENT', 'development'),  # 'development' or 'production'
+        ENVIRONMENT=os.environ.get('ENVIRONMENT', 'development'),
         # Session configuration for persistent login
         SESSION_PERMANENT=True,
-        PERMANENT_SESSION_LIFETIME=timedelta(days=30),  # Sessions last 30 days
-        SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+        SESSION_COOKIE_SECURE=is_production,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         # Flask-Login remember me cookie configuration
-        REMEMBER_COOKIE_DURATION=timedelta(days=30),  # Remember me lasts 30 days
-        REMEMBER_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+        REMEMBER_COOKIE_DURATION=timedelta(days=30),
+        REMEMBER_COOKIE_SECURE=is_production,
         REMEMBER_COOKIE_HTTPONLY=True,
         REMEMBER_COOKIE_SAMESITE='Lax',
     )

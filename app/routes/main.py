@@ -1704,6 +1704,7 @@ def plex_login_poll():
                 user_obj = current_app.login_manager._user_callback(user_record['id'])
                 if user_obj:
                     login_user(user_obj, remember=True)
+                    session.permanent = True
                     session['user_id'] = user_obj.id
                     session['username'] = user_obj.username
                     session['is_admin'] = user_obj.is_admin
@@ -1806,7 +1807,8 @@ def callback():
     # Log in the user
     user_obj = current_app.login_manager._user_callback(user_record['id'])
     if user_obj:
-        login_user(user_obj, remember=True)  # Enable persistent login
+        login_user(user_obj, remember=True)
+        session.permanent = True
         session['user_id'] = user_obj.id
         session['username'] = user_obj.username
         session['is_admin'] = user_obj.is_admin
