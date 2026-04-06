@@ -308,7 +308,7 @@ document.getElementById('profile-settings-form').addEventListener('submit', asyn
 
         if (data.success) {
             showNotification('Profile updated successfully!', 'success');
-            window.location.href = '{{ url_for('main.watch_history') }}';
+            // stay on settings page
         } else {
             showNotification(data.error, 'error', 'Error updating profile');
         }
