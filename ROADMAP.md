@@ -45,13 +45,23 @@ Make the app intuitive for non-technical users before building social features o
 
 ## v1.2 — Multi-User & Social Foundation
 
-- [ ] User registration — invite link flow (admin sends invite, user claims it via Plex OAuth)
-- [ ] Members page — opt-in directory, shows avatar, bio, currently watching
-- [ ] Follow system — follow a member to see their activity
+### Household profiles (decided)
+One Plex account can have multiple ShowNotes profiles (e.g. you + wife + anyone else sharing
+the account). Play history stays shared under one `plex_username` — that's fine. What's
+per-profile: favorites, watchlist, recommendations, avatar, display name.
+
+- [ ] `household_members` table: `(id, user_id, display_name, avatar_url)`
+- [ ] Add `member_id` FK to `user_favorites`, `user_notifications`, lists, ratings
+- [ ] "Who's watching?" picker on login if multiple profiles exist — sets `sn_member_id` cookie
+- [ ] Profile page: "Add a profile to this Plex account" button (creates a household member)
+- [ ] Profile switcher in nav/header
+
+### Friends & discovery
+- [ ] User registration — invite link (admin sends, user claims via Plex OAuth)
+- [ ] Members page — opt-in directory with avatar, bio, currently watching
+- [ ] Follow system — follow a member to see their public activity
 - [ ] Watch status per show: Watching / Completed / Dropped / Want to Watch
-      (builds on existing `is_dropped` in `user_favorites`)
-- [ ] Activity feed on homepage — what people you follow have watched recently
-- [ ] Per-user watch history scoped properly to each Plex account
+- [ ] Activity feed on homepage — recent watches from people you follow
 
 ---
 
