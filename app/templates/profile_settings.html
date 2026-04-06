@@ -397,10 +397,15 @@ async function addMember() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({display_name: name, avatar_color: color})
         });
-        if (!r.ok) { const e = await r.json(); showNotification(e.error || 'Failed', 'error'); return; }
+        if (!r.ok) {
+            let msg = 'Failed';
+            try { const e = await r.json(); msg = e.error || msg; } catch(_) {}
+            showNotification(msg, 'error');
+            return;
+        }
         showNotification(`Profile "${name}" added!`, 'success');
         setTimeout(() => location.reload(), 800);
-    } catch(e) { showNotification('Error adding profile', 'error'); }
+    } catch(e) { showNotification('Error adding profile: ' + e.message, 'error'); }
 }
 
 async function deleteMember(id, name) {
