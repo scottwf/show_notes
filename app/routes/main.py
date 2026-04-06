@@ -327,6 +327,18 @@ def _get_plex_event_details(plex_event_row, db):
                 item_details.update(dict(movie_data))
             item_details['tmdb_id_for_poster'] = plex_tmdb_id
             item_details['link_tmdb_id'] = plex_tmdb_id
+        else:
+            # Fallback: look up by title (used when called from Tautulli live session)
+            movie_title = item_details.get('title')
+            if movie_title:
+                movie_data = db.execute(
+                    'SELECT tmdb_id, title, poster_url, year, overview FROM radarr_movies WHERE LOWER(title) = ?',
+                    (movie_title.lower(),)
+                ).fetchone()
+                if movie_data:
+                    item_details.update(dict(movie_data))
+                    item_details['tmdb_id_for_poster'] = movie_data['tmdb_id']
+                    item_details['link_tmdb_id'] = movie_data['tmdb_id']
         item_details['item_type_for_url'] = 'movie'
 
     elif media_type == 'episode':

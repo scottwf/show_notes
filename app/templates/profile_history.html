@@ -87,103 +87,71 @@
       </div>
     {% endif %}
 
-    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Recent Watch History</h2>
+    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Recent Watch History</h2>
 
     {% if watch_history %}
-    <div class="space-y-4">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {% for item in watch_history %}
-        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div class="flex gap-4">
-                <!-- Poster -->
-                <div class="flex-shrink-0">
-                    {% if item.cached_poster_url %}
-                    <a href="{{ item.detail_url or '#' }}">
-                        <img src="{{ item.cached_poster_url }}" alt="{{ item.title or item.show_title }}"
-                            class="w-16 h-24 object-cover rounded shadow-sm"
-                            onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
-                    </a>
-                    {% else %}
-                    <div class="w-16 h-24 bg-slate-300 dark:bg-slate-600 rounded flex items-center justify-center">
-                        <svg class="w-8 h-8 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                                d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z">
-                            </path>
-                        </svg>
-                    </div>
-                    {% endif %}
+        <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors
+                    {% if not loop.last %}border-b border-slate-100 dark:border-slate-700/60{% endif %}">
+
+            <!-- Thumbnail -->
+            <a href="{{ item.detail_url or '#' }}" class="flex-shrink-0">
+                {% if item.cached_poster_url %}
+                <img src="{{ item.cached_poster_url }}" alt=""
+                    class="w-9 h-14 object-cover rounded shadow-sm"
+                    onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                {% else %}
+                <div class="w-9 h-14 bg-slate-200 dark:bg-slate-600 rounded flex items-center justify-center">
+                    <svg class="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"></path>
+                    </svg>
                 </div>
+                {% endif %}
+            </a>
 
-                <!-- Details -->
-                <div class="flex-grow min-w-0">
-                    {% if item.media_type == 'movie' %}
-                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">
-                        {% if item.detail_url %}
-                        <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
-                            {{ item.title }}
-                        </a>
-                        {% else %}
-                        {{ item.title }}
-                        {% endif %}
-                    </h3>
-                    {% if item.year %}
-                    <p class="text-sm text-slate-600 dark:text-slate-400">({{ item.year }})</p>
-                    {% endif %}
-                    {% elif item.media_type == 'episode' %}
-                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">
-                        {% if item.detail_url %}
-                        <a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">
-                            {{ item.show_title or item.title }}
-                        </a>
-                        {% else %}
-                        {{ item.show_title or item.title }}
-                        {% endif %}
-                    </h3>
-                    <p class="text-sm text-slate-600 dark:text-slate-400 break-words">
-                        {% if item.episode_detail_url %}
-                        <a href="{{ item.episode_detail_url }}"
-                            class="hover:text-sky-600 dark:hover:text-sky-400">
-                            {{ item.season_episode }}: {{ item.title if item.show_title else '' }}
-                        </a>
-                        {% else %}
-                        {{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{%
-                        endif %}
-                        {% endif %}
-                    </p>
-                    {% else %}
-                    <h3 class="font-semibold text-lg text-slate-800 dark:text-slate-100 break-words">{{ item.title
-                        }}</h3>
-                    {% endif %}
+            <!-- Title / episode -->
+            <div class="flex-1 min-w-0">
+                {% if item.media_type == 'episode' %}
+                <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                    {% if item.detail_url %}<a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">{{ item.show_title or item.title }}</a>
+                    {% else %}{{ item.show_title or item.title }}{% endif %}
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {% if item.episode_detail_url %}<a href="{{ item.episode_detail_url }}" class="hover:text-sky-500">{{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{% endif %}</a>
+                    {% else %}{{ item.season_episode }}{% if item.title and item.show_title %}: {{ item.title }}{% endif %}{% endif %}
+                </p>
+                {% elif item.media_type == 'movie' %}
+                <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
+                    {% if item.detail_url %}<a href="{{ item.detail_url }}" class="hover:text-sky-600 dark:hover:text-sky-400">{{ item.title }}</a>
+                    {% else %}{{ item.title }}{% endif %}
+                </p>
+                {% if item.year %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ item.year }}</p>{% endif %}
+                {% else %}
+                <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{{ item.title }}</p>
+                {% endif %}
 
-                    <!-- Timestamp -->
-                    <div class="mt-2">
-                        {% if item.event_timestamp %}
-                        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">
-                            {{ item.event_timestamp | format_datetime('%B %d, %Y') }}
-                        </p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                            {{ item.event_timestamp | format_datetime('%-I:%M %p') }}
-                        </p>
-                        {% else %}
-                        <p class="text-sm text-slate-600 dark:text-slate-400">Unknown</p>
-                        {% endif %}
-                    </div>
-
-                    <!-- Progress bar if applicable -->
-                    {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
-                    {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
-                    {% if progress < 95 %}
-                    <div class="mt-2 w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
-                        <div class="bg-sky-600 h-1.5 rounded-full" style="width: {{ progress }}%"></div>
-                    </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ progress }}% watched</p>
-                    {% endif %}
-                    {% endif %}
+                <!-- Progress bar (compact) -->
+                {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
+                {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
+                {% if progress < 95 %}
+                <div class="mt-1 w-full max-w-xs bg-slate-200 dark:bg-slate-600 rounded-full h-1">
+                    <div class="bg-sky-500 h-1 rounded-full" style="width: {{ progress }}%"></div>
                 </div>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- Date -->
+            <div class="flex-shrink-0 text-right hidden sm:block">
+                {% if item.event_timestamp %}
+                <p class="text-xs font-medium text-slate-600 dark:text-slate-300">{{ item.event_timestamp | format_datetime('%b %d, %Y') }}</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">{{ item.event_timestamp | format_datetime('%-I:%M %p') }}</p>
+                {% endif %}
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
 
 {% if watch_history|length >= 50 %}
 <div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
