@@ -35,6 +35,34 @@
                     Episode {{ episode_number }}
                 </span>
             </div>
+
+            <!-- External links -->
+            {% if character.actor_name %}
+            <div class="flex flex-wrap gap-2 mt-1">
+                <a href="https://www.imdb.com/find?q={{ character.actor_name | urlencode }}&s=nm"
+                   target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-yellow-400 hover:bg-yellow-300 text-black transition-colors">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M14.31 9.588v.005c-.077-.048-1.549-.04-1.549-.04v4.958s1.52.014 1.587-.047c.432-.009.673-.101.673-.101.37-.129.47-.592.47-.592.079-.33.062-2.2.062-2.2s.008-1.48-.203-1.7c-.2-.21-.594-.264-.594-.264l-.446-.019zm3.604-4.52C16.535 5 12 5 12 5S7.465 5 6.086 5.068C5.004 5.13 4.124 6 4 7.077 3.893 8.007 3.893 12 3.893 12s0 3.993.107 4.923C4.124 18 5.003 18.87 6.086 18.932 7.465 19 12 19 12 19s4.535 0 5.914-.068c1.083-.062 1.962-.932 2.086-2.01.107-.929.107-4.922.107-4.922s0-3.993-.107-4.923c-.124-1.077-1.003-1.947-2.086-2.009zM9.5 15.5v-7l6 3.5-6 3.5z"/></svg>
+                    IMDb
+                </a>
+                {% if tmdb_person_id %}
+                <a href="https://www.themoviedb.org/person/{{ tmdb_person_id }}"
+                   target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-teal-500 hover:bg-teal-400 text-white transition-colors">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><path fill="white" d="M7 9h3.5c1.1 0 2 .9 2 2s-.9 2-2 2H9v2H7V9zm2 2v1h1.5c.28 0 .5-.22.5-.5s-.22-.5-.5-.5H9zm5-2h2.5c1.38 0 2.5 1.12 2.5 2.5S15.88 14 14.5 14H14v1.5h-2V9zm2 3.5h.5c.28 0 .5-.22.5-.5s-.22-.5-.5-.5H14v1z"/></svg>
+                    TMDB
+                </a>
+                {% endif %}
+                {% if tvmaze_person_id %}
+                <a href="https://www.tvmaze.com/people/{{ tvmaze_person_id }}"
+                   target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 2l-4 5-4-5"/></svg>
+                    TVmaze
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 

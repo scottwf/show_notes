@@ -3003,6 +3003,19 @@ def character_detail(show_id, season_number, episode_number, character_id):
             LIMIT 10
         ''', (character['actor_name'], show_id)).fetchall()
 
+    # Try to get TMDB person ID from show_cast table for external links
+    tmdb_person_id = None
+    tvmaze_person_id = character.get('actor_id')
+    if character.get('actor_name'):
+        cast_row = db.execute(
+            'SELECT tmdb_person_id, person_id FROM show_cast WHERE actor_name = ? AND tmdb_person_id IS NOT NULL LIMIT 1',
+            (character['actor_name'],)
+        ).fetchone()
+        if cast_row:
+            tmdb_person_id = cast_row['tmdb_person_id']
+            if not tvmaze_person_id:
+                tvmaze_person_id = cast_row['person_id']
+
     return render_template('character_detail.html',
                            show_id=show_id,
                            season_number=season_number,
@@ -3011,7 +3024,9 @@ def character_detail(show_id, season_number, episode_number, character_id):
                            character=character,
                            show_title=show_title,
                            character_episodes=character_episodes,
-                           other_shows=other_shows)
+                           other_shows=other_shows,
+                           tmdb_person_id=tmdb_person_id,
+                           tvmaze_person_id=tvmaze_person_id)
 
 @main_bp.route('/report_issue/<string:media_type>/<int:media_id>', methods=['GET', 'POST'])
 @login_required
