@@ -81,7 +81,7 @@
         if(p.authorized){
           statusEl.textContent = 'Logged in successfully! Redirecting...';
           if (authWindow && !authWindow.closed) authWindow.close();
-          window.location = '/'; // Redirect to home or dashboard
+          window.location = p.pick_profile ? '/pick-profile' : '/';
         } else {
           // Only set timeout if auth window is still open
           if (authWindow && !authWindow.closed) {

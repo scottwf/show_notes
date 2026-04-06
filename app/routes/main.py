@@ -43,6 +43,50 @@ from .. import database
 main_bp = Blueprint('main', __name__)
 
 last_plex_event = None
+
+# ── Household member helpers ──────────────────────────────────────────────────
+
+MEMBER_AVATAR_COLORS = [
+    '#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b',
+    '#ef4444', '#ec4899', '#f97316', '#06b6d4',
+]
+
+def get_current_member():
+    """Return the active household_member row for this session, or None."""
+    member_id = session.get('member_id')
+    if not member_id:
+        return None
+    db = database.get_db()
+    return db.execute(
+        'SELECT * FROM household_members WHERE id = ? AND user_id = ?',
+        (member_id, session.get('user_id'))
+    ).fetchone()
+
+def get_user_members(user_id):
+    """Return all household members for a user."""
+    db = database.get_db()
+    return db.execute(
+        'SELECT * FROM household_members WHERE user_id = ? ORDER BY is_default DESC, created_at ASC',
+        (user_id,)
+    ).fetchall()
+
+def set_member_session(member_id):
+    """Store the chosen member_id in the Flask session."""
+    session['member_id'] = member_id
+    session.modified = True
+
+
+@main_bp.context_processor
+def inject_household():
+    """Make current_member and all_members available in every template."""
+    if not session.get('user_id'):
+        return {}
+    try:
+        member = get_current_member()
+        members = get_user_members(session['user_id'])
+        return {'current_member': member, 'all_members': members}
+    except Exception:
+        return {}
 _homepage_cache = {}
 _homepage_cache_lock = threading.Lock()
 _IMAGE_ROUTE_ENDPOINTS = {'main.image_proxy', 'main.cast_image_proxy'}
@@ -1719,7 +1763,14 @@ def plex_login_poll():
                         db.execute('UPDATE users SET plex_token=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?',
                                   (auth_token, user_obj.id))
                     db.commit()
-                    return jsonify({'authorized': True, 'username': user_obj.username})
+
+                    # Household member: auto-select if only one, else prompt picker
+                    members = get_user_members(user_obj.id)
+                    if len(members) == 1:
+                        set_member_session(members[0]['id'])
+                        return jsonify({'authorized': True, 'username': user_obj.username})
+                    else:
+                        return jsonify({'authorized': True, 'username': user_obj.username, 'pick_profile': True})
             else:
                 # If admin is already logged in, link their account to Plex
                 if current_user.is_authenticated and current_user.is_admin:
@@ -2994,6 +3045,124 @@ def report_issue(media_type, media_id):
 # ============================================================================
 # USER PROFILE ROUTES
 # ============================================================================
+
+# ── Household member routes ───────────────────────────────────────────────────
+
+@main_bp.route('/pick-profile')
+@login_required
+def pick_profile():
+    """Profile picker — shown after login when multiple household members exist."""
+    user_id = session.get('user_id')
+    members = get_user_members(user_id)
+    if len(members) == 1:
+        set_member_session(members[0]['id'])
+        return redirect(url_for('main.home'))
+    return render_template('pick_profile.html', members=members)
+
+
+@main_bp.route('/pick-profile/set', methods=['POST'])
+@login_required
+def set_profile():
+    """Set the active household member from the picker or switch-profile UI."""
+    user_id = session.get('user_id')
+    member_id = request.form.get('member_id', type=int)
+    if not member_id:
+        return redirect(url_for('main.pick_profile'))
+    db = database.get_db()
+    member = db.execute(
+        'SELECT id FROM household_members WHERE id = ? AND user_id = ?',
+        (member_id, user_id)
+    ).fetchone()
+    if member:
+        set_member_session(member_id)
+    return redirect(request.form.get('next') or url_for('main.home'))
+
+
+@main_bp.route('/api/profile/members', methods=['GET'])
+@login_required
+def list_members():
+    user_id = session.get('user_id')
+    members = [dict(m) for m in get_user_members(user_id)]
+    return jsonify(members)
+
+
+@main_bp.route('/api/profile/members', methods=['POST'])
+@login_required
+def add_member():
+    """Create a new household member profile."""
+    user_id = session.get('user_id')
+    display_name = (request.json or request.form).get('display_name', '').strip()
+    avatar_color = (request.json or request.form).get('avatar_color', '#0ea5e9')
+    if not display_name:
+        return jsonify({'error': 'display_name required'}), 400
+    if avatar_color not in MEMBER_AVATAR_COLORS:
+        avatar_color = MEMBER_AVATAR_COLORS[0]
+
+    db = database.get_db()
+    count = db.execute('SELECT COUNT(*) FROM household_members WHERE user_id = ?', (user_id,)).fetchone()[0]
+    if count >= 6:
+        return jsonify({'error': 'Maximum 6 profiles per account'}), 400
+
+    db.execute(
+        'INSERT INTO household_members (user_id, display_name, avatar_color) VALUES (?, ?, ?)',
+        (user_id, display_name, avatar_color)
+    )
+    db.commit()
+    member = db.execute(
+        'SELECT * FROM household_members WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+        (user_id,)
+    ).fetchone()
+    return jsonify(dict(member)), 201
+
+
+@main_bp.route('/api/profile/members/<int:member_id>', methods=['DELETE'])
+@login_required
+def delete_member(member_id):
+    """Delete a household member (cannot delete the default member)."""
+    user_id = session.get('user_id')
+    db = database.get_db()
+    member = db.execute(
+        'SELECT * FROM household_members WHERE id = ? AND user_id = ?',
+        (member_id, user_id)
+    ).fetchone()
+    if not member:
+        return jsonify({'error': 'Not found'}), 404
+    if member['is_default']:
+        return jsonify({'error': 'Cannot delete the primary profile'}), 400
+    db.execute('DELETE FROM household_members WHERE id = ?', (member_id,))
+    db.commit()
+    if session.get('member_id') == member_id:
+        default = db.execute(
+            'SELECT id FROM household_members WHERE user_id = ? AND is_default = 1',
+            (user_id,)
+        ).fetchone()
+        if default:
+            set_member_session(default['id'])
+    return jsonify({'deleted': True})
+
+
+@main_bp.route('/api/profile/members/<int:member_id>', methods=['PATCH'])
+@login_required
+def update_member(member_id):
+    """Rename a member or update their avatar color."""
+    user_id = session.get('user_id')
+    db = database.get_db()
+    member = db.execute(
+        'SELECT id FROM household_members WHERE id = ? AND user_id = ?',
+        (member_id, user_id)
+    ).fetchone()
+    if not member:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.json or {}
+    display_name = data.get('display_name', '').strip()
+    avatar_color = data.get('avatar_color', '')
+    if display_name:
+        db.execute('UPDATE household_members SET display_name = ? WHERE id = ?', (display_name, member_id))
+    if avatar_color in MEMBER_AVATAR_COLORS:
+        db.execute('UPDATE household_members SET avatar_color = ? WHERE id = ?', (avatar_color, member_id))
+    db.commit()
+    return jsonify(dict(db.execute('SELECT * FROM household_members WHERE id = ?', (member_id,)).fetchone()))
+
 
 @main_bp.route('/profile')
 @login_required

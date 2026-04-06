@@ -105,6 +105,79 @@
             </div>
         </div>
 
+        <!-- Household Profiles -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700" id="add-profile">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">Profiles</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-5">
+                Everyone sharing this Plex account can have their own ShowNotes profile with separate favorites, watchlists, and recommendations.
+            </p>
+
+            <!-- Existing members -->
+            <div id="member-list" class="flex flex-wrap gap-4 mb-6">
+                {% for member in all_members %}
+                <div class="member-card flex flex-col items-center gap-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 w-28 relative group"
+                     data-id="{{ member.id }}">
+                    <div class="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow"
+                         style="background-color: {{ member.avatar_color }};">
+                        {% if member.avatar_url %}
+                            <img src="{{ member.avatar_url }}" class="w-full h-full object-cover rounded-full">
+                        {% else %}
+                            {{ member.display_name[0].upper() }}
+                        {% endif %}
+                    </div>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate w-full text-center">
+                        {{ member.display_name }}
+                    </span>
+                    {% if member.is_default %}
+                        <span class="text-xs text-slate-400">Primary</span>
+                    {% else %}
+                        <button onclick="deleteMember({{ member.id }}, '{{ member.display_name }}')"
+                                class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs
+                                       hidden group-hover:flex items-center justify-center hover:bg-red-600"
+                                title="Remove {{ member.display_name }}">×</button>
+                    {% endif %}
+                    {% if current_member and current_member.id == member.id %}
+                        <span class="text-xs text-sky-500 font-medium">Active</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Add member form -->
+            {% if all_members|length < 6 %}
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-5">
+                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Add a profile</h4>
+                <div class="flex flex-wrap gap-3 items-end">
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Name</label>
+                        <input type="text" id="new-member-name" maxlength="30" placeholder="e.g. Sarah"
+                               class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg
+                                      bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100
+                                      focus:outline-none focus:ring-2 focus:ring-sky-500 w-40">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Colour</label>
+                        <div class="flex gap-2">
+                            {% set colors = ['#0ea5e9','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#f97316','#06b6d4'] %}
+                            {% for color in colors %}
+                            <button type="button"
+                                    class="color-swatch w-7 h-7 rounded-full border-2 border-transparent hover:border-white transition-all"
+                                    style="background-color: {{ color }};"
+                                    data-color="{{ color }}"
+                                    onclick="selectColor(this)"></button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button type="button" onclick="addMember()"
+                            class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium transition-colors">
+                        Add Profile
+                    </button>
+                </div>
+                <input type="hidden" id="new-member-color" value="#0ea5e9">
+            </div>
+            {% endif %}
+        </div>
+
         <!-- Password Change (Admin Only) -->
         {% if user.is_admin %}
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
@@ -293,6 +366,48 @@ async function changePassword() {
         console.error('Error:', error);
         showNotification('Please try again', 'error', 'Error updating password');
     }
+}
+}
+
+// ── Household member management ───────────────────────────────────────────────
+let selectedColor = '#0ea5e9';
+
+function selectColor(btn) {
+    document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('border-white','scale-110'));
+    btn.classList.add('border-white','scale-110');
+    selectedColor = btn.dataset.color;
+    document.getElementById('new-member-color').value = selectedColor;
+}
+// Mark first color selected on load
+document.addEventListener('DOMContentLoaded', () => {
+    const first = document.querySelector('.color-swatch');
+    if (first) selectColor(first);
+});
+
+async function addMember() {
+    const name = document.getElementById('new-member-name').value.trim();
+    if (!name) { showNotification('Please enter a name', 'error'); return; }
+    const color = document.getElementById('new-member-color').value;
+    try {
+        const r = await fetch('/api/profile/members', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({display_name: name, avatar_color: color})
+        });
+        if (!r.ok) { const e = await r.json(); showNotification(e.error || 'Failed', 'error'); return; }
+        showNotification(`Profile "${name}" added!`, 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch(e) { showNotification('Error adding profile', 'error'); }
+}
+
+async function deleteMember(id, name) {
+    if (!confirm(`Remove the profile "${name}"? Their favorites and lists will be deleted.`)) return;
+    try {
+        const r = await fetch(`/api/profile/members/${id}`, {method: 'DELETE'});
+        if (!r.ok) { const e = await r.json(); showNotification(e.error || 'Failed', 'error'); return; }
+        showNotification(`Profile "${name}" removed`, 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch(e) { showNotification('Error removing profile', 'error'); }
 }
 </script>
 {% endblock %}
