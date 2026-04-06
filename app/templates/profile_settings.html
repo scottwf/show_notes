@@ -308,7 +308,10 @@ document.getElementById('profile-settings-form').addEventListener('submit', asyn
 
         if (data.success) {
             showNotification('Profile updated successfully!', 'success');
-            // stay on settings page
+            if (data.photo_url) {
+                // Reload so the nav avatar and page photo both reflect the new image
+                setTimeout(() => location.reload(), 800);
+            }
         } else {
             showNotification(data.error, 'error', 'Error updating profile');
         }
