@@ -250,7 +250,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
                     (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
                      WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
                     (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND member_id = ? AND is_dropped = 0) as favorite_count,
-                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND member_id = ? AND is_read = 0) as unread_notification_count
+                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND member_id = ? AND is_read = 0 AND is_dismissed = 0) as unread_notification_count
             ''', (user_id, member_id, user_id, member_id)).fetchone()
         else:
             consolidated_stats = db.execute('''
@@ -261,7 +261,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
                     (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
                      WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
                     (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
-                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0) as unread_notification_count
+                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0 AND is_dismissed = 0) as unread_notification_count
             ''', (user_id, user_id)).fetchone()
     else:
         consolidated_stats = db.execute('''
@@ -3453,34 +3453,35 @@ def profile_notifications():
     # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    # Get notifications (recent 50)
+    # Get notifications, split into active and dismissed
     member_id = session.get('member_id')
+    _notif_select = """
+        SELECT
+            n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
+            n.episode_id, n.season_number, n.episode_number, n.is_read, n.is_dismissed,
+            n.created_at, n.read_at, n.issue_report_id, n.service_url,
+            s.tmdb_id as show_tmdb_id, s.title as show_title
+        FROM user_notifications n
+        LEFT JOIN sonarr_shows s ON n.show_id = s.id
+    """
     if member_id:
-        notifications = db.execute("""
-            SELECT
-                n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
-                n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
-                n.issue_report_id, n.service_url,
-                s.tmdb_id as show_tmdb_id, s.title as show_title
-            FROM user_notifications n
-            LEFT JOIN sonarr_shows s ON n.show_id = s.id
-            WHERE n.user_id = ? AND n.member_id = ?
-            ORDER BY n.created_at DESC
-            LIMIT 50
-        """, (user_id, member_id)).fetchall()
+        notifications = db.execute(
+            _notif_select + "WHERE n.user_id = ? AND n.member_id = ? AND n.is_dismissed = 0 ORDER BY n.created_at DESC LIMIT 50",
+            (user_id, member_id)
+        ).fetchall()
+        dismissed_notifications = db.execute(
+            _notif_select + "WHERE n.user_id = ? AND n.member_id = ? AND n.is_dismissed = 1 ORDER BY n.created_at DESC LIMIT 20",
+            (user_id, member_id)
+        ).fetchall()
     else:
-        notifications = db.execute("""
-            SELECT
-                n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
-                n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
-                n.issue_report_id, n.service_url,
-                s.tmdb_id as show_tmdb_id, s.title as show_title
-            FROM user_notifications n
-            LEFT JOIN sonarr_shows s ON n.show_id = s.id
-            WHERE n.user_id = ?
-            ORDER BY n.created_at DESC
-            LIMIT 50
-        """, (user_id,)).fetchall()
+        notifications = db.execute(
+            _notif_select + "WHERE n.user_id = ? AND n.is_dismissed = 0 ORDER BY n.created_at DESC LIMIT 50",
+            (user_id,)
+        ).fetchall()
+        dismissed_notifications = db.execute(
+            _notif_select + "WHERE n.user_id = ? AND n.is_dismissed = 1 ORDER BY n.created_at DESC LIMIT 20",
+            (user_id,)
+        ).fetchall()
 
     # Get profile statistics using helper function
     stats = _get_profile_stats(db, user_id, member_id=member_id)
@@ -3488,6 +3489,7 @@ def profile_notifications():
     return render_template('profile_notifications.html',
                          user=user_dict,
                          notifications=notifications,
+                         dismissed_notifications=dismissed_notifications,
                          **stats,
                          active_tab='notifications')
 
@@ -3625,6 +3627,58 @@ def mark_all_notifications_read():
         )
     db.commit()
 
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/profile/notification/<int:notification_id>/dismiss', methods=['POST'])
+@login_required
+def dismiss_notification(notification_id):
+    """Dismiss a notification — hides from main list and badge, keeps in dismissed archive."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    notification = db.execute(
+        'SELECT user_id FROM user_notifications WHERE id = ?', (notification_id,)
+    ).fetchone()
+    if not notification:
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+    if notification['user_id'] != user_id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    db.execute(
+        'UPDATE user_notifications SET is_dismissed = 1, is_read = 1, read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE id = ?',
+        (notification_id,)
+    )
+    db.commit()
+    return jsonify({'success': True})
+
+
+@main_bp.route('/api/profile/notification/<int:notification_id>/restore', methods=['POST'])
+@login_required
+def restore_notification(notification_id):
+    """Restore a dismissed notification back to the active list."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    notification = db.execute(
+        'SELECT user_id FROM user_notifications WHERE id = ?', (notification_id,)
+    ).fetchone()
+    if not notification:
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+    if notification['user_id'] != user_id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    db.execute(
+        'UPDATE user_notifications SET is_dismissed = 0 WHERE id = ?',
+        (notification_id,)
+    )
+    db.commit()
     return jsonify({'success': True})
 
 

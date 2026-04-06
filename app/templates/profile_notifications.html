@@ -88,22 +88,27 @@
                         </div>
 
                         <!-- Timestamp and Actions -->
-                        <div class="text-right flex-shrink-0">
+                        <div class="text-right flex-shrink-0 flex flex-col items-end gap-1">
                             <p class="text-sm font-medium text-slate-700 dark:text-slate-300 timestamp"
                                 data-timestamp="{{ notif.created_at }}"></p>
                             {% if not notif.is_read %}
                                 {% if notif.notification_type == 'new_issue_report' and notif.issue_report_id %}
                                 <button onclick="resolveIssue({{ notif.id }}, {{ notif.issue_report_id }})"
-                                    class="mt-2 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                    class="mt-1 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
                                     Resolve Issue
                                 </button>
                                 {% else %}
                                 <button onclick="markAsRead({{ notif.id }})"
-                                    class="mt-2 text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                                    class="mt-1 text-xs text-sky-600 dark:text-sky-400 hover:underline">
                                     Mark as read
                                 </button>
                                 {% endif %}
                             {% endif %}
+                            <button onclick="dismissNotif({{ notif.id }}, this)"
+                                class="mt-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                title="Dismiss">
+                                Dismiss
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -117,6 +122,32 @@
         <p>Showing most recent 50 notifications</p>
     </div>
     {% endif %}
+
+    {% if dismissed_notifications %}
+    <div class="mt-8">
+        <button onclick="toggleDismissed()" class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors mb-3">
+            <svg id="dismissed-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            Dismissed ({{ dismissed_notifications|length }})
+        </button>
+        <div id="dismissed-list" class="hidden space-y-2">
+            {% for notif in dismissed_notifications %}
+            <div class="bg-slate-50/50 dark:bg-slate-800/50 rounded-lg px-4 py-3 flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{{ notif.title }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ notif.message }}</p>
+                </div>
+                <button onclick="restoreNotif({{ notif.id }}, this)"
+                    class="flex-shrink-0 text-xs text-sky-600 dark:text-sky-400 hover:underline whitespace-nowrap">
+                    Restore
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     {% else %}
     <div class="text-center py-12">
         <svg class="w-16 h-16 mx-auto text-slate-400 dark:text-slate-600 mb-4" fill="none" stroke="currentColor"
@@ -229,6 +260,45 @@
         } catch (error) {
             console.error('Error:', error);
             alert('Failed to mark all notifications as read. Please try again.');
+        }
+    }
+
+    async function dismissNotif(notificationId, btn) {
+        try {
+            const r = await fetch(`/api/profile/notification/${notificationId}/dismiss`, {method: 'POST'});
+            if (!r.ok) return;
+            // Fade out and remove the card
+            const card = btn.closest('.bg-slate-50, [class*="bg-slate-50"]') || btn.closest('div[class*="rounded-lg"]');
+            if (card) {
+                card.style.transition = 'opacity 0.3s';
+                card.style.opacity = '0';
+                setTimeout(() => { card.remove(); }, 300);
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function restoreNotif(notificationId, btn) {
+        try {
+            const r = await fetch(`/api/profile/notification/${notificationId}/restore`, {method: 'POST'});
+            if (!r.ok) return;
+            const row = btn.closest('div[class*="rounded-lg"]');
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => { row.remove(); }, 300);
+            }
+            // Reload after a beat so the restored notification appears in the main list
+            setTimeout(() => location.reload(), 400);
+        } catch(e) { console.error(e); }
+    }
+
+    function toggleDismissed() {
+        const list = document.getElementById('dismissed-list');
+        const chevron = document.getElementById('dismissed-chevron');
+        if (list.classList.toggle('hidden')) {
+            chevron.style.transform = '';
+        } else {
+            chevron.style.transform = 'rotate(90deg)';
         }
     }
 
