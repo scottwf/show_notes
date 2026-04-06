@@ -216,7 +216,7 @@ def update_session_profile_photo():
     except Exception:
         pass  # Silently fail to avoid breaking the request
 
-def _get_profile_stats(db, user_id=None, now_playing_count=None):
+def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None):
     """
     Helper function to get consistent statistics for profile pages.
     Returns dict with: now_playing_count, total_shows, total_episodes, total_movies,
@@ -227,6 +227,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None):
     Args:
         now_playing_count: Pre-fetched stream count to avoid a redundant Tautulli API call.
                            If None, fetches from Tautulli directly.
+        member_id: Household member to scope favorite/notification counts to.
     """
     from ..utils import get_tautulli_activity
 
@@ -239,18 +240,29 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None):
         stats['now_playing_count'] = get_tautulli_activity()
 
     # Consolidated query for all count statistics to reduce database round-trips
-    # This single query replaces 5-6 separate COUNT queries
     if user_id:
-        consolidated_stats = db.execute('''
-            SELECT
-                (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
-                (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
-                (SELECT COUNT(*) FROM radarr_movies) as total_movies,
-                (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                 WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
-                (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
-                (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0) as unread_notification_count
-        ''', (user_id, user_id)).fetchone()
+        if member_id:
+            consolidated_stats = db.execute('''
+                SELECT
+                    (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
+                    (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
+                    (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                    (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
+                     WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
+                    (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND member_id = ? AND is_dropped = 0) as favorite_count,
+                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND member_id = ? AND is_read = 0) as unread_notification_count
+            ''', (user_id, member_id, user_id, member_id)).fetchone()
+        else:
+            consolidated_stats = db.execute('''
+                SELECT
+                    (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
+                    (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
+                    (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                    (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
+                     WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
+                    (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
+                    (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0) as unread_notification_count
+            ''', (user_id, user_id)).fetchone()
     else:
         consolidated_stats = db.execute('''
             SELECT
@@ -466,7 +478,7 @@ def home():
                     current_plex_event['overview'] = episode['overview']
 
     def load_stats():
-        cached_stats = _get_profile_stats(db, user_id, now_playing_count=0)
+        cached_stats = _get_profile_stats(db, user_id, now_playing_count=0, member_id=session.get('member_id'))
         cached_stats['now_playing_count'] = tautulli_stream_count
         return cached_stats
 
@@ -551,10 +563,17 @@ def home():
         now = datetime.datetime.now(timezone.utc).isoformat()
         seven_days_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=7)).isoformat()
 
-        favorited_show_ids = db.execute("""
-            SELECT show_id FROM user_favorites
-            WHERE user_id = ? AND is_dropped = 0
-        """, (user_id,)).fetchall()
+        _fav_member_id = session.get('member_id')
+        if _fav_member_id:
+            favorited_show_ids = db.execute("""
+                SELECT show_id FROM user_favorites
+                WHERE user_id = ? AND member_id = ? AND is_dropped = 0
+            """, (user_id, _fav_member_id)).fetchall()
+        else:
+            favorited_show_ids = db.execute("""
+                SELECT show_id FROM user_favorites
+                WHERE user_id = ? AND is_dropped = 0
+            """, (user_id,)).fetchall()
         favorited_ids = [row['show_id'] for row in favorited_show_ids]
 
         watched_show_ids = db.execute("""
@@ -3217,7 +3236,7 @@ def profile():
         current_plex_event.update(event_details)
 
     # Get profile statistics
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     # Get watch history (recent 50 unique items)
     watch_history = db.execute("""
@@ -3325,22 +3344,41 @@ def profile_favorites():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get favorited shows
-    favorites = db.execute("""
-        SELECT 
-            uf.id as favorite_id,
-            uf.added_at,
-            s.id as show_db_id,
-            s.tmdb_id,
-            s.title,
-            s.year,
-            s.status,
-            s.poster_url,
-            s.overview
-        FROM user_favorites uf
-        JOIN sonarr_shows s ON s.id = uf.show_id
-        WHERE uf.user_id = ? AND uf.is_dropped = 0
-        ORDER BY uf.added_at DESC
-    """, (user_id,)).fetchall()
+    member_id = session.get('member_id')
+    if member_id:
+        favorites = db.execute("""
+            SELECT
+                uf.id as favorite_id,
+                uf.added_at,
+                s.id as show_db_id,
+                s.tmdb_id,
+                s.title,
+                s.year,
+                s.status,
+                s.poster_url,
+                s.overview
+            FROM user_favorites uf
+            JOIN sonarr_shows s ON s.id = uf.show_id
+            WHERE uf.user_id = ? AND uf.member_id = ? AND uf.is_dropped = 0
+            ORDER BY uf.added_at DESC
+        """, (user_id, member_id)).fetchall()
+    else:
+        favorites = db.execute("""
+            SELECT
+                uf.id as favorite_id,
+                uf.added_at,
+                s.id as show_db_id,
+                s.tmdb_id,
+                s.title,
+                s.year,
+                s.status,
+                s.poster_url,
+                s.overview
+            FROM user_favorites uf
+            JOIN sonarr_shows s ON s.id = uf.show_id
+            WHERE uf.user_id = ? AND uf.is_dropped = 0
+            ORDER BY uf.added_at DESC
+        """, (user_id,)).fetchall()
     
     # Enrich favorites with next episode info
     enriched_favorites = []
@@ -3360,7 +3398,7 @@ def profile_favorites():
         enriched_favorites.append(fav_dict)
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=member_id)
 
     return render_template('profile_favorites.html',
                          user=user_dict,
@@ -3389,21 +3427,36 @@ def profile_notifications():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get notifications (recent 50)
-    notifications = db.execute("""
-        SELECT
-            n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
-            n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
-            n.issue_report_id, n.service_url,
-            s.tmdb_id as show_tmdb_id, s.title as show_title
-        FROM user_notifications n
-        LEFT JOIN sonarr_shows s ON n.show_id = s.id
-        WHERE n.user_id = ?
-        ORDER BY n.created_at DESC
-        LIMIT 50
-    """, (user_id,)).fetchall()
+    member_id = session.get('member_id')
+    if member_id:
+        notifications = db.execute("""
+            SELECT
+                n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
+                n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
+                n.issue_report_id, n.service_url,
+                s.tmdb_id as show_tmdb_id, s.title as show_title
+            FROM user_notifications n
+            LEFT JOIN sonarr_shows s ON n.show_id = s.id
+            WHERE n.user_id = ? AND n.member_id = ?
+            ORDER BY n.created_at DESC
+            LIMIT 50
+        """, (user_id, member_id)).fetchall()
+    else:
+        notifications = db.execute("""
+            SELECT
+                n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
+                n.episode_id, n.season_number, n.episode_number, n.is_read, n.created_at, n.read_at,
+                n.issue_report_id, n.service_url,
+                s.tmdb_id as show_tmdb_id, s.title as show_title
+            FROM user_notifications n
+            LEFT JOIN sonarr_shows s ON n.show_id = s.id
+            WHERE n.user_id = ?
+            ORDER BY n.created_at DESC
+            LIMIT 50
+        """, (user_id,)).fetchall()
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=member_id)
 
     return render_template('profile_notifications.html',
                          user=user_dict,
@@ -3427,26 +3480,34 @@ def toggle_favorite(show_id):
     if not show:
         return jsonify({'success': False, 'error': 'Show not found'}), 404
     
+    member_id = session.get('member_id')
+
     if request.method == 'POST':
         # Add to favorites
         try:
             db.execute(
-                'INSERT OR IGNORE INTO user_favorites (user_id, show_id) VALUES (?, ?)',
-                (user_id, show_id)
+                'INSERT OR IGNORE INTO user_favorites (user_id, show_id, member_id) VALUES (?, ?, ?)',
+                (user_id, show_id, member_id)
             )
             db.commit()
             return jsonify({'success': True, 'action': 'added'})
         except Exception as e:
             current_app.logger.error(f"Error adding favorite: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
-    
+
     elif request.method == 'DELETE':
         # Remove from favorites
         try:
-            db.execute(
-                'DELETE FROM user_favorites WHERE user_id = ? AND show_id = ?',
-                (user_id, show_id)
-            )
+            if member_id:
+                db.execute(
+                    'DELETE FROM user_favorites WHERE user_id = ? AND show_id = ? AND member_id = ?',
+                    (user_id, show_id, member_id)
+                )
+            else:
+                db.execute(
+                    'DELETE FROM user_favorites WHERE user_id = ? AND show_id = ?',
+                    (user_id, show_id)
+                )
             db.commit()
             return jsonify({'success': True, 'action': 'removed'})
         except Exception as e:
@@ -3463,10 +3524,17 @@ def check_favorite(show_id):
     
     db = database.get_db()
     
-    favorite = db.execute(
-        'SELECT id FROM user_favorites WHERE user_id = ? AND show_id = ? AND is_dropped = 0',
-        (user_id, show_id)
-    ).fetchone()
+    member_id = session.get('member_id')
+    if member_id:
+        favorite = db.execute(
+            'SELECT id FROM user_favorites WHERE user_id = ? AND show_id = ? AND member_id = ? AND is_dropped = 0',
+            (user_id, show_id, member_id)
+        ).fetchone()
+    else:
+        favorite = db.execute(
+            'SELECT id FROM user_favorites WHERE user_id = ? AND show_id = ? AND is_dropped = 0',
+            (user_id, show_id)
+        ).fetchone()
 
     return jsonify({
         'success': True,
@@ -3517,10 +3585,17 @@ def mark_all_notifications_read():
     db = database.get_db()
 
     # Mark all unread notifications as read
-    db.execute(
-        'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_read = 0',
-        (user_id,)
-    )
+    member_id = session.get('member_id')
+    if member_id:
+        db.execute(
+            'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND member_id = ? AND is_read = 0',
+            (user_id, member_id)
+        )
+    else:
+        db.execute(
+            'UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_read = 0',
+            (user_id,)
+        )
     db.commit()
 
     return jsonify({'success': True})
@@ -4191,7 +4266,7 @@ def profile_statistics():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     return render_template('profile_statistics.html',
                          user=user_dict,
@@ -4237,16 +4312,28 @@ def api_get_lists():
             ORDER BY l.updated_at DESC
         ''', (user_id,)).fetchall()
     else:  # 'mine' or default
-        # Get only current user's lists (public and private)
-        lists = db.execute('''
-            SELECT l.id, l.name, l.description, l.item_count, l.is_public,
-                   l.created_at, l.updated_at, l.user_id,
-                   u.username as owner_username
-            FROM user_lists l
-            JOIN users u ON l.user_id = u.id
-            WHERE l.user_id = ?
-            ORDER BY l.updated_at DESC
-        ''', (user_id,)).fetchall()
+        # Get only current user's lists (public and private), scoped to member if set
+        _list_member_id = session.get('member_id')
+        if _list_member_id:
+            lists = db.execute('''
+                SELECT l.id, l.name, l.description, l.item_count, l.is_public,
+                       l.created_at, l.updated_at, l.user_id,
+                       u.username as owner_username
+                FROM user_lists l
+                JOIN users u ON l.user_id = u.id
+                WHERE l.user_id = ? AND l.member_id = ?
+                ORDER BY l.updated_at DESC
+            ''', (user_id, _list_member_id)).fetchall()
+        else:
+            lists = db.execute('''
+                SELECT l.id, l.name, l.description, l.item_count, l.is_public,
+                       l.created_at, l.updated_at, l.user_id,
+                       u.username as owner_username
+                FROM user_lists l
+                JOIN users u ON l.user_id = u.id
+                WHERE l.user_id = ?
+                ORDER BY l.updated_at DESC
+            ''', (user_id,)).fetchall()
 
     lists_data = []
     for lst in lists:
@@ -4286,11 +4373,13 @@ def api_create_list():
 
     db = database.get_db()
 
+    member_id = session.get('member_id')
+
     try:
         cur = db.execute('''
-            INSERT INTO user_lists (user_id, name, description, is_public)
-            VALUES (?, ?, ?, ?)
-        ''', (user_id, name, description, is_public))
+            INSERT INTO user_lists (user_id, member_id, name, description, is_public)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, member_id, name, description, is_public))
         db.commit()
 
         return jsonify({
@@ -4671,7 +4760,7 @@ def profile_lists():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     return render_template('profile_lists.html',
                          user=user_dict,
@@ -4710,7 +4799,7 @@ def profile_list_detail(list_id):
         return redirect(url_for('main.profile_lists'))
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     return render_template('profile_list_detail.html',
                          user=user_dict,
@@ -5021,7 +5110,7 @@ def profile_progress():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     return render_template('profile_progress.html',
                          user=user_dict,
@@ -5048,7 +5137,7 @@ def profile_settings():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get profile statistics using helper function
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
     return render_template('profile_settings.html',
                          user=user_dict,
@@ -5340,12 +5429,14 @@ def create_recommendation():
 
     db = database.get_db()
 
+    member_id = session.get('member_id')
+
     try:
         # Insert recommendation
         db.execute('''
-            INSERT INTO user_recommendations (user_id, media_type, media_id, title, note)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, media_type, media_id, title, note))
+            INSERT INTO user_recommendations (user_id, member_id, media_type, media_id, title, note)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, member_id, media_type, media_id, title, note))
         db.commit()
 
         return jsonify({'success': True})
@@ -5374,18 +5465,32 @@ def profile_recommendations():
     user_dict = dict(user)
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    # Get user's personal recommendations
-    my_recommendations = db.execute("""
-        SELECT
-            ur.id, ur.media_type, ur.media_id, ur.title, ur.note, ur.created_at,
-            s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
-            m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
-        FROM user_recommendations ur
-        LEFT JOIN sonarr_shows s ON ur.media_type = 'show' AND ur.media_id = s.id
-        LEFT JOIN radarr_movies m ON ur.media_type = 'movie' AND ur.media_id = m.id
-        WHERE ur.user_id = ?
-        ORDER BY ur.created_at DESC
-    """, (user_id,)).fetchall()
+    # Get user's personal recommendations, scoped to member if active
+    member_id = session.get('member_id')
+    if member_id:
+        my_recommendations = db.execute("""
+            SELECT
+                ur.id, ur.media_type, ur.media_id, ur.title, ur.note, ur.created_at,
+                s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
+                m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
+            FROM user_recommendations ur
+            LEFT JOIN sonarr_shows s ON ur.media_type = 'show' AND ur.media_id = s.id
+            LEFT JOIN radarr_movies m ON ur.media_type = 'movie' AND ur.media_id = m.id
+            WHERE ur.user_id = ? AND ur.member_id = ?
+            ORDER BY ur.created_at DESC
+        """, (user_id, member_id)).fetchall()
+    else:
+        my_recommendations = db.execute("""
+            SELECT
+                ur.id, ur.media_type, ur.media_id, ur.title, ur.note, ur.created_at,
+                s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
+                m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
+            FROM user_recommendations ur
+            LEFT JOIN sonarr_shows s ON ur.media_type = 'show' AND ur.media_id = s.id
+            LEFT JOIN radarr_movies m ON ur.media_type = 'movie' AND ur.media_id = m.id
+            WHERE ur.user_id = ?
+            ORDER BY ur.created_at DESC
+        """, (user_id,)).fetchall()
 
     # Enrich personal recommendations
     enriched_my_recs = []
@@ -5465,7 +5570,7 @@ def profile_recommendations():
     unread_count = sum(1 for r in enriched_received if not r.get('is_read'))
 
     # Get profile statistics
-    stats = _get_profile_stats(db, user_id)
+    stats = _get_profile_stats(db, user_id, member_id=member_id)
 
     return render_template('profile_recommendations.html',
                          user=user_dict,
