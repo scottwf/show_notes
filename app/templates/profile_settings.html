@@ -285,20 +285,20 @@ function removePhoto() {
 document.getElementById('profile-settings-form').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const formData = new FormData();
-    formData.append('bio', document.getElementById('bio').value);
-    formData.append('profile_show_profile', document.getElementById('profile-show-profile').checked);
-    formData.append('profile_show_lists', document.getElementById('profile-show-lists').checked);
-    formData.append('profile_show_favorites', document.getElementById('profile-show-favorites').checked);
-    formData.append('profile_show_history', document.getElementById('profile-show-history').checked);
-    formData.append('profile_show_progress', document.getElementById('profile-show-progress').checked);
-    formData.append('allow_recommendations', document.getElementById('allow-recommendations').checked);
-
-    if (photoFile) {
-        formData.append('photo', photoFile);
-    }
-
     try {
+        const formData = new FormData();
+        formData.append('bio', document.getElementById('bio').value);
+        formData.append('profile_show_profile', document.getElementById('profile-show-profile').checked);
+        formData.append('profile_show_lists', document.getElementById('profile-show-lists').checked);
+        formData.append('profile_show_favorites', document.getElementById('profile-show-favorites').checked);
+        formData.append('profile_show_history', document.getElementById('profile-show-history').checked);
+        formData.append('profile_show_progress', document.getElementById('profile-show-progress').checked);
+        formData.append('allow_recommendations', document.getElementById('allow-recommendations').checked);
+
+        if (photoFile) {
+            formData.append('photo', photoFile);
+        }
+
         const response = await fetch('/api/profile/settings', {
             method: 'POST',
             body: formData
@@ -313,11 +313,11 @@ document.getElementById('profile-settings-form').addEventListener('submit', asyn
                 setTimeout(() => location.reload(), 800);
             }
         } else {
-            showNotification(data.error, 'error', 'Error updating profile');
+            showNotification(data.error || 'Save failed', 'error', 'Error updating profile');
         }
     } catch (error) {
-        console.error('Error:', error);
-        showNotification('Please try again', 'error', 'Error updating profile');
+        console.error('Settings save error:', error);
+        showNotification('Save failed: ' + error.message, 'error', 'Error');
     }
 });
 
