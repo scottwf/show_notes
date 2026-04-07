@@ -2493,9 +2493,11 @@ def show_detail(tmdb_id):
         seasons_with_episodes
     )
 
-    # Get Jellyseer URL for request button
-    settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
-    jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
+    # Get Jellyseer URL for request button — prefer public/remote URL for browser links
+    settings = db.execute('SELECT jellyseer_url, jellyseer_remote_url FROM settings LIMIT 1').fetchone()
+    jellyseer_url = None
+    if settings:
+        jellyseer_url = settings['jellyseer_remote_url'] or settings['jellyseer_url'] or None
 
     # Fetch season summaries
     show_summary = None
