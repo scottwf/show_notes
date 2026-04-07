@@ -124,7 +124,7 @@
               {{ watched.title }}
               {% endif %}
             </div>
-            <div class="text-xs text-slate-400 dark:text-slate-500">{{ watched.event_timestamp[:10] if watched.event_timestamp else '' }}</div>
+            <div class="text-xs text-slate-400 dark:text-slate-500">{{ watched.event_timestamp|string|truncate(10, False, '') if watched.event_timestamp else '' }}</div>
             {% else %}
             <span class="text-slate-400">—</span>
             {% endif %}
