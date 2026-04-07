@@ -9,8 +9,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const logbookTableDiv = document.getElementById('logbook-table-div');
     const loadingDiv = document.getElementById('logbook-loading');
 
-    // Load user list for dropdown
+    // Load user list for dropdown, then pre-select ?user= from URL if present
     function loadUsers() {
+        const preselect = new URLSearchParams(window.location.search).get('user');
         fetch('/admin/watch-history/users')
             .then(response => response.json())
             .then(data => {
@@ -21,6 +22,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         option.textContent = username;
                         userSelect.appendChild(option);
                     });
+                }
+                if (preselect && userSelect) {
+                    userSelect.value = preselect;
+                    fetchLogbookData();
                 }
             })
             .catch(err => {

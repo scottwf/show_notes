@@ -694,7 +694,9 @@ def admin_users():
 
     users = db.execute('''
         SELECT id, username, plex_username, plex_user_id, is_admin,
-               last_login_at, profile_photo_url
+               last_login_at, profile_photo_url,
+               profile_show_profile, profile_show_lists, profile_show_favorites,
+               profile_show_history, profile_show_progress, allow_recommendations
         FROM users ORDER BY last_login_at DESC
     ''').fetchall()
     current_app.logger.debug(f"admin_users: users query {(time.monotonic()-t0)*1000:.0f}ms")
@@ -734,6 +736,22 @@ def admin_users():
         SELECT user_id, COUNT(*) as cnt FROM user_favorites
         WHERE is_dropped = 0 GROUP BY user_id
     ''').fetchall()}
+
+    # Household sub-profiles (non-default members) grouped by user_id
+    hm_rows = db.execute('''
+        SELECT id, user_id, display_name, avatar_color, avatar_url
+        FROM household_members WHERE is_default = 0
+        ORDER BY user_id, created_at
+    ''').fetchall()
+    members_by_user = {}
+    for m in hm_rows:
+        members_by_user.setdefault(m['user_id'], []).append(dict(m))
+
+    member_fav_counts = {r['member_id']: r['cnt'] for r in db.execute('''
+        SELECT member_id, COUNT(*) as cnt FROM user_favorites
+        WHERE is_dropped = 0 AND member_id IS NOT NULL
+        GROUP BY member_id
+    ''').fetchall()}
     current_app.logger.debug(f"admin_users: aggregate queries {(time.monotonic()-t2)*1000:.0f}ms")
 
     t3 = time.monotonic()
@@ -751,7 +769,43 @@ def admin_users():
         problem_counts=problem_counts,
         fav_counts=fav_counts,
         jellyseer_counts=jellyseer_counts,
+        members_by_user=members_by_user,
+        member_fav_counts=member_fav_counts,
     )
+
+
+@admin_bp.route('/api/users/<int:user_id>/permissions', methods=['POST'])
+@login_required
+@admin_required
+def update_user_permissions(user_id):
+    """Update a user's admin status and privacy/permission settings."""
+    db = database.get_db()
+    user = db.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    data = request.json or {}
+    db.execute('''
+        UPDATE users SET
+            is_admin = ?,
+            profile_show_profile = ?,
+            profile_show_lists = ?,
+            profile_show_favorites = ?,
+            profile_show_history = ?,
+            profile_show_progress = ?,
+            allow_recommendations = ?
+        WHERE id = ?
+    ''', (
+        1 if data.get('is_admin') else 0,
+        1 if data.get('profile_show_profile') else 0,
+        1 if data.get('profile_show_lists') else 0,
+        1 if data.get('profile_show_favorites') else 0,
+        1 if data.get('profile_show_history') else 0,
+        1 if data.get('profile_show_progress') else 0,
+        1 if data.get('allow_recommendations') else 0,
+        user_id,
+    ))
+    db.commit()
+    return jsonify({'success': True})
 
 
 @admin_bp.route('/logs/list', methods=['GET'])

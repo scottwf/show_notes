@@ -8,7 +8,7 @@
       <thead class="bg-slate-50 dark:bg-slate-700">
         <tr>
           <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Login</th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Login <span class="normal-case font-normal text-slate-400">(UTC)</span></th>
           <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Watched</th>
           <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Watches</th>
           <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Favorites</th>
@@ -16,7 +16,7 @@
           {% if jellyseer_counts is not none %}
           <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Requests</th>
           {% endif %}
-          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"></th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -25,6 +25,7 @@
           <td colspan="8" class="px-4 py-8 text-center text-slate-400 dark:text-slate-500">No users found.</td>
         </tr>
         {% endif %}
+
         {% for user in users %}
         {% set pn = user.plex_username %}
         {% set watched = last_watched.get(pn) if pn else none %}
@@ -32,6 +33,9 @@
         {% set icount = (issue_counts.get(user.id, 0) or 0) + (problem_counts.get(user.id, 0) or 0) %}
         {% set fcount = fav_counts.get(user.id, 0) or 0 %}
         {% set jcount = jellyseer_counts.get((pn or '').lower()) if pn else none %}
+        {% set user_members = members_by_user.get(user.id, []) %}
+
+        {# ── Main account row ── #}
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
           <!-- Avatar + Name -->
           <td class="px-4 py-3">
@@ -53,6 +57,9 @@
                   <span class="font-medium text-slate-900 dark:text-slate-100 truncate">{{ user.username }}</span>
                   {% if user.is_admin %}
                   <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">Admin</span>
+                  {% endif %}
+                  {% if user_members %}
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">+{{ user_members|length }} profile{{ 's' if user_members|length != 1 }}</span>
                   {% endif %}
                 </div>
                 {% if pn and pn != user.username %}
@@ -86,17 +93,23 @@
             {% endif %}
           </td>
           <!-- Watch count -->
-          <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300 font-medium">
-            {{ wcount if wcount else '—' }}
+          <td class="px-4 py-3 text-center font-medium">
+            {% if wcount and pn %}
+            <a href="{{ url_for('admin.watch_history_view') }}?user={{ pn | urlencode }}"
+               class="text-sky-600 dark:text-sky-400 hover:underline">{{ wcount }}</a>
+            {% else %}
+            <span class="text-slate-400">—</span>
+            {% endif %}
           </td>
           <!-- Favorites -->
           <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300 font-medium">
             {{ fcount if fcount else '—' }}
           </td>
-          <!-- Issues (amber badge if any) -->
+          <!-- Issues -->
           <td class="px-4 py-3 text-center">
             {% if icount > 0 %}
-            <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">{{ icount }}</span>
+            <a href="{{ url_for('admin.issue_reports') }}"
+               class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60">{{ icount }}</a>
             {% else %}
             <span class="text-slate-400">—</span>
             {% endif %}
@@ -109,15 +122,186 @@
           {% endif %}
           <!-- Actions -->
           <td class="px-4 py-3">
-            <a href="{{ url_for('admin.watch_history_view') }}"
-               class="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 text-xs font-medium whitespace-nowrap">
-              Watch History →
-            </a>
+            <div class="flex flex-wrap gap-2 items-center">
+              {% if pn %}
+              <a href="{{ url_for('admin.watch_history_view') }}?user={{ pn | urlencode }}"
+                 class="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 text-xs font-medium whitespace-nowrap">History</a>
+              {% endif %}
+              <button onclick='openPermissions({{ user.id }}, {{ user.username | tojson }}, {
+                  "is_admin": {{ "true" if user.is_admin else "false" }},
+                  "profile_show_profile": {{ "true" if user.profile_show_profile else "false" }},
+                  "profile_show_lists": {{ "true" if user.profile_show_lists else "false" }},
+                  "profile_show_favorites": {{ "true" if user.profile_show_favorites else "false" }},
+                  "profile_show_history": {{ "true" if user.profile_show_history else "false" }},
+                  "profile_show_progress": {{ "true" if user.profile_show_progress else "false" }},
+                  "allow_recommendations": {{ "true" if user.allow_recommendations else "false" }}
+              })'
+                      class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium whitespace-nowrap">
+                Edit
+              </button>
+            </div>
           </td>
         </tr>
+
+        {# ── Household sub-profile rows ── #}
+        {% for member in user_members %}
+        {% set mfcount = member_fav_counts.get(member.id, 0) or 0 %}
+        <tr class="bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-100/60 dark:hover:bg-slate-700/30 transition-colors">
+          <td class="px-4 py-2 pl-10">
+            <div class="flex items-center gap-3">
+              <div class="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden"
+                   style="background-color: {{ member.avatar_color }};">
+                {% if member.avatar_url %}
+                <img src="{{ member.avatar_url }}" alt="{{ member.display_name }}" class="w-full h-full object-cover"
+                     onerror="this.style.display='none';this.parentElement.textContent='{{ member.display_name[0].upper() }}'">
+                {% else %}
+                {{ member.display_name[0].upper() }}
+                {% endif %}
+              </div>
+              <div class="min-w-0">
+                <span class="text-sm text-slate-700 dark:text-slate-300">{{ member.display_name }}</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500 ml-1">· sub-profile</span>
+              </div>
+            </div>
+          </td>
+          <td class="px-4 py-2 text-slate-400">—</td>
+          <td class="px-4 py-2 text-slate-400">—</td>
+          <td class="px-4 py-2 text-center text-slate-400">—</td>
+          <td class="px-4 py-2 text-center text-slate-600 dark:text-slate-300 font-medium text-sm">
+            {{ mfcount if mfcount else '—' }}
+          </td>
+          <td class="px-4 py-2 text-center text-slate-400">—</td>
+          {% if jellyseer_counts is not none %}<td class="px-4 py-2 text-center text-slate-400">—</td>{% endif %}
+          <td class="px-4 py-2"></td>
+        </tr>
+        {% endfor %}
+
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<!-- Permissions Modal -->
+<div id="permissions-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50"
+     onclick="if(event.target===this)closePermissions()">
+  <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-lg font-bold text-slate-900 dark:text-slate-100">
+        Edit Permissions — <span id="modal-username" class="text-sky-600 dark:text-sky-400"></span>
+      </h2>
+      <button onclick="closePermissions()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <input type="hidden" id="modal-user-id">
+
+    <div class="space-y-3 mb-6">
+      <!-- Admin -->
+      <div class="pb-3 border-b border-slate-200 dark:border-slate-700">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="perm-is-admin" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+          <div>
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">Administrator</span>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Full access to the admin panel</p>
+          </div>
+        </label>
+      </div>
+
+      <!-- Privacy / profile permissions -->
+      <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider pt-1">Profile Visibility</p>
+
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-show-profile" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Show profile info publicly</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-show-lists" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Show custom lists</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-show-favorites" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Show favorites</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-show-history" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Show watch history</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-show-progress" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Show watch progress</span>
+      </label>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input type="checkbox" id="perm-recommendations" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+        <span class="text-sm text-slate-700 dark:text-slate-300">Allow recommendations from others</span>
+      </label>
+    </div>
+
+    <div class="flex justify-end gap-3">
+      <button onclick="closePermissions()"
+              class="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+        Cancel
+      </button>
+      <button onclick="savePermissions()"
+              class="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium transition-colors">
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openPermissions(userId, username, perms) {
+  document.getElementById('modal-user-id').value = userId;
+  document.getElementById('modal-username').textContent = username;
+  document.getElementById('perm-is-admin').checked = !!perms.is_admin;
+  document.getElementById('perm-show-profile').checked = !!perms.profile_show_profile;
+  document.getElementById('perm-show-lists').checked = !!perms.profile_show_lists;
+  document.getElementById('perm-show-favorites').checked = !!perms.profile_show_favorites;
+  document.getElementById('perm-show-history').checked = !!perms.profile_show_history;
+  document.getElementById('perm-show-progress').checked = !!perms.profile_show_progress;
+  document.getElementById('perm-recommendations').checked = !!perms.allow_recommendations;
+  const modal = document.getElementById('permissions-modal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closePermissions() {
+  const modal = document.getElementById('permissions-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function savePermissions() {
+  const userId = document.getElementById('modal-user-id').value;
+  const payload = {
+    is_admin:              document.getElementById('perm-is-admin').checked,
+    profile_show_profile:  document.getElementById('perm-show-profile').checked,
+    profile_show_lists:    document.getElementById('perm-show-lists').checked,
+    profile_show_favorites:document.getElementById('perm-show-favorites').checked,
+    profile_show_history:  document.getElementById('perm-show-history').checked,
+    profile_show_progress: document.getElementById('perm-show-progress').checked,
+    allow_recommendations: document.getElementById('perm-recommendations').checked,
+  };
+  try {
+    const r = await fetch(`/admin/api/users/${userId}/permissions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    if (data.success) {
+      closePermissions();
+      location.reload();
+    } else {
+      alert('Failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+</script>
 {% endblock %}
