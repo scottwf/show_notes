@@ -693,7 +693,7 @@ def admin_users():
     db = database.get_db()
 
     users = db.execute('''
-        SELECT id, username, plex_username, plex_user_id, is_admin,
+        SELECT id, username, plex_username, plex_user_id, is_admin, is_active,
                last_login_at, profile_photo_url,
                profile_show_profile, profile_show_lists, profile_show_favorites,
                profile_show_history, profile_show_progress, allow_recommendations
@@ -787,6 +787,7 @@ def update_user_permissions(user_id):
     db.execute('''
         UPDATE users SET
             is_admin = ?,
+            is_active = ?,
             profile_show_profile = ?,
             profile_show_lists = ?,
             profile_show_favorites = ?,
@@ -796,6 +797,7 @@ def update_user_permissions(user_id):
         WHERE id = ?
     ''', (
         1 if data.get('is_admin') else 0,
+        1 if data.get('is_active') else 0,
         1 if data.get('profile_show_profile') else 0,
         1 if data.get('profile_show_lists') else 0,
         1 if data.get('profile_show_favorites') else 0,
@@ -806,6 +808,64 @@ def update_user_permissions(user_id):
     ))
     db.commit()
     return jsonify({'success': True})
+
+
+@admin_bp.route('/api/import-plex-users', methods=['POST'])
+@login_required
+@admin_required
+def import_plex_users():
+    """Fetch Plex home users and create inactive ShowNotes accounts for any not yet registered."""
+    import requests as _requests
+    db = database.get_db()
+
+    # Use the admin's stored Plex token
+    admin_row = db.execute(
+        'SELECT plex_token FROM users WHERE is_admin = 1 AND plex_token IS NOT NULL ORDER BY id LIMIT 1'
+    ).fetchone()
+    if not admin_row:
+        return jsonify({'success': False, 'error': 'No admin Plex token found. Log in via Plex first.'}), 400
+
+    from ..database import get_setting
+    client_id = get_setting('plex_client_id') or 'shownotes'
+    headers = {
+        'X-Plex-Token': admin_row['plex_token'],
+        'X-Plex-Client-Identifier': client_id,
+        'Accept': 'application/json',
+    }
+
+    try:
+        resp = _requests.get('https://plex.tv/api/v2/home/users', headers=headers, timeout=10)
+        resp.raise_for_status()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Plex API error: {e}'}), 502
+
+    plex_users = resp.json().get('users', [])
+
+    imported, skipped = [], []
+    for pu in plex_users:
+        plex_id = str(pu.get('id', ''))
+        if not plex_id:
+            continue
+
+        if db.execute('SELECT id FROM users WHERE plex_user_id = ?', (plex_id,)).fetchone():
+            skipped.append(pu.get('title') or pu.get('username') or plex_id)
+            continue
+
+        base = (pu.get('title') or pu.get('username') or f'user_{plex_id}').strip()
+        username = base
+        n = 1
+        while db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
+            username = f'{base}_{n}'
+            n += 1
+
+        db.execute('''
+            INSERT INTO users (username, plex_user_id, plex_username, email, is_active, joined_at)
+            VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+        ''', (username, plex_id, pu.get('username') or base, pu.get('email') or ''))
+        imported.append(username)
+
+    db.commit()
+    return jsonify({'success': True, 'imported': imported, 'skipped': skipped})
 
 
 @admin_bp.route('/logs/list', methods=['GET'])

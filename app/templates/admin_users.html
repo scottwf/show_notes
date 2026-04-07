@@ -2,19 +2,44 @@
 {% block admin_page_title %}Users{% endblock %}
 {% block admin_page_header %}Users{% endblock %}
 {% block admin_page_content %}
+
+<!-- Header row: filters + Import button -->
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <div class="flex items-center gap-2 flex-wrap">
+    <input id="filter-search" type="text" placeholder="Search username…"
+           oninput="applyFilters()"
+           class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500 w-44">
+    <select id="filter-status" onchange="applyFilters()"
+            class="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+      <option value="all">All users</option>
+      <option value="active">Active only</option>
+      <option value="inactive">Inactive only</option>
+      <option value="admin">Admins only</option>
+    </select>
+    <span id="filter-count" class="text-sm text-slate-500 dark:text-slate-400"></span>
+  </div>
+  <button onclick="importPlexUsers()"
+          class="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg transition-colors">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+    </svg>
+    Import Plex Users
+  </button>
+</div>
+
 <div class="bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
   <div class="overflow-x-auto">
     <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-slate-700">
       <thead class="bg-slate-50 dark:bg-slate-700">
         <tr>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
-          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Login <span class="normal-case font-normal text-slate-400">(UTC)</span></th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(0)" data-col="0">User <span class="sort-icon">↕</span></th>
+          <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(1)" data-col="1">Last Login <span class="normal-case font-normal text-slate-400">(UTC)</span> <span class="sort-icon">↕</span></th>
           <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Last Watched</th>
-          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Watches</th>
-          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Favorites</th>
-          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Issues</th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(3)" data-col="3">Watches <span class="sort-icon">↕</span></th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(4)" data-col="4">Favorites <span class="sort-icon">↕</span></th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(5)" data-col="5">Issues <span class="sort-icon">↕</span></th>
           {% if jellyseer_counts is not none %}
-          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Requests</th>
+          <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer select-none" onclick="sortTable(6)" data-col="6">Requests <span class="sort-icon">↕</span></th>
           {% endif %}
           <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
         </tr>
@@ -36,7 +61,16 @@
         {% set user_members = members_by_user.get(user.id, []) %}
 
         {# ── Main account row ── #}
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+        <tr class="user-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors {% if not user.is_active %}opacity-60{% endif %}"
+            data-username="{{ user.username | lower }}"
+            data-active="{{ '1' if user.is_active else '0' }}"
+            data-admin="{{ '1' if user.is_admin else '0' }}"
+            data-login="{{ user.last_login_at or '' }}"
+            data-watches="{{ wcount }}"
+            data-favorites="{{ fcount }}"
+            data-issues="{{ icount }}"
+            data-requests="{{ jcount or 0 }}"
+            data-group="{{ user.id }}">
           <!-- Avatar + Name -->
           <td class="px-4 py-3">
             <div class="flex items-center gap-3">
@@ -48,7 +82,7 @@
                 {{ (user.username or '?')[0].upper() }}
               </div>
               {% else %}
-              <div class="flex h-9 w-9 rounded-full bg-sky-500 items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+              <div class="flex h-9 w-9 rounded-full {% if user.is_active %}bg-sky-500{% else %}bg-slate-400{% endif %} items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                 {{ (user.username or '?')[0].upper() }}
               </div>
               {% endif %}
@@ -57,6 +91,9 @@
                   <span class="font-medium text-slate-900 dark:text-slate-100 truncate">{{ user.username }}</span>
                   {% if user.is_admin %}
                   <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">Admin</span>
+                  {% endif %}
+                  {% if not user.is_active %}
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
                   {% endif %}
                   {% if user_members %}
                   <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">+{{ user_members|length }} profile{{ 's' if user_members|length != 1 }}</span>
@@ -128,11 +165,12 @@
                  class="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 text-xs font-medium whitespace-nowrap">History</a>
               {% endif %}
               <button onclick='openPermissions({{ user.id }}, {{ user.username | tojson }}, {
-                  "is_admin": {{ "true" if user.is_admin else "false" }},
-                  "profile_show_profile": {{ "true" if user.profile_show_profile else "false" }},
-                  "profile_show_lists": {{ "true" if user.profile_show_lists else "false" }},
-                  "profile_show_favorites": {{ "true" if user.profile_show_favorites else "false" }},
-                  "profile_show_history": {{ "true" if user.profile_show_history else "false" }},
+                  "is_active":             {{ "true" if user.is_active else "false" }},
+                  "is_admin":              {{ "true" if user.is_admin else "false" }},
+                  "profile_show_profile":  {{ "true" if user.profile_show_profile else "false" }},
+                  "profile_show_lists":    {{ "true" if user.profile_show_lists else "false" }},
+                  "profile_show_favorites":{{ "true" if user.profile_show_favorites else "false" }},
+                  "profile_show_history":  {{ "true" if user.profile_show_history else "false" }},
                   "profile_show_progress": {{ "true" if user.profile_show_progress else "false" }},
                   "allow_recommendations": {{ "true" if user.allow_recommendations else "false" }}
               })'
@@ -143,10 +181,10 @@
           </td>
         </tr>
 
-        {# ── Household sub-profile rows ── #}
+        {# ── Household sub-profile rows — share parent account's Plex data ── #}
         {% for member in user_members %}
         {% set mfcount = member_fav_counts.get(member.id, 0) or 0 %}
-        <tr class="bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-100/60 dark:hover:bg-slate-700/30 transition-colors">
+        <tr class="member-row bg-slate-50/60 dark:bg-slate-800/60 hover:bg-slate-100/60 dark:hover:bg-slate-700/30 transition-colors" data-group="{{ user.id }}">
           <td class="px-4 py-2 pl-10">
             <div class="flex items-center gap-3">
               <div class="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden"
@@ -160,18 +198,36 @@
               </div>
               <div class="min-w-0">
                 <span class="text-sm text-slate-700 dark:text-slate-300">{{ member.display_name }}</span>
-                <span class="text-xs text-slate-400 dark:text-slate-500 ml-1">· sub-profile</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500 ml-1">· sub-profile of {{ user.username }}</span>
               </div>
             </div>
           </td>
-          <td class="px-4 py-2 text-slate-400">—</td>
-          <td class="px-4 py-2 text-slate-400">—</td>
-          <td class="px-4 py-2 text-center text-slate-400">—</td>
-          <td class="px-4 py-2 text-center text-slate-600 dark:text-slate-300 font-medium text-sm">
+          <!-- Last Login — same as parent account -->
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
+            {% if user.last_login_at %}{{ user.last_login_at[:16].replace('T', ' ') }}{% else %}<span class="text-slate-400">—</span>{% endif %}
+          </td>
+          <!-- Last Watched — same Plex account -->
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-xs text-xs">
+            {% if watched %}
+            <div class="truncate">
+              {% if watched.show_title %}{{ watched.show_title }}{% if watched.season_episode %} <span class="text-slate-400">{{ watched.season_episode }}</span>{% endif %}
+              {% else %}{{ watched.title }}{% endif %}
+            </div>
+            {% else %}<span class="text-slate-400">—</span>{% endif %}
+          </td>
+          <!-- Watches — same Plex account -->
+          <td class="px-4 py-2 text-center text-slate-500 dark:text-slate-400 text-xs font-medium">
+            {% if wcount and pn %}
+            <a href="{{ url_for('admin.watch_history_view') }}?user={{ pn | urlencode }}"
+               class="text-sky-500 hover:underline">{{ wcount }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <!-- Favorites — scoped to this member_id -->
+          <td class="px-4 py-2 text-center text-slate-600 dark:text-slate-300 font-medium text-xs">
             {{ mfcount if mfcount else '—' }}
           </td>
-          <td class="px-4 py-2 text-center text-slate-400">—</td>
-          {% if jellyseer_counts is not none %}<td class="px-4 py-2 text-center text-slate-400">—</td>{% endif %}
+          <td class="px-4 py-2 text-center text-slate-400 text-xs">—</td>
+          {% if jellyseer_counts is not none %}<td class="px-4 py-2 text-center text-slate-400 text-xs">—</td>{% endif %}
           <td class="px-4 py-2"></td>
         </tr>
         {% endfor %}
@@ -200,8 +256,15 @@
     <input type="hidden" id="modal-user-id">
 
     <div class="space-y-3 mb-6">
-      <!-- Admin -->
-      <div class="pb-3 border-b border-slate-200 dark:border-slate-700">
+      <!-- Account status -->
+      <div class="pb-3 border-b border-slate-200 dark:border-slate-700 space-y-3">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="perm-is-active" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
+          <div>
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">Active</span>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Inactive users cannot log in</p>
+          </div>
+        </label>
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" id="perm-is-admin" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
           <div>
@@ -211,9 +274,7 @@
         </label>
       </div>
 
-      <!-- Privacy / profile permissions -->
       <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider pt-1">Profile Visibility</p>
-
       <label class="flex items-center gap-3 cursor-pointer">
         <input type="checkbox" id="perm-show-profile" class="w-4 h-4 text-sky-600 rounded border-slate-300 dark:border-slate-600">
         <span class="text-sm text-slate-700 dark:text-slate-300">Show profile info publicly</span>
@@ -253,17 +314,21 @@
   </div>
 </div>
 
+<!-- Import result toast -->
+<div id="import-toast" class="hidden fixed bottom-6 right-6 bg-slate-800 text-white text-sm rounded-lg shadow-xl px-5 py-3 z-50 max-w-sm"></div>
+
 <script>
 function openPermissions(userId, username, perms) {
   document.getElementById('modal-user-id').value = userId;
   document.getElementById('modal-username').textContent = username;
-  document.getElementById('perm-is-admin').checked = !!perms.is_admin;
-  document.getElementById('perm-show-profile').checked = !!perms.profile_show_profile;
-  document.getElementById('perm-show-lists').checked = !!perms.profile_show_lists;
+  document.getElementById('perm-is-active').checked      = !!perms.is_active;
+  document.getElementById('perm-is-admin').checked       = !!perms.is_admin;
+  document.getElementById('perm-show-profile').checked   = !!perms.profile_show_profile;
+  document.getElementById('perm-show-lists').checked     = !!perms.profile_show_lists;
   document.getElementById('perm-show-favorites').checked = !!perms.profile_show_favorites;
-  document.getElementById('perm-show-history').checked = !!perms.profile_show_history;
-  document.getElementById('perm-show-progress').checked = !!perms.profile_show_progress;
-  document.getElementById('perm-recommendations').checked = !!perms.allow_recommendations;
+  document.getElementById('perm-show-history').checked   = !!perms.profile_show_history;
+  document.getElementById('perm-show-progress').checked  = !!perms.profile_show_progress;
+  document.getElementById('perm-recommendations').checked= !!perms.allow_recommendations;
   const modal = document.getElementById('permissions-modal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -278,6 +343,7 @@ function closePermissions() {
 async function savePermissions() {
   const userId = document.getElementById('modal-user-id').value;
   const payload = {
+    is_active:             document.getElementById('perm-is-active').checked,
     is_admin:              document.getElementById('perm-is-admin').checked,
     profile_show_profile:  document.getElementById('perm-show-profile').checked,
     profile_show_lists:    document.getElementById('perm-show-lists').checked,
@@ -293,14 +359,109 @@ async function savePermissions() {
       body: JSON.stringify(payload)
     });
     const data = await r.json();
+    if (data.success) { closePermissions(); location.reload(); }
+    else alert('Failed: ' + (data.error || 'Unknown error'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── Table filter + sort ──────────────────────────────────────────────────────
+let sortCol = 1, sortAsc = false; // default: last login descending
+
+function applyFilters() {
+  const search = document.getElementById('filter-search').value.toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const rows = document.querySelectorAll('.user-row');
+  let visible = 0;
+
+  rows.forEach(row => {
+    const username = row.dataset.username || '';
+    const active   = row.dataset.active === '1';
+    const admin    = row.dataset.admin  === '1';
+    const group    = row.dataset.group;
+
+    const matchSearch = !search || username.includes(search);
+    const matchStatus =
+      status === 'all'      ? true :
+      status === 'active'   ? active :
+      status === 'inactive' ? !active :
+      status === 'admin'    ? admin : true;
+
+    const show = matchSearch && matchStatus;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+
+    // Sub-profile rows follow their parent
+    document.querySelectorAll(`.member-row[data-group="${group}"]`).forEach(mr => {
+      mr.style.display = show ? '' : 'none';
+    });
+  });
+
+  document.getElementById('filter-count').textContent =
+    visible + ' of {{ users|length }} shown';
+}
+
+function sortTable(col) {
+  if (sortCol === col) { sortAsc = !sortAsc; } else { sortCol = col; sortAsc = true; }
+
+  // Update header icons
+  document.querySelectorAll('th[data-col]').forEach(th => {
+    th.querySelector('.sort-icon').textContent =
+      parseInt(th.dataset.col) === col ? (sortAsc ? '↑' : '↓') : '↕';
+  });
+
+  const colAttr = ['username','login','','watches','favorites','issues','requests'][col];
+  if (!colAttr) return;
+
+  const tbody = document.querySelector('tbody');
+  // Collect (main row + its member rows) as groups
+  const groups = [];
+  document.querySelectorAll('.user-row').forEach(row => {
+    const memberRows = [...document.querySelectorAll(`.member-row[data-group="${row.dataset.group}"]`)];
+    groups.push({ row, memberRows, val: row.dataset[colAttr] || '' });
+  });
+
+  groups.sort((a, b) => {
+    const av = isNaN(a.val) ? a.val : +a.val;
+    const bv = isNaN(b.val) ? b.val : +b.val;
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  groups.forEach(({ row, memberRows }) => {
+    tbody.appendChild(row);
+    memberRows.forEach(mr => tbody.appendChild(mr));
+  });
+}
+
+// Init: show count
+document.addEventListener('DOMContentLoaded', () => applyFilters());
+
+// ── Plex import ──────────────────────────────────────────────────────────────
+async function importPlexUsers() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  try {
+    const r = await fetch('/admin/api/import-plex-users', {method: 'POST'});
+    const data = await r.json();
+    const toast = document.getElementById('import-toast');
     if (data.success) {
-      closePermissions();
-      location.reload();
+      const imp = data.imported.length;
+      const skip = data.skipped.length;
+      toast.textContent = imp > 0
+        ? `Imported ${imp} new user${imp !== 1 ? 's' : ''}: ${data.imported.join(', ')}. ${skip} already existed.`
+        : `No new users found (${skip} already registered).`;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 6000);
+      if (imp > 0) setTimeout(() => location.reload(), 1500);
     } else {
-      alert('Failed: ' + (data.error || 'Unknown error'));
+      alert('Import failed: ' + (data.error || 'Unknown error'));
     }
-  } catch(e) {
-    alert('Error: ' + e.message);
+  } catch(e) { alert('Error: ' + e.message); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg> Import Plex Users`;
   }
 }
 </script>

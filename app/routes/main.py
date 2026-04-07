@@ -1775,6 +1775,10 @@ def plex_login_poll():
             user_record = db.execute('SELECT * FROM users WHERE plex_user_id = ?', (plex_user_id,)).fetchone()
 
             if user_record:
+                # Block inactive (imported-but-not-yet-activated) accounts
+                if not user_record['is_active']:
+                    return jsonify({'authorized': False, 'error': 'Your account has not been activated yet. Please contact the administrator.'})
+
                 # Log in the user
                 user_obj = current_app.login_manager._user_callback(user_record['id'])
                 if user_obj:
