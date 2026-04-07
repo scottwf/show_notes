@@ -6099,15 +6099,8 @@ def api_active_announcements():
                 ORDER BY a.created_at DESC
             ''', (user_id, now, now)).fetchall()
         else:
-            # For non-logged-in users, show all active announcements
-            announcements = db.execute('''
-                SELECT id, title, message, type, created_at
-                FROM announcements
-                WHERE is_active = 1
-                  AND (start_date IS NULL OR start_date <= ?)
-                  AND (end_date IS NULL OR end_date >= ?)
-                ORDER BY created_at DESC
-            ''', (now, now)).fetchall()
+            # Non-logged-in users see no announcements
+            announcements = []
 
         return jsonify({
             'success': True,
