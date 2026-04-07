@@ -6,6 +6,7 @@ import re
 from thefuzz import fuzz
 import urllib.parse
 import datetime # For last_synced_at
+from datetime import timezone as dt_timezone
 from flask import current_app
 from . import database
 import pytz  # For timezone conversion
@@ -1549,10 +1550,10 @@ def format_datetime_simple(value, format_str='%b %d, %Y %H:%M'):
             if dt_obj.tzinfo is None:
                 dt_obj = pytz.UTC.localize(dt_obj)
             else:
-                # Convert to UTC first if it's in a different timezone
-                # Check if already UTC using direct comparison (safest method)
-                if dt_obj.tzinfo is not pytz.UTC:
-                    dt_obj = dt_obj.astimezone(pytz.UTC)
+                # Normalize to pytz.UTC for consistent handling.
+                # datetime.timezone.utc and pytz.UTC are not the same object,
+                # so always call astimezone to ensure a canonical pytz UTC tzinfo.
+                dt_obj = dt_obj.astimezone(pytz.UTC)
             
             # Convert to configured timezone
             target_tz = pytz.timezone(tz_name)
@@ -2287,7 +2288,9 @@ def convert_utc_to_user_timezone(utc_datetime_str, output_format='%Y-%m-%d %H:%M
         # Ensure datetime is timezone-aware (UTC)
         if utc_dt.tzinfo is None:
             utc_dt = pytz.UTC.localize(utc_dt)
-        elif utc_dt.tzinfo != pytz.UTC:
+        else:
+            # Normalize to pytz UTC regardless of which UTC implementation is present
+            # (datetime.timezone.utc and pytz.UTC are not the same object).
             utc_dt = utc_dt.astimezone(pytz.UTC)
 
         # Get user's timezone
@@ -2332,9 +2335,9 @@ def get_calendar_cache():
         with open(cache_path, 'r') as f:
             cache = json.load(f)
 
-        # Check if cache is from today
+        # Check if cache is from today (UTC date)
         cache_date = cache.get('cache_date')
-        today = datetime.date.today().isoformat()
+        today = datetime.datetime.now(dt_timezone.utc).date().isoformat()
 
         if cache_date != today:
             current_app.logger.info(f"Calendar cache is stale (from {cache_date}, today is {today})")
@@ -2359,8 +2362,8 @@ def set_calendar_cache(data):
         cache_path = get_calendar_cache_path()
 
         cache = {
-            'cache_date': datetime.date.today().isoformat(),
-            'cached_at': datetime.datetime.now().isoformat(),
+            'cache_date': datetime.datetime.now(dt_timezone.utc).date().isoformat(),
+            'cached_at': datetime.datetime.now(dt_timezone.utc).isoformat(),
             'data': data
         }
 
@@ -2405,11 +2408,12 @@ def build_calendar_data(db):
     from flask import url_for
     import datetime as dt
 
-    now = dt.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    today = dt.date.today().isoformat()
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    now = now_utc.strftime('%Y-%m-%d %H:%M:%S')
+    today = now_utc.date().isoformat()
 
     # Get all upcoming episodes (next 30 days, limit 200)
-    thirty_days_later = (dt.date.today() + dt.timedelta(days=30)).isoformat()
+    thirty_days_later = (now_utc.date() + dt.timedelta(days=30)).isoformat()
 
     upcoming_episodes = db.execute("""
         SELECT
@@ -2491,7 +2495,7 @@ def build_calendar_data(db):
         'upcoming_episodes': [episode_to_dict(ep) for ep in upcoming_episodes],
         'premieres': [episode_to_dict(ep, is_premiere=True) for ep in premieres],
         'tags_by_label': tags_by_label,
-        'built_at': datetime.datetime.now().isoformat()
+        'built_at': now_utc.isoformat()
     }
 
     return data

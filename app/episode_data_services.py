@@ -10,7 +10,7 @@ import time
 import json
 import logging
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlite3 import Row
 from app.database import get_db
 from flask import has_app_context
@@ -397,7 +397,7 @@ class EpisodeDataManager:
             """, (
                 tmdb_id, season, episode, summary_data.get('title', ''),
                 clean_summary, json.dumps(summary_data), summary_data['source'],
-                summary_data.get('source_url', ''), confidence, datetime.now()
+                summary_data.get('source_url', ''), confidence, datetime.now(timezone.utc)
             ))
             db.commit()
             logger.info(f"Stored episode summary for TMDB {tmdb_id} S{season}E{episode} from {summary_data['source']}")
