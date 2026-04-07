@@ -26,54 +26,51 @@
             <div
                 class="flex-grow bg-white dark:bg-slate-800 shadow-xl rounded-lg p-6 border border-slate-200 dark:border-slate-700">
                 <div>
-                    <div class="flex flex-wrap items-center gap-3 mb-4">
-                        <h1
-                            class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight tracking-tight drop-shadow-lg">
-                            {{ show.title }}
-                        </h1>
+                    <!-- Title -->
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 dark:text-white leading-tight tracking-tight drop-shadow-lg mb-2">
+                        {{ show.title }}
+                    </h1>
 
-                        <!-- Favorite Button -->
-                        {% if session.user_id %}
+                    {% if show.year_display %}
+                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light">
+                        ({{ show.year_display }})
+                    </p>
+                    {% endif %}
+
+                    <!-- Action Bar -->
+                    {% if session.user_id %}
+                    <div class="flex flex-wrap gap-2 mb-6">
+
+                        <!-- Favorite -->
                         <button id="favorite-btn" data-show-id="{{ show.id }}" onclick="toggleFavorite()"
-                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                            class="action-pill inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-amber-400/60 bg-amber-400/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:border-amber-500 hover:text-white hover:shadow-md hover:shadow-amber-500/25"
                             title="Add to favorites">
-                            <svg id="favorite-icon-empty" class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-yellow-500" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
-                                </path>
+                            <svg id="favorite-icon-empty" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                             </svg>
-                            <svg id="favorite-icon-filled" class="hidden w-8 h-8 text-yellow-500" fill="currentColor"
-                                viewBox="0 0 24 24">
-                                <path
-                                    d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
-                                </path>
+                            <svg id="favorite-icon-filled" class="hidden w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                             </svg>
+                            <span id="favorite-label">Favorite</span>
                         </button>
 
-                        <!-- Add to List Button -->
+                        <!-- Add to List -->
                         <div class="relative">
                             <button id="add-to-list-btn" onclick="toggleListDropdown()"
-                                class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-sky-400/60 bg-sky-400/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500 hover:border-sky-500 hover:text-white hover:shadow-md hover:shadow-sky-500/25"
                                 title="Add to list">
-                                <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-sky-500" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
-                                    </path>
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>
+                                <span>Add to List</span>
                             </button>
-
                             <!-- Dropdown Menu -->
-                            <div id="list-dropdown" class="hidden absolute top-full right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50">
+                            <div id="list-dropdown" class="hidden absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50">
                                 <div class="p-3 border-b border-slate-200 dark:border-slate-700">
                                     <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Add to List</h3>
                                 </div>
                                 <div id="lists-container" class="max-h-64 overflow-y-auto">
-                                    <!-- Lists will be loaded here -->
-                                    <div class="p-4 text-center text-sm text-slate-500">
-                                        Loading lists...
-                                    </div>
+                                    <div class="p-4 text-center text-sm text-slate-500">Loading lists...</div>
                                 </div>
                                 <div class="p-3 border-t border-slate-200 dark:border-slate-700">
                                     <button onclick="createNewList()" class="w-full px-3 py-2 text-sm bg-sky-500 hover:bg-sky-600 text-white rounded transition-colors">
@@ -83,62 +80,49 @@
                             </div>
                         </div>
 
-                        <!-- Report Problem Button -->
-                        <button onclick="openReportModal()"
-                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
-                            title="Report a problem">
-                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-red-500" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9">
-                                </path>
-                            </svg>
-                        </button>
-
-                        <!-- Recommend Button -->
+                        <!-- Recommend -->
                         <button onclick="openRecommendModal()"
-                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-emerald-400/60 bg-emerald-400/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:border-emerald-500 hover:text-white hover:shadow-md hover:shadow-emerald-500/25"
                             title="Recommend to others">
-                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-green-500" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5">
-                                </path>
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
                             </svg>
+                            <span>Recommend</span>
                         </button>
 
-                        <!-- Request on Jellyseerr Button -->
+                        <!-- Request on Seer -->
                         {% if jellyseer_url and show.tmdb_id %}
                         <a href="{{ jellyseer_url }}/tv/{{ show.tmdb_id }}" target="_blank" rel="noopener noreferrer"
-                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
-                            title="Request on Jellyseerr">
-                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-purple-500" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M12 4v16m8-8H4">
-                                </path>
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-violet-400/60 bg-violet-400/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500 hover:border-violet-500 hover:text-white hover:shadow-md hover:shadow-violet-500/25"
+                            title="Request on Seer">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                             </svg>
+                            <span>Request on Seer</span>
                         </a>
                         {% endif %}
 
-                        <!-- Generate Show Summary Button -->
-                        <button id="generate-show-summary-btn" onclick="generateShowSummary()" 
-                            class="flex-shrink-0 p-3 rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-md hover:shadow-lg"
+                        <!-- AI Summary -->
+                        <button id="generate-show-summary-btn" onclick="generateShowSummary()"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-indigo-400/60 bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500 hover:border-indigo-500 hover:text-white hover:shadow-md hover:shadow-indigo-500/25"
                             title="{% if show_summary %}Regenerate{% else %}Generate{% endif %} show summary with AI">
-                            <svg class="w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-indigo-500" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                                </path>
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
                             </svg>
+                            <span>{% if show_summary %}Regenerate Summary{% else %}AI Summary{% endif %}</span>
                         </button>
-                        {% endif %}
-                    </div>
 
-                    {% if show.year_display %}
-                    <p class="text-xl sm:text-2xl text-gray-700 dark:text-gray-300 mb-4 font-light">
-                        ({{ show.year_display }})
-                    </p>
+                        <!-- Report Issue (secondary / low-key) -->
+                        <button onclick="openReportModal()"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-slate-300/50 dark:border-slate-600/50 text-slate-400 dark:text-slate-500 hover:border-rose-400/60 hover:bg-rose-400/10 hover:text-rose-500 dark:hover:text-rose-400"
+                            title="Report a problem">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/>
+                            </svg>
+                            <span>Report Issue</span>
+                        </button>
+
+                    </div>
                     {% endif %}
 
                     <div
@@ -720,13 +704,25 @@
     function updateFavoriteIcon(favorited) {
         const emptyIcon = document.getElementById('favorite-icon-empty');
         const filledIcon = document.getElementById('favorite-icon-filled');
+        const label = document.getElementById('favorite-label');
+        const btn = document.getElementById('favorite-btn');
 
         if (favorited) {
             emptyIcon.classList.add('hidden');
             filledIcon.classList.remove('hidden');
+            if (label) label.textContent = 'Favorited';
+            if (btn) {
+                btn.classList.remove('border-amber-400/60', 'bg-amber-400/10', 'text-amber-600', 'dark:text-amber-400');
+                btn.classList.add('bg-amber-500', 'border-amber-500', 'text-white');
+            }
         } else {
             emptyIcon.classList.remove('hidden');
             filledIcon.classList.add('hidden');
+            if (label) label.textContent = 'Favorite';
+            if (btn) {
+                btn.classList.add('border-amber-400/60', 'bg-amber-400/10', 'text-amber-600', 'dark:text-amber-400');
+                btn.classList.remove('bg-amber-500', 'border-amber-500', 'text-white');
+            }
         }
     }
 
