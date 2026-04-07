@@ -5365,28 +5365,45 @@ def update_profile_settings():
                 # Store relative URL
                 photo_url = f"/static/uploads/profiles/{filename}"
 
-        # Update user profile
+        # Determine if the active member is a sub-profile (non-default)
+        active_member_id = session.get('member_id')
+        active_is_subprofile = False
+        if active_member_id and photo_url:
+            m = db.execute(
+                'SELECT is_default FROM household_members WHERE id = ? AND user_id = ?',
+                (active_member_id, user_id)
+            ).fetchone()
+            if m and not m['is_default']:
+                active_is_subprofile = True
+
+        # Always update bio/privacy on the user account
+        db.execute('''
+            UPDATE users
+            SET bio = ?, profile_show_profile = ?, profile_show_lists = ?,
+                profile_show_favorites = ?, profile_show_history = ?,
+                profile_show_progress = ?, allow_recommendations = ?
+            WHERE id = ?
+        ''', (bio, profile_show_profile, profile_show_lists,
+              profile_show_favorites, profile_show_history, profile_show_progress,
+              allow_recommendations, user_id))
+
+        # Handle photo: sub-profiles save to household_members.avatar_url only;
+        # primary account saves to users.profile_photo_url and syncs default member row.
         if photo_url:
-            db.execute('''
-                UPDATE users
-                SET bio = ?, profile_photo_url = ?,
-                    profile_show_profile = ?, profile_show_lists = ?,
-                    profile_show_favorites = ?, profile_show_history = ?,
-                    profile_show_progress = ?, allow_recommendations = ?
-                WHERE id = ?
-            ''', (bio, photo_url, profile_show_profile, profile_show_lists,
-                  profile_show_favorites, profile_show_history, profile_show_progress,
-                  allow_recommendations, user_id))
-        else:
-            db.execute('''
-                UPDATE users
-                SET bio = ?, profile_show_profile = ?, profile_show_lists = ?,
-                    profile_show_favorites = ?, profile_show_history = ?,
-                    profile_show_progress = ?, allow_recommendations = ?
-                WHERE id = ?
-            ''', (bio, profile_show_profile, profile_show_lists,
-                  profile_show_favorites, profile_show_history, profile_show_progress,
-                  allow_recommendations, user_id))
+            if active_is_subprofile:
+                db.execute(
+                    'UPDATE household_members SET avatar_url = ? WHERE id = ?',
+                    (photo_url, active_member_id)
+                )
+            else:
+                db.execute(
+                    'UPDATE users SET profile_photo_url = ? WHERE id = ?',
+                    (photo_url, user_id)
+                )
+                db.execute(
+                    'UPDATE household_members SET avatar_url = ? WHERE user_id = ? AND is_default = 1',
+                    (photo_url, user_id)
+                )
 
         db.commit()
 

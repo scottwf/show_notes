@@ -7,14 +7,29 @@
     <form id="profile-settings-form" class="space-y-6">
         <!-- Profile Photo -->
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+            {% if current_member and not current_member.is_default %}
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">Profile Photo</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Avatar for <span class="font-medium">{{ current_member.display_name }}</span>'s profile.</p>
+            {% else %}
             <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Profile Photo</h3>
+            {% endif %}
 
             <div class="flex items-center gap-6">
                 <div class="relative">
+                    {% if current_member and not current_member.is_default %}
+                    {# Sub-profile: show member avatar_color + avatar_url #}
+                    <div id="profile-photo-preview" class="w-32 h-32 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-lg overflow-hidden"
+                         style="background-color: {{ current_member.avatar_color }};">
+                        <span id="profile-initials" class="{% if current_member.avatar_url %}hidden{% endif %}">{{ current_member.display_name[0].upper() }}</span>
+                        <img id="profile-photo-img" src="{{ current_member.avatar_url or '' }}" alt="{{ current_member.display_name }}" class="w-full h-full object-cover absolute inset-0 {% if not current_member.avatar_url %}hidden{% endif %}">
+                    </div>
+                    {% else %}
+                    {# Primary account #}
                     <div id="profile-photo-preview" class="w-32 h-32 rounded-full bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg overflow-hidden">
                         <span id="profile-initials" class="{% if user.profile_photo_url %}hidden{% endif %}">{{ user.username[0].upper() }}</span>
-                        <img id="profile-photo-img" src="{{ user.profile_photo_url }}" alt="Profile" class="w-full h-full object-cover absolute inset-0 {% if not user.profile_photo_url %}hidden{% endif %}">
+                        <img id="profile-photo-img" src="{{ user.profile_photo_url or '' }}" alt="Profile" class="w-full h-full object-cover absolute inset-0 {% if not user.profile_photo_url %}hidden{% endif %}">
                     </div>
+                    {% endif %}
                 </div>
 
                 <div class="flex-1">
@@ -23,7 +38,8 @@
                         Upload Photo
                     </button>
                     <p class="text-sm text-slate-500 dark:text-slate-400">JPG, PNG or GIF. Max size 5MB.</p>
-                    {% if user.profile_photo_url %}
+                    {% set has_photo = (current_member.avatar_url if current_member and not current_member.is_default else user.profile_photo_url) %}
+                    {% if has_photo %}
                     <button type="button" onclick="removePhoto()" class="text-sm text-red-600 hover:text-red-700 dark:text-red-400 mt-2">
                         Remove photo
                     </button>
