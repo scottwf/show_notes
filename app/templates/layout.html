@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{% block page_title %}{% endblock %} - ShowNotes{% endblock %}
+{% block title %}{%- set _pt %}{% block page_title %}{% endblock %}{% endset -%}{% if _pt.strip() %}{{ _pt.strip() }} - {% endif %}ShowNotes{% endblock %}
 
 {% block head %}
 

@@ -1,0 +1,21 @@
+{
+  "name": "ShowNotes",
+  "short_name": "ShowNotes",
+  "description": "Your Plex companion — show notes, favorites, and watch history",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/static/logos/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/logos/shownotes.png",
+      "sizes": "444x346",
+      "type": "image/png"
+    }
+  ]
+}
