@@ -814,11 +814,10 @@ def update_user_permissions(user_id):
 @login_required
 @admin_required
 def import_plex_users():
-    """Fetch Plex home users and create inactive ShowNotes accounts for any not yet registered."""
+    """Fetch all Plex users (home/managed + friends) and create inactive accounts for any not registered."""
     import requests as _requests
     db = database.get_db()
 
-    # Use the admin's stored Plex token
     admin_row = db.execute(
         'SELECT plex_token FROM users WHERE is_admin = 1 AND plex_token IS NOT NULL ORDER BY id LIMIT 1'
     ).fetchone()
@@ -833,20 +832,34 @@ def import_plex_users():
         'Accept': 'application/json',
     }
 
-    try:
-        resp = _requests.get('https://plex.tv/api/v2/home/users', headers=headers, timeout=10)
-        resp.raise_for_status()
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'Plex API error: {e}'}), 502
+    # Collect from all sources, deduplicated by plex_id
+    candidates = {}  # plex_id -> user dict
 
-    plex_users = resp.json().get('users', [])
+    def _collect(url, extract):
+        """Fetch a Plex endpoint and merge results into candidates."""
+        try:
+            resp = _requests.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            for pu in extract(resp):
+                pid = str(pu.get('id', ''))
+                if pid and pid not in candidates:
+                    candidates[pid] = pu
+        except Exception as e:
+            current_app.logger.warning(f'Plex import: {url} failed — {e}')
+
+    # 1. Plex Home managed users
+    _collect('https://plex.tv/api/v2/home/users',
+             lambda r: r.json().get('users', []))
+
+    # 2. Plex friends (shared-server users)
+    _collect('https://plex.tv/api/v2/friends',
+             lambda r: r.json() if isinstance(r.json(), list) else r.json().get('friends', []))
+
+    if not candidates:
+        return jsonify({'success': False, 'error': 'No users returned from Plex. Check your token.'}), 502
 
     imported, skipped = [], []
-    for pu in plex_users:
-        plex_id = str(pu.get('id', ''))
-        if not plex_id:
-            continue
-
+    for plex_id, pu in candidates.items():
         if db.execute('SELECT id FROM users WHERE plex_user_id = ?', (plex_id,)).fetchone():
             skipped.append(pu.get('title') or pu.get('username') or plex_id)
             continue
@@ -865,7 +878,8 @@ def import_plex_users():
         imported.append(username)
 
     db.commit()
-    return jsonify({'success': True, 'imported': imported, 'skipped': skipped})
+    return jsonify({'success': True, 'imported': imported, 'skipped': skipped,
+                    'sources': {'home_users': True, 'friends': True}})
 
 
 @admin_bp.route('/logs/list', methods=['GET'])
