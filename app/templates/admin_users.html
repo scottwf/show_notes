@@ -202,9 +202,9 @@
               </div>
             </div>
           </td>
-          <!-- Last Login — same as parent account -->
+          <!-- Last Active — when this member profile was last selected -->
           <td class="px-4 py-2 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
-            {% if user.last_login_at %}{{ user.last_login_at[:16].replace('T', ' ') }}{% else %}<span class="text-slate-400">—</span>{% endif %}
+            {% if member.last_active_at %}{{ member.last_active_at[:16].replace('T', ' ') }}{% else %}<span class="text-slate-400">—</span>{% endif %}
           </td>
           <!-- Last Watched — same Plex account -->
           <td class="px-4 py-2 text-slate-500 dark:text-slate-400 max-w-xs text-xs">

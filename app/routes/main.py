@@ -71,9 +71,15 @@ def get_user_members(user_id):
     ).fetchall()
 
 def set_member_session(member_id):
-    """Store the chosen member_id in the Flask session."""
+    """Store the chosen member_id in the Flask session and record activity time."""
     session['member_id'] = member_id
     session.modified = True
+    try:
+        db = database.get_db()
+        db.execute('UPDATE household_members SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?', (member_id,))
+        db.commit()
+    except Exception:
+        pass
 
 
 @main_bp.context_processor

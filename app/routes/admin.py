@@ -739,7 +739,7 @@ def admin_users():
 
     # Household sub-profiles (non-default members) grouped by user_id
     hm_rows = db.execute('''
-        SELECT id, user_id, display_name, avatar_color, avatar_url
+        SELECT id, user_id, display_name, avatar_color, avatar_url, last_active_at
         FROM household_members WHERE is_default = 0
         ORDER BY user_id, created_at
     ''').fetchall()
