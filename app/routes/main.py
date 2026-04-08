@@ -5402,6 +5402,7 @@ def calendar():
         'premieres': make_feed('premieres'),
         'series': make_feed('series'),
         'finales': make_feed('finales'),
+        'movies': make_feed('movies'),
     } if ical_token else None
 
     return render_template('calendar.html',
@@ -5428,7 +5429,7 @@ def calendar_ical_feed(token):
         return 'Not found', 404
 
     feed_filter = flask_request.args.get('filter', 'all')
-    if feed_filter not in ('all', 'premieres', 'series', 'finales'):
+    if feed_filter not in ('all', 'premieres', 'series', 'finales', 'movies'):
         feed_filter = 'all'
     alarm = flask_request.args.get('alarm', '1d')
     if alarm not in ('1d', '2h', 'none'):

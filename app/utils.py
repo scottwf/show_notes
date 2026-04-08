@@ -2237,6 +2237,22 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
         """, favorited_show_ids + [now_str, ninety_days + ' 23:59:59']).fetchall()
         events = [dict(r) for r in rows]
 
+    # Movies feed: upcoming monitored Radarr releases (not yet downloaded)
+    if feed_filter == 'movies':
+        movie_rows = db.execute("""
+            SELECT id, title, release_date, overview, tmdb_id
+            FROM radarr_movies
+            WHERE monitored = 1
+              AND has_file = 0
+              AND release_date >= ?
+              AND release_date <= ?
+            ORDER BY release_date ASC
+            LIMIT 200
+        """, (now_str[:10], ninety_days)).fetchall()
+        movie_events = [dict(r) for r in movie_rows]
+    else:
+        movie_events = []
+
     lines = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
@@ -2247,6 +2263,21 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
         'METHOD:PUBLISH',
     ]
 
+    def append_alarm(lines, title, alarm):
+        if alarm == '1d':
+            lines.append('BEGIN:VALARM')
+            lines.append('ACTION:DISPLAY')
+            lines.append('TRIGGER:-P1D')
+            lines.append(f'DESCRIPTION:{ical_escape("Reminder: " + title + " airs tomorrow")}')
+            lines.append('END:VALARM')
+        elif alarm == '2h':
+            lines.append('BEGIN:VALARM')
+            lines.append('ACTION:DISPLAY')
+            lines.append('TRIGGER:-PT2H')
+            lines.append(f'DESCRIPTION:{ical_escape("Reminder: " + title + " airs today")}')
+            lines.append('END:VALARM')
+
+    # TV episode events
     for ev in events:
         air_date = ev.get('air_date_utc', '')
         if not air_date:
@@ -2274,39 +2305,42 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
             label = ''
 
         summary = f'{show_title} - S{sn:02d}E{en:02d}: {ep_title}{label}'
-        description = ev.get('overview') or ''
-
-        uid = f'shownotes-ep-{ev["id"]}-{feed_filter}@shownotes'
 
         lines.append('BEGIN:VEVENT')
-        lines.append(f'UID:{uid}')
+        lines.append(f'UID:shownotes-ep-{ev["id"]}-{feed_filter}@shownotes')
         lines.append(f'DTSTART;VALUE=DATE:{date_str}')
         lines.append(f'DTEND;VALUE=DATE:{date_str}')
         lines.append(f'SUMMARY:{ical_escape(summary)}')
-        if description:
-            lines.append(f'DESCRIPTION:{ical_escape(description)}')
+        if ev.get('overview'):
+            lines.append(f'DESCRIPTION:{ical_escape(ev["overview"])}')
         lines.append(f'DTSTAMP:{now_utc.strftime("%Y%m%dT%H%M%SZ")}')
+        append_alarm(lines, show_title, alarm)
+        lines.append('END:VEVENT')
 
-        # VALARM — alert before the event
-        # For all-day events, alarms trigger relative to midnight on the day.
-        # -P1D = 1 day before (i.e. the day before at midnight, which most apps
-        # show as an alert the prior evening or morning depending on the app).
-        if alarm == '1d':
-            alarm_trigger = '-P1D'
-            alarm_desc = ical_escape(f'Reminder: {show_title} airs tomorrow')
-        elif alarm == '2h':
-            alarm_trigger = '-PT2H'
-            alarm_desc = ical_escape(f'Reminder: {show_title} airs today')
-        else:
-            alarm_trigger = None
+    # Movie events
+    for mv in movie_events:
+        release_date = mv.get('release_date', '')
+        if not release_date:
+            continue
+        try:
+            date_str = str(release_date)[:10].replace('-', '')
+            if len(date_str) != 8:
+                continue
+        except Exception:
+            continue
 
-        if alarm_trigger:
-            lines.append('BEGIN:VALARM')
-            lines.append('ACTION:DISPLAY')
-            lines.append(f'TRIGGER:{alarm_trigger}')
-            lines.append(f'DESCRIPTION:{alarm_desc}')
-            lines.append('END:VALARM')
+        title = mv.get('title', 'Unknown Movie')
+        summary = f'\U0001f3a5 {title}'
 
+        lines.append('BEGIN:VEVENT')
+        lines.append(f'UID:shownotes-movie-{mv["id"]}@shownotes')
+        lines.append(f'DTSTART;VALUE=DATE:{date_str}')
+        lines.append(f'DTEND;VALUE=DATE:{date_str}')
+        lines.append(f'SUMMARY:{ical_escape(summary)}')
+        if mv.get('overview'):
+            lines.append(f'DESCRIPTION:{ical_escape(mv["overview"])}')
+        lines.append(f'DTSTAMP:{now_utc.strftime("%Y%m%dT%H%M%SZ")}')
+        append_alarm(lines, title, alarm)
         lines.append('END:VEVENT')
 
     lines.append('END:VCALENDAR')
