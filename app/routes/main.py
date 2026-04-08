@@ -5287,14 +5287,27 @@ def profile_settings():
 
     # Convert user row to dict so we can add the plex_member_since field
     user_dict = dict(user)
-    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get profile statistics using helper function
     stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
+    # iCal feed base URLs (no alarm param — set per-feed in the UI)
+    ical_token = user_dict.get('ical_token')
+    ical_feed_bases = None
+    if ical_token:
+        ical_feed_bases = {
+            'all':      url_for('main.calendar_ical_feed', token=ical_token, filter='all',      _external=True),
+            'premieres':url_for('main.calendar_ical_feed', token=ical_token, filter='premieres',_external=True),
+            'series':   url_for('main.calendar_ical_feed', token=ical_token, filter='series',   _external=True),
+            'finales':  url_for('main.calendar_ical_feed', token=ical_token, filter='finales',  _external=True),
+            'movies':   url_for('main.calendar_ical_feed', token=ical_token, filter='movies',   _external=True),
+        }
+
     return render_template('profile_settings.html',
                          user=user_dict,
+                         ical_token=ical_token,
+                         ical_feed_bases=ical_feed_bases,
                          **stats,
                          active_tab='settings')
 
@@ -5387,30 +5400,10 @@ def calendar():
             ep_dict['finale_date'] = ep.get('air_date_utc')
         formatted_finales.append(ep_dict)
 
-    # Get user's iCal token for feed URLs
-    user_row = db.execute('SELECT ical_token FROM users WHERE id = ?', (user_id,)).fetchone()
-    ical_token = user_row['ical_token'] if user_row else None
-
-    def make_feed(filter_name, alarm='1d'):
-        if not ical_token:
-            return None
-        return url_for('main.calendar_ical_feed', token=ical_token,
-                       filter=filter_name, alarm=alarm, _external=True)
-
-    ical_feeds = {
-        'all': make_feed('all'),
-        'premieres': make_feed('premieres'),
-        'series': make_feed('series'),
-        'finales': make_feed('finales'),
-        'movies': make_feed('movies'),
-    } if ical_token else None
-
     return render_template('calendar.html',
                          upcoming_episodes=formatted_upcoming,
                          series_premieres=formatted_premieres,
-                         season_finales=formatted_finales,
-                         ical_token=ical_token,
-                         ical_feeds=ical_feeds)
+                         season_finales=formatted_finales)
 
 @main_bp.route('/calendar/feed/<token>.ics')
 def calendar_ical_feed(token):

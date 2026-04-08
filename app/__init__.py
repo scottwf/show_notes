@@ -4,6 +4,7 @@ from datetime import timedelta, datetime
 from logging.handlers import RotatingFileHandler
 from flask import Flask
 from flask_login import LoginManager
+from werkzeug.middleware.proxy_fix import ProxyFix
 from markupsafe import Markup
 import markdown
 from . import database
@@ -118,6 +119,10 @@ def create_app(test_config=None):
             # Log the error if the database query fails (e.g., table not yet created)
             app.logger.error(f"Error loading user {user_id} from database: {e}")
         return None # Return None if the user is not found or an error occurs
+
+    # Trust X-Forwarded-Proto/Host from reverse proxy (Traefik/Cloudflare)
+    # so that url_for(..., _external=True) generates https:// URLs correctly.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
     # --- Register Blueprints ---
     from .routes.main import main_bp
