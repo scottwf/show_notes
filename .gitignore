@@ -237,3 +237,6 @@ cython_debug/
 .cursorindexingignoredb_backups/
 db_backups/
 .github/copilot-instructions.md
+
+# Local reference screenshots
+reference/
