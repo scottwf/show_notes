@@ -192,6 +192,14 @@ class TVMazeService(EpisodeDataService):
             logger.info(f"Fetched {len(data)} cast members for TVMaze ID {tvmaze_id}")
         return data if data else []
 
+    def get_show_crew(self, tvmaze_id: int) -> List[Dict]:
+        """Get crew information for a show (creators, executive producers, etc.)"""
+        url = f"{self.base_url}/shows/{tvmaze_id}/crew"
+        data = self._make_request(url)
+        if data:
+            logger.info(f"Fetched {len(data)} crew members for TVMaze ID {tvmaze_id}")
+        return data if data else []
+
 class TheTVDBService(EpisodeDataService):
     """Service to fetch data from TheTVDB API v4"""
 

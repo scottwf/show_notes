@@ -64,6 +64,10 @@ class TVMazeEnrichmentService:
             if cast_data:
                 self._store_cast_data(db, tvmaze_id, cast_data)
 
+            crew_data = self.tvmaze.get_show_crew(tvmaze_id)
+            if crew_data:
+                self._store_crew_data(db, show_db_id, crew_data)
+
             db.commit()
             logger.info(f"Successfully enriched '{show_title}'")
             return True
@@ -163,5 +167,38 @@ class TVMazeEnrichmentService:
                 char_img, person_img, idx,
                 member.get('voice', False)
             ))
+
+    def _store_crew_data(self, db, show_db_id: int, crew_data: List[Dict]):
+        """Store key crew members (creators, executive producers) in show_crew table."""
+        # Only store the roles we want to display
+        keep_jobs = {'Creator', 'Executive Producer', 'Showrunner', 'Co-Creator'}
+
+        db.execute("DELETE FROM show_crew WHERE show_id = ?", (show_db_id,))
+
+        # Deduplicate: one row per person per job
+        seen = set()
+        sort_order = 0
+        for member in crew_data:
+            job = member.get('type', '')
+            if job not in keep_jobs:
+                continue
+            person = member.get('person', {}) or {}
+            person_name = person.get('name')
+            if not person_name:
+                continue
+            key = (person_name, job)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            person_img = None
+            if person.get('image'):
+                person_img = person['image'].get('medium') or person['image'].get('original')
+
+            db.execute("""
+                INSERT INTO show_crew (show_id, person_name, job, person_image_url, tvmaze_person_id, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (show_db_id, person_name, job, person_img, person.get('id'), sort_order))
+            sort_order += 1
 
 tvmaze_enrichment_service = TVMazeEnrichmentService()

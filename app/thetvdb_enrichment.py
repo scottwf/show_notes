@@ -96,6 +96,19 @@ class TheTVDBEnrichmentService:
             if characters:
                 self._store_cast_data(db, tvdb_id, show_db_id, characters)
 
+            # Fetch crew from TVMaze (TVDB doesn't provide crew data)
+            try:
+                from app.tvmaze_enrichment import tvmaze_enrichment_service
+                tvmaze_data = self.tvmaze_fallback.tvmaze.lookup_show_by_tvdb_id(tvdb_id)
+                if tvmaze_data:
+                    tvmaze_id = tvmaze_data.get('id')
+                    if tvmaze_id:
+                        crew_data = self.tvmaze_fallback.tvmaze.get_show_crew(tvmaze_id)
+                        if crew_data:
+                            tvmaze_enrichment_service._store_crew_data(db, show_db_id, crew_data)
+            except Exception as e_crew:
+                logger.warning(f"Could not fetch crew for '{show_title}': {e_crew}")
+
             db.commit()
             logger.info(f"Successfully enriched '{show_title}' from TheTVDB")
             return True
