@@ -5292,16 +5292,17 @@ def profile_settings():
     # Get profile statistics using helper function
     stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
-    # iCal feed base URLs (no alarm param — set per-feed in the UI)
+    # iCal feed URL paths — scheme/host added client-side via window.location.origin
+    # so the URLs always match however the user is actually accessing the site (https).
     ical_token = user_dict.get('ical_token')
     ical_feed_bases = None
     if ical_token:
         ical_feed_bases = {
-            'all':      url_for('main.calendar_ical_feed', token=ical_token, filter='all',      _external=True),
-            'premieres':url_for('main.calendar_ical_feed', token=ical_token, filter='premieres',_external=True),
-            'series':   url_for('main.calendar_ical_feed', token=ical_token, filter='series',   _external=True),
-            'finales':  url_for('main.calendar_ical_feed', token=ical_token, filter='finales',  _external=True),
-            'movies':   url_for('main.calendar_ical_feed', token=ical_token, filter='movies',   _external=True),
+            'all':      url_for('main.calendar_ical_feed', token=ical_token, filter='all'),
+            'premieres':url_for('main.calendar_ical_feed', token=ical_token, filter='premieres'),
+            'series':   url_for('main.calendar_ical_feed', token=ical_token, filter='series'),
+            'finales':  url_for('main.calendar_ical_feed', token=ical_token, filter='finales'),
+            'movies':   url_for('main.calendar_ical_feed', token=ical_token, filter='movies'),
         }
 
     return render_template('profile_settings.html',
