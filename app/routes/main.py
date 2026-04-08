@@ -6530,7 +6530,7 @@ def _build_public_profile_context(db, viewed_user, member_id=None):
     recent_activity = []
     if viewed_user['profile_show_activity']:
         recent_activity = db.execute('''
-            SELECT show_title, episode_title, season_number, episode_number,
+            SELECT show_title, title as episode_title, season_episode,
                    event_type, event_timestamp
             FROM plex_activity_log
             WHERE plex_username = ? AND event_type IN ('media.play','media.scrobble')

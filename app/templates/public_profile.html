@@ -196,8 +196,8 @@
             <div class="min-w-0">
               <div class="text-sm text-slate-700 dark:text-slate-200 truncate">
                 {{ act.show_title }}
-                {% if act.season_number and act.episode_number %}
-                <span class="text-slate-400 text-xs">S{{ '%02d'|format(act.season_number) }}E{{ '%02d'|format(act.episode_number) }}</span>
+                {% if act.season_episode %}
+                <span class="text-slate-400 text-xs">{{ act.season_episode }}</span>
                 {% endif %}
               </div>
               {% if act.episode_title %}
