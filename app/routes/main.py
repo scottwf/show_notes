@@ -5365,23 +5365,81 @@ def calendar():
                                              tmdb_id=tmdb_id,
                                              season_number=ep.get('season_number'),
                                              episode_number=ep.get('episode_number'))
-            # Rename fields for template compatibility
             ep_dict['show_db_id'] = ep.get('show_id')
-
-            # Add premiere type label
             if ep.get('is_series_premiere'):
                 ep_dict['premiere_type'] = 'Series Premiere'
             else:
                 ep_dict['premiere_type'] = f"Season {ep.get('season_number')} Premiere"
-
-            # Rename air_date field for template
             ep_dict['premiere_date'] = ep.get('air_date_utc')
-
         formatted_premieres.append(ep_dict)
+
+    # Format finales for template (tracked shows only)
+    formatted_finales = []
+    for ep in calendar_data.get('tracked_finales', []):
+        ep_dict = ep.copy()
+        tmdb_id = ep.get('tmdb_id')
+        if tmdb_id:
+            ep_dict['episode_url'] = url_for('main.episode_detail',
+                                             tmdb_id=tmdb_id,
+                                             season_number=ep.get('season_number'),
+                                             episode_number=ep.get('episode_number'))
+            ep_dict['show_db_id'] = ep.get('show_id')
+            ep_dict['finale_date'] = ep.get('air_date_utc')
+        formatted_finales.append(ep_dict)
+
+    # Get user's iCal feed URL
+    user_row = db.execute('SELECT ical_token FROM users WHERE id = ?', (user_id,)).fetchone()
+    ical_token = user_row['ical_token'] if user_row else None
+    ical_feed_url = url_for('main.calendar_ical_feed', token=ical_token, _external=True) if ical_token else None
 
     return render_template('calendar.html',
                          upcoming_episodes=formatted_upcoming,
-                         series_premieres=formatted_premieres)
+                         series_premieres=formatted_premieres,
+                         season_finales=formatted_finales,
+                         ical_feed_url=ical_feed_url)
+
+@main_bp.route('/calendar/feed/<token>.ics')
+def calendar_ical_feed(token):
+    """
+    Serve a personal iCal (.ics) feed for a user based on their unique token.
+    No login required — token acts as the auth credential.
+    """
+    db = database.get_db()
+    user_row = db.execute('SELECT id FROM users WHERE ical_token = ?', (token,)).fetchone()
+    if not user_row:
+        return 'Not found', 404
+
+    from app import utils
+    ical_content = utils.generate_ical_for_user(db, user_row['id'])
+
+    from flask import Response
+    return Response(
+        ical_content,
+        mimetype='text/calendar',
+        headers={
+            'Content-Disposition': 'inline; filename="shownotes.ics"',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+        }
+    )
+
+
+@main_bp.route('/api/calendar/regenerate-token', methods=['POST'])
+@login_required
+def regenerate_ical_token():
+    """Regenerate the user's iCal feed token."""
+    import secrets
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+
+    db = database.get_db()
+    new_token = secrets.token_urlsafe(32)
+    db.execute('UPDATE users SET ical_token = ? WHERE id = ?', (new_token, user_id))
+    db.commit()
+
+    new_url = url_for('main.calendar_ical_feed', token=new_token, _external=True)
+    return jsonify({'success': True, 'token': new_token, 'feed_url': new_url})
+
 
 @main_bp.route('/api/profile/settings', methods=['POST'])
 @login_required
@@ -6351,87 +6409,84 @@ def generate_season_summary_route():
 @main_bp.route('/members')
 @login_required
 def members():
-    """Community page — lists all users with public profiles."""
+    """Community page — lists all users with public profiles, including sub-profiles."""
     db = database.get_db()
     users = db.execute('''
         SELECT u.id, u.username, u.bio, u.profile_photo_url,
                u.profile_show_profile, u.profile_show_favorites,
                u.profile_show_stats, u.profile_show_activity,
                u.is_active,
-               MAX(pal.event_timestamp) as last_seen,
-               COUNT(DISTINCT uf.id) as favorite_count
+               MAX(pal.event_timestamp) as last_seen
         FROM users u
         LEFT JOIN plex_activity_log pal ON pal.plex_username = u.plex_username
-        LEFT JOIN user_favorites uf ON uf.user_id = u.id AND uf.is_dropped = 0
         WHERE u.is_active = 1 AND u.profile_show_profile = 1
         GROUP BY u.id
         ORDER BY last_seen DESC NULLS LAST, u.username
     ''').fetchall()
 
-    # Attach default member avatar/color for each user
     members_data = []
     for u in users:
         u = dict(u)
-        dm = db.execute(
-            'SELECT avatar_url, avatar_color, display_name FROM household_members WHERE user_id = ? AND is_default = 1',
-            (u['id'],)
-        ).fetchone()
-        u['avatar_url'] = dm['avatar_url'] if dm else None
-        u['avatar_color'] = (dm['avatar_color'] if dm else None) or '#0ea5e9'
-        u['display_name'] = dm['display_name'] if dm else u['username']
-        members_data.append(u)
+        uid = u['id']
+        # Fetch all members for this user (default first, then sub-profiles)
+        hm_rows = db.execute(
+            '''SELECT id, display_name, avatar_url, avatar_color, is_default,
+                      (SELECT COUNT(*) FROM user_favorites WHERE user_id=? AND member_id=household_members.id AND is_dropped=0) as favorite_count
+               FROM household_members WHERE user_id=? ORDER BY is_default DESC, display_name''',
+            (uid, uid)
+        ).fetchall()
+
+        for hm in hm_rows:
+            entry = dict(u)  # inherit privacy flags from parent user
+            entry['member_id'] = hm['id']
+            entry['display_name'] = hm['display_name']
+            entry['avatar_url'] = hm['avatar_url']
+            entry['avatar_color'] = hm['avatar_color'] or '#0ea5e9'
+            entry['is_default'] = hm['is_default']
+            entry['favorite_count'] = hm['favorite_count']
+            # URL: default member → /members/<username>, sub-profile → /members/<username>/<member_id>
+            if hm['is_default']:
+                entry['profile_url'] = url_for('main.public_profile', username=u['username'])
+            else:
+                entry['profile_url'] = url_for('main.public_subprofile', username=u['username'], member_id=hm['id'])
+            members_data.append(entry)
 
     stats = _get_profile_stats(db)
     return render_template('members.html', members=members_data, **stats)
 
 
-@main_bp.route('/members/<username>')
-@login_required
-def public_profile(username):
-    """Public profile page for a specific user, respecting their privacy flags."""
-    db = database.get_db()
-    viewed_user = db.execute(
-        'SELECT * FROM users WHERE username = ? AND is_active = 1',
-        (username,)
-    ).fetchone()
-
-    if not viewed_user:
-        abort(404)
-
-    if not viewed_user['profile_show_profile']:
-        flash('This profile is private.', 'info')
-        return redirect(url_for('main.members'))
-
-    viewed_user = dict(viewed_user)
-    dm = db.execute(
-        'SELECT avatar_url, avatar_color, display_name FROM household_members WHERE user_id = ? AND is_default = 1',
-        (viewed_user['id'],)
-    ).fetchone()
-    viewed_user['avatar_url'] = dm['avatar_url'] if dm else None
-    viewed_user['avatar_color'] = (dm['avatar_color'] if dm else None) or '#0ea5e9'
-    viewed_user['display_name'] = dm['display_name'] if dm else viewed_user['username']
-    viewed_user['plex_member_since'] = viewed_user.get('plex_joined_at') or viewed_user.get('created_at')
-    viewed_user['is_self'] = (session.get('user_id') == viewed_user['id'])
-
+def _build_public_profile_context(db, viewed_user, member_id=None):
+    """Shared logic for building public profile context for a user/member."""
     uid = viewed_user['id']
 
-    # Favorites (if permitted)
+    # Favorites — scoped to the specific member if given, otherwise default member
     favorites = []
     if viewed_user['profile_show_favorites']:
-        favorites = db.execute('''
-            SELECT s.id as show_db_id, s.tmdb_id, s.title, s.year, s.status,
-                   s.poster_url, s.overview, uf.added_at
-            FROM user_favorites uf
-            JOIN sonarr_shows s ON s.id = uf.show_id
-            JOIN household_members hm ON hm.id = uf.member_id AND hm.is_default = 1
-            WHERE uf.user_id = ? AND uf.is_dropped = 0
-            ORDER BY uf.added_at DESC
-            LIMIT 20
-        ''', (uid,)).fetchall()
+        if member_id:
+            favorites = db.execute('''
+                SELECT s.id as show_db_id, s.tmdb_id, s.title, s.year, s.status,
+                       s.poster_url, s.overview, uf.added_at
+                FROM user_favorites uf
+                JOIN sonarr_shows s ON s.id = uf.show_id
+                WHERE uf.user_id = ? AND uf.member_id = ? AND uf.is_dropped = 0
+                ORDER BY uf.added_at DESC
+                LIMIT 20
+            ''', (uid, member_id)).fetchall()
+        else:
+            favorites = db.execute('''
+                SELECT s.id as show_db_id, s.tmdb_id, s.title, s.year, s.status,
+                       s.poster_url, s.overview, uf.added_at
+                FROM user_favorites uf
+                JOIN sonarr_shows s ON s.id = uf.show_id
+                JOIN household_members hm ON hm.id = uf.member_id AND hm.is_default = 1
+                WHERE uf.user_id = ? AND uf.is_dropped = 0
+                ORDER BY uf.added_at DESC
+                LIMIT 20
+            ''', (uid,)).fetchall()
 
-    # Public lists (if permitted)
+    # Public lists — not member-scoped
     lists = []
-    if viewed_user['profile_show_lists'] if 'profile_show_lists' in viewed_user else True:
+    if viewed_user.get('profile_show_lists', 1):
         lists = db.execute('''
             SELECT id, name, description, updated_at,
                    (SELECT COUNT(*) FROM user_list_items WHERE list_id = user_lists.id) as item_count
@@ -6440,7 +6495,7 @@ def public_profile(username):
             ORDER BY updated_at DESC
         ''', (uid,)).fetchall()
 
-    # Watch stats summary (if permitted)
+    # Watch stats — account-level (Plex doesn't distinguish sub-profiles)
     watch_stats = None
     if viewed_user['profile_show_stats']:
         watch_stats = db.execute('''
@@ -6452,7 +6507,7 @@ def public_profile(username):
             WHERE plex_username = ?
         ''', (viewed_user.get('plex_username', ''),)).fetchone()
 
-    # Recent activity (last 10 plays, if permitted)
+    # Recent activity — account-level
     recent_activity = []
     if viewed_user['profile_show_activity']:
         recent_activity = db.execute('''
@@ -6464,12 +6519,77 @@ def public_profile(username):
             LIMIT 10
         ''', (viewed_user.get('plex_username', ''),)).fetchall()
 
+    return dict(favorites=favorites, lists=lists, watch_stats=watch_stats, recent_activity=recent_activity)
+
+
+@main_bp.route('/members/<username>')
+@login_required
+def public_profile(username):
+    """Public profile page — default member of a user account."""
+    db = database.get_db()
+    viewed_user = db.execute(
+        'SELECT * FROM users WHERE username = ? AND is_active = 1', (username,)
+    ).fetchone()
+    if not viewed_user:
+        abort(404)
+    if not viewed_user['profile_show_profile']:
+        flash('This profile is private.', 'info')
+        return redirect(url_for('main.members'))
+
+    viewed_user = dict(viewed_user)
+    dm = db.execute(
+        'SELECT id, avatar_url, avatar_color, display_name FROM household_members WHERE user_id = ? AND is_default = 1',
+        (viewed_user['id'],)
+    ).fetchone()
+    viewed_user['member_id'] = dm['id'] if dm else None
+    viewed_user['avatar_url'] = dm['avatar_url'] if dm else None
+    viewed_user['avatar_color'] = (dm['avatar_color'] if dm else None) or '#0ea5e9'
+    viewed_user['display_name'] = dm['display_name'] if dm else viewed_user['username']
+    viewed_user['plex_member_since'] = viewed_user.get('plex_joined_at') or viewed_user.get('created_at')
+    viewed_user['is_self'] = (session.get('user_id') == viewed_user['id'])
+    viewed_user['is_subprofile'] = False
+    viewed_user['sub_profiles'] = db.execute(
+        'SELECT id, display_name, avatar_url, avatar_color FROM household_members WHERE user_id=? AND is_default=0',
+        (viewed_user['id'],)
+    ).fetchall()
+
+    ctx = _build_public_profile_context(db, viewed_user, member_id=viewed_user['member_id'])
     stats = _get_profile_stats(db)
-    return render_template('public_profile.html',
-        viewed_user=viewed_user,
-        favorites=favorites,
-        lists=lists,
-        watch_stats=watch_stats,
-        recent_activity=recent_activity,
-        **stats
-    )
+    return render_template('public_profile.html', viewed_user=viewed_user, **ctx, **stats)
+
+
+@main_bp.route('/members/<username>/<int:member_id>')
+@login_required
+def public_subprofile(username, member_id):
+    """Public profile page for a specific household sub-profile."""
+    db = database.get_db()
+    viewed_user = db.execute(
+        'SELECT * FROM users WHERE username = ? AND is_active = 1', (username,)
+    ).fetchone()
+    if not viewed_user:
+        abort(404)
+    if not viewed_user['profile_show_profile']:
+        flash('This profile is private.', 'info')
+        return redirect(url_for('main.members'))
+
+    member = db.execute(
+        'SELECT * FROM household_members WHERE id = ? AND user_id = ? AND is_default = 0',
+        (member_id, viewed_user['id'])
+    ).fetchone()
+    if not member:
+        abort(404)
+
+    viewed_user = dict(viewed_user)
+    viewed_user['member_id'] = member['id']
+    viewed_user['avatar_url'] = member['avatar_url']
+    viewed_user['avatar_color'] = member['avatar_color'] or '#0ea5e9'
+    viewed_user['display_name'] = member['display_name']
+    viewed_user['plex_member_since'] = viewed_user.get('plex_joined_at') or viewed_user.get('created_at')
+    viewed_user['is_self'] = (session.get('user_id') == viewed_user['id'] and session.get('member_id') == member_id)
+    viewed_user['is_subprofile'] = True
+    viewed_user['parent_username'] = username
+    viewed_user['sub_profiles'] = []  # not shown on sub-profile pages
+
+    ctx = _build_public_profile_context(db, viewed_user, member_id=member_id)
+    stats = _get_profile_stats(db)
+    return render_template('public_profile.html', viewed_user=viewed_user, **ctx, **stats)
