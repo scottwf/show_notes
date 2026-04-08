@@ -299,6 +299,36 @@
                         </div>
                         {% endif %}
 
+                        {% if show.content_rating %}
+                        <div class="px-4 py-3">
+                            <p class="text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-500 mb-1">Rating</p>
+                            <span class="inline-block px-2 py-0.5 rounded border text-xs font-bold tracking-wide
+                                {% if show.content_rating in ['TV-MA', 'NC-17', '18', 'R18', 'X'] %}border-rose-400 text-rose-600 dark:text-rose-400
+                                {% elif show.content_rating in ['TV-14', 'R', '15', '16', 'M'] %}border-amber-400 text-amber-600 dark:text-amber-400
+                                {% elif show.content_rating in ['TV-PG', 'PG', 'PG-13', '12', '12A'] %}border-sky-400 text-sky-600 dark:text-sky-400
+                                {% else %}border-slate-400 text-slate-600 dark:text-slate-400{% endif %}">
+                                {{ show.content_rating }}
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        {% if show.original_language and show.original_language.lower() != 'english' %}
+                        <div class="px-4 py-3">
+                            <p class="text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Language</p>
+                            <p class="font-medium text-slate-800 dark:text-slate-100">{{ show.original_language }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if show.production_countries %}
+                        {% set countries = show.production_countries | from_json %}
+                        {% if countries %}
+                        <div class="px-4 py-3">
+                            <p class="text-xs uppercase tracking-wide font-semibold text-slate-400 dark:text-slate-500 mb-0.5">Country</p>
+                            <p class="font-medium text-slate-800 dark:text-slate-100">{{ countries | join(', ') }}</p>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+
                     </div>
                 </div><!-- end sidebar -->
 

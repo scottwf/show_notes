@@ -145,6 +145,16 @@ def create_app(test_config=None):
     
     app.jinja_env.filters['markdown'] = markdown_filter
 
+    import json as _json
+    def from_json_filter(value, default=None):
+        if not value:
+            return default
+        try:
+            return _json.loads(value)
+        except (ValueError, TypeError):
+            return default
+    app.jinja_env.filters['from_json'] = from_json_filter
+
     # Register context processor to make current year available in all templates
     @app.context_processor
     def inject_current_year():

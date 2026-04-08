@@ -802,6 +802,10 @@ def sync_sonarr_library():
                 tags_array = show_data.get("tags", [])
                 tags_str = ",".join(str(tag_id) for tag_id in tags_array) if tags_array else None
 
+                # Extract original language name from the nested object Sonarr returns
+                orig_lang_obj = show_data.get("originalLanguage", {}) or {}
+                orig_lang_name = orig_lang_obj.get("name")
+
                 show_values = {
                     "sonarr_id": current_sonarr_id,
                     "tvdb_id": show_data.get("tvdbId"),
@@ -824,6 +828,8 @@ def sync_sonarr_library():
                     "ratings_metacritic_value": metacritic_rating.get("value"),
                     "metacritic_id": show_data.get("metacriticId"),
                     "tags": tags_str,
+                    "original_language": orig_lang_name,
+                    "content_rating": show_data.get("certification"),
                 }
 
                 # Filter out None values to avoid inserting NULL for non-nullable or for cleaner updates

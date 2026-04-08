@@ -146,6 +146,20 @@ class TheTVDBEnrichmentService:
         # Rating/score
         rating = series_data.get('score')
 
+        # Original country → production_countries JSON array
+        original_country = series_data.get('originalCountry')
+        production_countries = json.dumps([original_country.upper()]) if original_country else None
+
+        # Content rating: prefer US rating from contentRatings list
+        content_rating = None
+        content_ratings = series_data.get('contentRatings', []) or []
+        for cr in content_ratings:
+            if cr.get('country', '').lower() in ('usa', 'us'):
+                content_rating = cr.get('name')
+                break
+        if not content_rating and content_ratings:
+            content_rating = content_ratings[0].get('name')
+
         return {
             'premiered': series_data.get('firstAired'),
             'ended': series_data.get('lastAired') if series_data.get('status', {}).get('name') == 'Ended' else None,
@@ -155,6 +169,8 @@ class TheTVDBEnrichmentService:
             'network_country': network_country,
             'runtime': runtime,
             'tvmaze_rating': rating,  # Reuse the same column
+            'production_countries': production_countries,
+            'content_rating': content_rating,
         }
 
     def _update_show_metadata(self, db, show_db_id: int, metadata: Dict):
@@ -164,6 +180,8 @@ class TheTVDBEnrichmentService:
             SET premiered = ?, ended = ?,
                 tvmaze_summary = ?, genres = ?, network_name = ?,
                 network_country = ?, runtime = ?, tvmaze_rating = ?,
+                production_countries = COALESCE(?, production_countries),
+                content_rating = COALESCE(?, content_rating),
                 tvdb_enriched_at = CURRENT_TIMESTAMP,
                 enrichment_source = 'tvdb'
             WHERE id = ?
@@ -172,6 +190,7 @@ class TheTVDBEnrichmentService:
             metadata.get('tvmaze_summary'), metadata.get('genres'),
             metadata.get('network_name'), metadata.get('network_country'),
             metadata.get('runtime'), metadata.get('tvmaze_rating'),
+            metadata.get('production_countries'), metadata.get('content_rating'),
             show_db_id
         ))
 
