@@ -107,31 +107,96 @@
 
     <!-- Notifications Panel -->
     <div data-panel="notifications" class="hidden" style="display:none">
-      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
-        <div class="flex items-center mb-4">
-          <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover" class="w-8 h-8 mr-3 dark:hidden">
-          <img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover" class="w-8 h-8 mr-3 hidden dark:inline">
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Pushover Notifications</h3>
-        </div>
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Send notifications to your devices when events occur.</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Token</label>
-            <input type="text" name="pushover_token" value="{{ settings.pushover_token or '' }}"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+      <div class="space-y-6">
+
+        <!-- Pushover -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <img src="{{ url_for('static', filename='logos/pushover-light.png') }}" alt="Pushover" class="w-8 h-8 mr-3 dark:hidden">
+            <img src="{{ url_for('static', filename='logos/pushover-dark.png') }}" alt="Pushover" class="w-8 h-8 mr-3 hidden dark:inline">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Pushover</h3>
           </div>
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">User Key</label>
-              <a href="https://pushover.net/" target="_blank" class="text-xs text-sky-600 dark:text-sky-400 hover:underline">Get key</a>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Push notifications via the Pushover app (iOS/Android).</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">API Token</label>
+              <input type="text" name="pushover_token" value="{{ settings.pushover_token or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
             </div>
-            <input type="text" name="pushover_key" value="{{ settings.pushover_key or '' }}"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">User Key</label>
+                <a href="https://pushover.net/" target="_blank" class="text-xs text-sky-600 dark:text-sky-400 hover:underline">Get key</a>
+              </div>
+              <input type="text" name="pushover_key" value="{{ settings.pushover_key or '' }}"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" id="pushover-test-btn" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Send Test Notification
+          </button>
+        </div>
+
+        <!-- ntfy -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <div class="flex items-center mb-4">
+            <span class="w-8 h-8 mr-3 flex items-center justify-center text-xl">🔔</span>
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">ntfy</h3>
+            <a href="https://ntfy.sh" target="_blank" class="ml-auto text-xs text-sky-600 dark:text-sky-400 hover:underline">ntfy.sh docs</a>
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Push notifications via ntfy (self-hosted or ntfy.sh).</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Server URL</label>
+              <input type="text" name="ntfy_url" value="{{ settings.ntfy_url or '' }}"
+                placeholder="https://ntfy.sh"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Topic</label>
+              <input type="text" name="ntfy_topic" value="{{ settings.ntfy_topic or '' }}"
+                placeholder="my-shownotes-alerts"
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Access Token <span class="text-slate-400 font-normal">(optional)</span></label>
+              <input type="password" name="ntfy_token" value="{{ settings.ntfy_token or '' }}"
+                placeholder="tk_..."
+                class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            </div>
+          </div>
+          <button type="button" id="ntfy-test-btn" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
+            Send Test Notification
+          </button>
+          <span id="ntfy-test-result" class="ml-3 text-sm hidden"></span>
+        </div>
+
+        <!-- Notification Triggers -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">Notification Triggers</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Choose which events send you a push notification via the services above.</p>
+          <div class="space-y-3">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" name="notify_on_problem_report" value="1"
+                {% if settings.notify_on_problem_report != 0 %}checked{% endif %}
+                class="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500">
+              <span class="text-sm text-slate-700 dark:text-slate-200">User submits a problem / issue report</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" name="notify_on_new_user" value="1"
+                {% if settings.notify_on_new_user != 0 %}checked{% endif %}
+                class="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500">
+              <span class="text-sm text-slate-700 dark:text-slate-200">New user signs up or is imported</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" name="notify_on_issue_resolved" value="1"
+                {% if settings.notify_on_issue_resolved %}checked{% endif %}
+                class="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500">
+              <span class="text-sm text-slate-700 dark:text-slate-200">Issue report is marked resolved</span>
+            </label>
           </div>
         </div>
-        <button type="button" id="pushover-test-btn" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm">
-          Send Test Notification
-        </button>
+
       </div>
     </div>
 

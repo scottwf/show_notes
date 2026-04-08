@@ -6227,11 +6227,27 @@ def create_problem_report():
             VALUES (?, ?, ?, ?, ?, ?, ?, 'open', 'normal')
         ''', (user_id, category, title, description, show_id, movie_id, episode_id))
 
+        report_id = cur.lastrowid
         db.commit()
+
+        # Notify admin
+        try:
+            from ..utils import send_admin_notification
+            username = session.get('username', 'Unknown user')
+            notif_url = url_for('admin.problem_reports', _external=True)
+            send_admin_notification(
+                title=f'New Issue Report: {title}',
+                message=f'{username} reported: {description[:200]}',
+                url=notif_url,
+                url_title='View Reports',
+                trigger_key='notify_on_problem_report',
+            )
+        except Exception as notif_err:
+            current_app.logger.warning(f"Admin notification failed: {notif_err}")
 
         return jsonify({
             'success': True,
-            'id': cur.lastrowid
+            'id': report_id
         })
 
     except Exception as e:

@@ -52,6 +52,7 @@ from ..utils import (
     test_sonarr_connection_with_params, test_radarr_connection_with_params,
     test_bazarr_connection_with_params, test_ollama_connection_with_params,
     test_pushover_notification_with_params,
+    send_ntfy_notification,
     sync_tautulli_watch_history,
     test_tautulli_connection, test_tautulli_connection_with_params,
     test_jellyseer_connection, test_jellyseer_connection_with_params,
@@ -1020,6 +1021,8 @@ def settings():
             sonarr_url=?, sonarr_api_key=?, sonarr_remote_url=?,
             bazarr_url=?, bazarr_api_key=?, bazarr_remote_url=?,
             pushover_key=?, pushover_token=?,
+            ntfy_url=?, ntfy_topic=?, ntfy_token=?,
+            notify_on_problem_report=?, notify_on_new_user=?, notify_on_issue_resolved=?,
             plex_client_id=?, tautulli_url=?, tautulli_api_key=?,
             thetvdb_api_key=?, timezone=?,
             jellyseer_url=?, jellyseer_api_key=?, jellyseer_remote_url=?,
@@ -1043,6 +1046,12 @@ def settings():
             request.form.get('bazarr_remote_url'),
             request.form.get('pushover_key'),
             request.form.get('pushover_token'),
+            request.form.get('ntfy_url'),
+            request.form.get('ntfy_topic'),
+            request.form.get('ntfy_token'),
+            1 if request.form.get('notify_on_problem_report') else 0,
+            1 if request.form.get('notify_on_new_user') else 0,
+            1 if request.form.get('notify_on_issue_resolved') else 0,
             request.form.get('plex_client_id'),
             request.form.get('tautulli_url'),
             request.form.get('tautulli_api_key'),
@@ -1761,6 +1770,32 @@ def test_pushover_connection_route():
         return jsonify({'success': True})
     else:
         return jsonify({'success': False, 'error': error_message or 'Pushover test failed'}), 400
+
+@admin_bp.route('/test-ntfy', methods=['POST'])
+@login_required
+@admin_required
+def test_ntfy_route():
+    """Test ntfy notification with provided credentials."""
+    data = request.json
+    ntfy_url = (data.get('ntfy_url') or 'https://ntfy.sh').rstrip('/')
+    ntfy_topic = data.get('ntfy_topic', '').strip()
+    ntfy_token = data.get('ntfy_token', '').strip() or None
+
+    if not ntfy_topic:
+        return jsonify({'success': False, 'error': 'Topic is required'}), 400
+
+    import requests as _req
+    headers = {'Title': 'ShowNotes Test', 'Content-Type': 'text/plain'}
+    if ntfy_token:
+        headers['Authorization'] = f'Bearer {ntfy_token}'
+    try:
+        resp = _req.post(f"{ntfy_url}/{ntfy_topic}", data=b'This is a test notification from ShowNotes!', headers=headers, timeout=5)
+        if resp.status_code in (200, 201, 202):
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': f'HTTP {resp.status_code}: {resp.text}'}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @admin_bp.route('/sync-tautulli', methods=['POST'])
 @login_required

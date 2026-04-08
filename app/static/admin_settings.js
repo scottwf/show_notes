@@ -186,6 +186,42 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- ntfy Test ---
+    const ntfyBtn = document.getElementById('ntfy-test-btn');
+    if (ntfyBtn) {
+        ntfyBtn.addEventListener('click', async function() {
+            const urlInput = document.querySelector('[name="ntfy_url"]');
+            const topicInput = document.querySelector('[name="ntfy_topic"]');
+            const tokenInput = document.querySelector('[name="ntfy_token"]');
+            const resultElem = document.getElementById('ntfy-test-result');
+
+            ntfyBtn.disabled = true;
+            if (resultElem) { resultElem.textContent = 'Sending...'; resultElem.className = 'ml-3 text-sm text-yellow-500'; }
+
+            try {
+                const response = await fetch('/admin/test-ntfy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ntfy_url: urlInput ? urlInput.value : '',
+                        ntfy_topic: topicInput ? topicInput.value : '',
+                        ntfy_token: tokenInput ? tokenInput.value : ''
+                    })
+                });
+                const data = await response.json();
+                if (resultElem) {
+                    resultElem.textContent = data.success ? 'Sent!' : ('Failed: ' + (data.error || 'Unknown error'));
+                    resultElem.className = 'ml-3 text-sm ' + (data.success ? 'text-green-600' : 'text-red-600');
+                    resultElem.classList.remove('hidden');
+                }
+            } catch (err) {
+                if (resultElem) { resultElem.textContent = 'Failed: ' + err.message; resultElem.className = 'ml-3 text-sm text-red-600'; resultElem.classList.remove('hidden'); }
+            } finally {
+                ntfyBtn.disabled = false;
+            }
+        });
+    }
+
     // --- Ollama Model Fetching ---
     const ollamaUrlInput = document.getElementById('ollama_url');
     const ollamaModelSelect = document.getElementById('ollama_model_name');
