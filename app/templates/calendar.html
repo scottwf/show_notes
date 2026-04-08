@@ -13,45 +13,96 @@
         </div>
 
         <!-- iCal Subscribe -->
-        {% if ical_feed_url %}
-        <div x-data="{ copied: false, showUrl: false }" class="flex flex-col items-end gap-2">
-            <div class="flex items-center gap-2">
-                <button @click="showUrl = !showUrl"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-                               bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300
-                               border border-sky-200 dark:border-sky-700
-                               hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors">
+        {% if ical_feeds %}
+        <div x-data="{
+            open: false,
+            copied: null,
+            alarm: '1d',
+            feedFilter: 'all',
+            feeds: {{ ical_feeds | tojson }},
+            get feedUrl() {
+                let base = this.feeds[this.feedFilter] || this.feeds['all'];
+                return base.replace(/([?&]alarm=)[^&]*/, '$1' + this.alarm)
+                           .replace(/([?&]filter=)[^&]*/, '$1' + this.feedFilter);
+            },
+            get webcalUrl() { return this.feedUrl.replace(/^https?:\/\//, 'webcal://'); },
+            copyUrl() {
+                navigator.clipboard.writeText(this.feedUrl);
+                this.copied = true; setTimeout(() => this.copied = false, 2000);
+            }
+        }">
+            <button @click="open = !open"
+                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+                           bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300
+                           border border-sky-200 dark:border-sky-700
+                           hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Subscribe to Calendar
+            </button>
+
+            <div x-show="open" x-transition
+                 class="mt-3 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg w-80 sm:w-96">
+
+                <!-- Feed filter picker -->
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">What to include</label>
+                <select x-model="feedFilter"
+                        class="w-full text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600
+                               rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 mb-3 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="all">All episodes (favorites)</option>
+                    <option value="premieres">Season & series premieres only</option>
+                    <option value="series">Series premieres only</option>
+                    <option value="finales">Season finales only</option>
+                </select>
+
+                <!-- Alarm picker -->
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Alert reminder</label>
+                <select x-model="alarm"
+                        class="w-full text-sm bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600
+                               rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 mb-3 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="1d">1 day before</option>
+                    <option value="2h">2 hours before</option>
+                    <option value="none">No reminder</option>
+                </select>
+
+                <!-- Add to Calendar (webcal://) -->
+                <a :href="webcalUrl"
+                   class="flex items-center justify-center gap-2 w-full px-4 py-2 rounded-lg text-sm font-medium
+                          bg-sky-600 hover:bg-sky-700 text-white transition-colors mb-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                              d="M12 4v16m8-8H4"/>
                     </svg>
-                    Subscribe to Calendar
-                </button>
-            </div>
-            <div x-show="showUrl" x-transition class="w-full max-w-sm">
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Add this URL to any calendar app (Apple Calendar, Google, etc.):</p>
+                    Add to Calendar App
+                </a>
+                <p class="text-xs text-slate-400 dark:text-slate-500 text-center mb-3">Opens Apple Calendar, Outlook, etc. directly</p>
+
+                <!-- Manual URL copy -->
                 <div class="flex items-center gap-2">
-                    <input type="text" readonly
-                           value="{{ ical_feed_url }}"
+                    <input type="text" readonly :value="feedUrl"
                            class="flex-1 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600
-                                  rounded-lg px-3 py-2 text-slate-700 dark:text-slate-200 font-mono truncate focus:outline-none"
+                                  rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 font-mono truncate focus:outline-none"
                            @click="$el.select()">
-                    <button @click="navigator.clipboard.writeText('{{ ical_feed_url }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                    <button @click="copyUrl()"
                             class="px-3 py-2 rounded-lg text-xs font-medium bg-slate-200 dark:bg-slate-600
                                    hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 transition-colors whitespace-nowrap">
-                        <span x-show="!copied">Copy</span>
+                        <span x-show="!copied">Copy URL</span>
                         <span x-show="copied" class="text-green-600 dark:text-green-400">Copied!</span>
                     </button>
                 </div>
-                <div class="mt-2 flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
-                    <span>Includes your favorited shows</span>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Use this URL to subscribe manually in Google Calendar or other apps</p>
+
+                <!-- Regenerate -->
+                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                     <button hx-post="/api/calendar/regenerate-token"
                             hx-trigger="click"
                             hx-swap="none"
-                            class="text-red-500 hover:text-red-600 dark:text-red-400 underline text-xs"
-                            onclick="if(confirm('Regenerate feed URL? Your current subscription link will stop working.')) return true; return false;"
+                            class="text-xs text-red-400 hover:text-red-500 underline"
+                            onclick="return confirm('Regenerate feed URL? Any existing subscriptions will stop working.');"
                             hx-on:htmx:after-request="window.location.reload()">
-                        Regenerate URL
+                        Regenerate URL (invalidates current subscriptions)
                     </button>
                 </div>
             </div>

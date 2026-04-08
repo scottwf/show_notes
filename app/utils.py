@@ -2142,14 +2142,22 @@ def get_jellyseerr_requests_for_user(plex_username):
         return set()
 
 
-def generate_ical_for_user(db, user_id):
+def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
     """
     Generate an iCal (.ics) feed for a user's favorited shows.
-    Includes upcoming episodes, season premieres, and season finales.
-    Returns the iCal content as a string.
+
+    Args:
+        feed_filter: 'all' | 'premieres' | 'series' | 'finales'
+            - all: every upcoming episode from favorites
+            - premieres: only season/series premiere episodes (ep 1)
+            - series: only series premieres (ep 1, season 1)
+            - finales: only season finale episodes
+        alarm: '1d' | '2h' | 'none'
+            - 1d: alert 1 day before air date
+            - 2h: alert 2 hours before air date (only useful if time is known)
+            - none: no alarm
     """
     import datetime as dt
-    import re
 
     def ical_escape(text):
         if not text:
@@ -2164,7 +2172,6 @@ def generate_ical_for_user(db, user_id):
             return line + '\r\n'
         result = []
         while len(encoded) > 75:
-            # Find safe split point (don't split multi-byte chars)
             split = 75
             while split > 0 and (encoded[split] & 0xC0) == 0x80:
                 split -= 1
@@ -2175,6 +2182,15 @@ def generate_ical_for_user(db, user_id):
 
     now_utc = dt.datetime.now(dt.timezone.utc)
     ninety_days = (now_utc.date() + dt.timedelta(days=90)).isoformat()
+
+    # Calendar name based on filter
+    cal_names = {
+        'all': 'ShowNotes - My Shows',
+        'premieres': 'ShowNotes - Premieres',
+        'series': 'ShowNotes - Series Premieres',
+        'finales': 'ShowNotes - Season Finales',
+    }
+    cal_name = cal_names.get(feed_filter, 'ShowNotes - My Shows')
 
     # Get user's favorited show IDs
     favorites = db.execute(
@@ -2189,14 +2205,25 @@ def generate_ical_for_user(db, user_id):
         placeholders = ','.join('?' * len(favorited_show_ids))
         now_str = now_utc.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Upcoming episodes of favorited shows (next 90 days)
+        # Build WHERE clause additions based on filter
+        filter_clause = ''
+        if feed_filter == 'premieres':
+            filter_clause = 'AND e.episode_number = 1'
+        elif feed_filter == 'series':
+            filter_clause = 'AND e.episode_number = 1 AND ss.season_number = 1'
+        elif feed_filter == 'finales':
+            filter_clause = '''AND e.episode_number > 1
+              AND e.episode_number = (
+                SELECT MAX(e2.episode_number) FROM sonarr_episodes e2 WHERE e2.season_id = e.season_id
+              )'''
+
         rows = db.execute(f"""
             SELECT e.id, e.title as ep_title, e.episode_number, e.air_date_utc,
                    e.overview, ss.season_number, s.title as show_title, s.tmdb_id,
                    e.episode_number = 1 as is_premiere,
-                   e.episode_number = (
+                   (e.episode_number = (
                      SELECT MAX(e2.episode_number) FROM sonarr_episodes e2 WHERE e2.season_id = e.season_id
-                   ) AND e.episode_number > 1 as is_finale
+                   ) AND e.episode_number > 1) as is_finale
             FROM sonarr_episodes e
             JOIN sonarr_seasons ss ON e.season_id = ss.id
             JOIN sonarr_shows s ON ss.show_id = s.id
@@ -2204,8 +2231,9 @@ def generate_ical_for_user(db, user_id):
               AND ss.season_number > 0
               AND e.air_date_utc >= ?
               AND e.air_date_utc <= ?
+              {filter_clause}
             ORDER BY e.air_date_utc ASC
-            LIMIT 300
+            LIMIT 500
         """, favorited_show_ids + [now_str, ninety_days + ' 23:59:59']).fetchall()
         events = [dict(r) for r in rows]
 
@@ -2213,8 +2241,8 @@ def generate_ical_for_user(db, user_id):
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
         'PRODID:-//ShowNotes//ShowNotes Calendar//EN',
-        'X-WR-CALNAME:ShowNotes - My Shows',
-        'X-WR-CALDESC:Upcoming episodes and premieres from your favorites',
+        f'X-WR-CALNAME:{ical_escape(cal_name)}',
+        'X-WR-CALDESC:Upcoming TV events from your ShowNotes favorites',
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
     ]
@@ -2237,18 +2265,18 @@ def generate_ical_for_user(db, user_id):
         is_finale = bool(ev.get('is_finale'))
 
         if is_premiere and sn == 1:
-            label = ' [Series Premiere]'
+            label = ' \U0001f7e2 Series Premiere'
         elif is_premiere:
-            label = f' [Season {sn} Premiere]'
+            label = f' \U0001f7e1 Season {sn} Premiere'
         elif is_finale:
-            label = f' [Season {sn} Finale]'
+            label = f' \U0001f534 Season {sn} Finale'
         else:
             label = ''
 
         summary = f'{show_title} - S{sn:02d}E{en:02d}: {ep_title}{label}'
         description = ev.get('overview') or ''
 
-        uid = f'shownotes-ep-{ev["id"]}@shownotes'
+        uid = f'shownotes-ep-{ev["id"]}-{feed_filter}@shownotes'
 
         lines.append('BEGIN:VEVENT')
         lines.append(f'UID:{uid}')
@@ -2258,6 +2286,27 @@ def generate_ical_for_user(db, user_id):
         if description:
             lines.append(f'DESCRIPTION:{ical_escape(description)}')
         lines.append(f'DTSTAMP:{now_utc.strftime("%Y%m%dT%H%M%SZ")}')
+
+        # VALARM — alert before the event
+        # For all-day events, alarms trigger relative to midnight on the day.
+        # -P1D = 1 day before (i.e. the day before at midnight, which most apps
+        # show as an alert the prior evening or morning depending on the app).
+        if alarm == '1d':
+            alarm_trigger = '-P1D'
+            alarm_desc = ical_escape(f'Reminder: {show_title} airs tomorrow')
+        elif alarm == '2h':
+            alarm_trigger = '-PT2H'
+            alarm_desc = ical_escape(f'Reminder: {show_title} airs today')
+        else:
+            alarm_trigger = None
+
+        if alarm_trigger:
+            lines.append('BEGIN:VALARM')
+            lines.append('ACTION:DISPLAY')
+            lines.append(f'TRIGGER:{alarm_trigger}')
+            lines.append(f'DESCRIPTION:{alarm_desc}')
+            lines.append('END:VALARM')
+
         lines.append('END:VEVENT')
 
     lines.append('END:VCALENDAR')

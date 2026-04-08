@@ -5387,37 +5387,63 @@ def calendar():
             ep_dict['finale_date'] = ep.get('air_date_utc')
         formatted_finales.append(ep_dict)
 
-    # Get user's iCal feed URL
+    # Get user's iCal token for feed URLs
     user_row = db.execute('SELECT ical_token FROM users WHERE id = ?', (user_id,)).fetchone()
     ical_token = user_row['ical_token'] if user_row else None
-    ical_feed_url = url_for('main.calendar_ical_feed', token=ical_token, _external=True) if ical_token else None
+
+    def make_feed(filter_name, alarm='1d'):
+        if not ical_token:
+            return None
+        return url_for('main.calendar_ical_feed', token=ical_token,
+                       filter=filter_name, alarm=alarm, _external=True)
+
+    ical_feeds = {
+        'all': make_feed('all'),
+        'premieres': make_feed('premieres'),
+        'series': make_feed('series'),
+        'finales': make_feed('finales'),
+    } if ical_token else None
 
     return render_template('calendar.html',
                          upcoming_episodes=formatted_upcoming,
                          series_premieres=formatted_premieres,
                          season_finales=formatted_finales,
-                         ical_feed_url=ical_feed_url)
+                         ical_token=ical_token,
+                         ical_feeds=ical_feeds)
 
 @main_bp.route('/calendar/feed/<token>.ics')
 def calendar_ical_feed(token):
     """
     Serve a personal iCal (.ics) feed for a user based on their unique token.
     No login required — token acts as the auth credential.
+
+    Query params:
+        filter: all | premieres | series | finales  (default: all)
+        alarm:  1d | 2h | none                      (default: 1d)
     """
+    from flask import request as flask_request, Response
     db = database.get_db()
     user_row = db.execute('SELECT id FROM users WHERE ical_token = ?', (token,)).fetchone()
     if not user_row:
         return 'Not found', 404
 
-    from app import utils
-    ical_content = utils.generate_ical_for_user(db, user_row['id'])
+    feed_filter = flask_request.args.get('filter', 'all')
+    if feed_filter not in ('all', 'premieres', 'series', 'finales'):
+        feed_filter = 'all'
+    alarm = flask_request.args.get('alarm', '1d')
+    if alarm not in ('1d', '2h', 'none'):
+        alarm = '1d'
 
-    from flask import Response
+    from app import utils
+    ical_content = utils.generate_ical_for_user(db, user_row['id'],
+                                                feed_filter=feed_filter,
+                                                alarm=alarm)
+
     return Response(
         ical_content,
         mimetype='text/calendar',
         headers={
-            'Content-Disposition': 'inline; filename="shownotes.ics"',
+            'Content-Disposition': f'inline; filename="shownotes-{feed_filter}.ics"',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
         }
     )
