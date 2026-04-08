@@ -236,6 +236,8 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
         member_id: Household member to scope favorite/notification counts to.
     """
     from ..utils import get_tautulli_activity
+    import pytz
+    from datetime import datetime as _dt
 
     stats = {}
 
@@ -245,44 +247,78 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
     else:
         stats['now_playing_count'] = get_tautulli_activity()
 
+    # Compute start of today in the app's configured timezone (avoids UTC midnight mismatch)
+    tz_name = db.execute("SELECT timezone FROM settings LIMIT 1").fetchone()
+    tz_name = tz_name['timezone'] if tz_name and tz_name['timezone'] else 'UTC'
+    try:
+        tz = pytz.timezone(tz_name)
+        local_now = _dt.now(tz)
+        today_local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_utc_start = today_local_start.astimezone(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        today_utc_start = _dt.utcnow().strftime('%Y-%m-%d') + ' 00:00:00'
+
     # Consolidated query for all count statistics to reduce database round-trips
+    today_filter = f"event_timestamp >= '{today_utc_start}'"
+    play_events = "('media.play', 'media.scrobble')"
+
     if user_id:
         if member_id:
-            consolidated_stats = db.execute('''
+            consolidated_stats = db.execute(f'''
                 SELECT
                     (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
                     (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
                     (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                    (SELECT COUNT(*) FROM plex_activity_log
+                     WHERE {today_filter} AND event_type IN {play_events}) as plays_today,
                     (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                     WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
+                     WHERE {today_filter}) as active_users_today,
+                    (SELECT ROUND(SUM(COALESCE(view_offset_ms, duration_ms)) / 3600000.0, 1)
+                     FROM plex_activity_log
+                     WHERE {today_filter} AND event_type IN ('media.stop','media.scrobble')) as watch_hours_today,
                     (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND member_id = ? AND is_dropped = 0) as favorite_count,
                     (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND member_id = ? AND is_read = 0 AND is_dismissed = 0) as unread_notification_count
             ''', (user_id, member_id, user_id, member_id)).fetchone()
         else:
-            consolidated_stats = db.execute('''
+            consolidated_stats = db.execute(f'''
                 SELECT
                     (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
                     (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
                     (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                    (SELECT COUNT(*) FROM plex_activity_log
+                     WHERE {today_filter} AND event_type IN {play_events}) as plays_today,
                     (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                     WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today,
+                     WHERE {today_filter}) as active_users_today,
+                    (SELECT ROUND(SUM(COALESCE(view_offset_ms, duration_ms)) / 3600000.0, 1)
+                     FROM plex_activity_log
+                     WHERE {today_filter} AND event_type IN ('media.stop','media.scrobble')) as watch_hours_today,
                     (SELECT COUNT(*) FROM user_favorites WHERE user_id = ? AND is_dropped = 0) as favorite_count,
                     (SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND is_read = 0 AND is_dismissed = 0) as unread_notification_count
             ''', (user_id, user_id)).fetchone()
     else:
-        consolidated_stats = db.execute('''
+        consolidated_stats = db.execute(f'''
             SELECT
                 (SELECT COUNT(*) FROM sonarr_shows) as total_shows,
                 (SELECT COUNT(*) FROM sonarr_episodes) as total_episodes,
                 (SELECT COUNT(*) FROM radarr_movies) as total_movies,
+                (SELECT COUNT(*) FROM plex_activity_log
+                 WHERE {today_filter} AND event_type IN {play_events}) as plays_today,
                 (SELECT COUNT(DISTINCT plex_username) FROM plex_activity_log
-                 WHERE event_timestamp >= date('now') AND event_timestamp < date('now', '+1 day')) as players_today
+                 WHERE {today_filter}) as active_users_today,
+                (SELECT ROUND(SUM(COALESCE(view_offset_ms, duration_ms)) / 3600000.0, 1)
+                 FROM plex_activity_log
+                 WHERE {today_filter} AND event_type IN ('media.stop','media.scrobble')) as watch_hours_today
         ''').fetchone()
 
     stats['total_shows'] = consolidated_stats['total_shows'] or 0
     stats['total_episodes'] = consolidated_stats['total_episodes'] or 0
     stats['total_movies'] = consolidated_stats['total_movies'] or 0
-    stats['players_today'] = consolidated_stats['players_today'] or 0
+    stats['plays_today'] = consolidated_stats['plays_today'] or 0
+    stats['active_users_today'] = consolidated_stats['active_users_today'] or 0
+    watch_h = consolidated_stats['watch_hours_today'] or 0
+    stats['watch_hours_today'] = f"{watch_h:.1f}h" if watch_h else "0h"
+    # Keep for backwards compat with any other templates still using players_today
+    stats['players_today'] = stats['active_users_today']
 
     if user_id:
         stats['favorite_count'] = consolidated_stats['favorite_count'] or 0

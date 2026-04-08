@@ -155,6 +155,13 @@ def create_app(test_config=None):
             return default
     app.jinja_env.filters['from_json'] = from_json_filter
 
+    def intcomma(value):
+        try:
+            return f"{int(value):,}"
+        except (ValueError, TypeError):
+            return value
+    app.jinja_env.filters['intcomma'] = intcomma
+
     # Register context processor to make current year available in all templates
     @app.context_processor
     def inject_current_year():
