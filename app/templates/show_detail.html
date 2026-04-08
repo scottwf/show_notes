@@ -428,55 +428,69 @@
                         </div>
                     </details>
                     {% endif %}
-                    <ul class="space-y-3">
+                    <ul class="space-y-1">
                         {% for episode in season.episodes %}
-                        <li class="pb-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                        <li id="ep-row-{{ episode.id }}"
+                            data-season-number="{{ season.season_number }}"
+                            class="episode-row px-3 py-3 rounded-lg border border-transparent transition-all duration-300 last:mb-0">
                             <div class="flex items-start gap-3">
-                                <!-- Watch checkbox -->
-                                <input type="checkbox"
-                                       class="mt-1.5 w-5 h-5 rounded border-gray-300 dark:border-gray-600 text-sky-600 focus:ring-sky-500 focus:ring-offset-0 cursor-pointer"
-                                       data-episode-id="{{ episode.id }}"
-                                       onchange="toggleEpisodeWatched({{ episode.id }}, this.checked)">
-
-                                <div class="flex-1">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <h4 class="font-medium text-gray-800 dark:text-gray-100">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex justify-between items-start gap-2">
+                                        <div class="flex-1 min-w-0">
+                                            <h4 class="episode-title font-medium text-gray-800 dark:text-gray-100 transition-colors duration-300">
                                                 <a href="{{ url_for('main.episode_detail', tmdb_id=show.tmdb_id, season_number=season.season_number, episode_number=episode.episode_number) }}"
                                                     class="hover:underline">
                                                     {{ episode.episode_number }}. {{ episode.title | default('TBA') }}
                                                 </a>
                                             </h4>
                                             {% if episode.overview %}
-                                            <p
-                                                class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
+                                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2 hover:line-clamp-none transition-all duration-200 ease-in-out">
                                                 {{ episode.overview }}
                                             </p>
                                             {% endif %}
                                         </div>
-                                        <div class="flex items-center gap-2 pl-4">
+                                        <div class="flex items-center gap-1.5 pl-2 flex-shrink-0">
                                             {% if episode.air_date_utc %}
-                                            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap pt-1">
+                                            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                                 {{ episode.air_date_utc | format_datetime('%b %d, %Y') }}
                                             </span>
                                             {% endif %}
                                             {% if session.user_id %}
+                                            <!-- Watch toggle -->
+                                            <button onclick="toggleEpisodeWatched({{ episode.id }})"
+                                                data-watch-episode-id="{{ episode.id }}"
+                                                class="p-1.5 rounded-full transition-colors hover:bg-slate-100 dark:hover:bg-slate-700"
+                                                title="Mark as watched">
+                                                <!-- Unwatched: outline circle check -->
+                                                <svg class="watch-icon-empty w-5 h-5 text-slate-300 dark:text-slate-600 hover:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.75">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                                <!-- Watched: filled green circle check -->
+                                                <svg class="watch-icon-filled hidden w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </button>
+                                            <!-- Report flag -->
                                             <a href="{{ url_for('main.report_issue', media_type='episode', media_id=episode.id, show_id=show.id, title=show.title + ' - S' + '%02d'|format(season.season_number) + 'E' + '%02d'|format(episode.episode_number) + ': ' + (episode.title or 'TBA')) }}"
-                                               class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                               class="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                                title="Report issue with this episode">
-                                                <svg class="w-4 h-4 text-slate-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <svg class="w-4 h-4 text-slate-300 dark:text-slate-600 hover:text-rose-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path>
                                                 </svg>
                                             </a>
                                             {% endif %}
                                         </div>
                                     </div>
-                                    {% if episode.has_file %}
-                                    <span
-                                        class="mt-1 inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-                                        Available
-                                    </span>
-                                    {% endif %}
+                                    <div class="flex items-center gap-2 mt-1.5">
+                                        {% if episode.has_file %}
+                                        <span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
+                                            Available
+                                        </span>
+                                        {% endif %}
+                                        <span class="watch-badge hidden text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+                                            Watched
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </li>
@@ -644,6 +658,26 @@
     </div>
 </div>
 
+<style>
+    .episode-row { border-bottom: 1px solid rgb(229 231 235); }
+    .dark .episode-row { border-bottom-color: rgb(55 65 81); }
+    .episode-row:last-child { border-bottom: none; }
+    .episode-watched {
+        background-color: rgba(16, 185, 129, 0.06);
+        border-color: rgba(16, 185, 129, 0.2) !important;
+    }
+    .dark .episode-watched {
+        background-color: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.2) !important;
+    }
+    .episode-watched .episode-title a {
+        color: rgb(107 114 128);
+    }
+    .dark .episode-watched .episode-title a {
+        color: rgb(107 114 128);
+    }
+</style>
+
 <script>
     // Favorite toggle functionality
     let isFavorite = false;
@@ -726,7 +760,22 @@
         }
     }
 
-    // Watch progress functionality
+    function setEpisodeWatchedState(episodeId, isWatched) {
+        const row = document.getElementById(`ep-row-${episodeId}`);
+        const btn = document.querySelector(`[data-watch-episode-id="${episodeId}"]`);
+
+        if (row) {
+            row.classList.toggle('episode-watched', isWatched);
+        }
+        if (btn) {
+            btn.querySelector('.watch-icon-empty')?.classList.toggle('hidden', isWatched);
+            btn.querySelector('.watch-icon-filled')?.classList.toggle('hidden', !isWatched);
+            btn.title = isWatched ? 'Mark as unwatched' : 'Mark as watched';
+        }
+        const badge = row?.querySelector('.watch-badge');
+        if (badge) badge.classList.toggle('hidden', !isWatched);
+    }
+
     async function loadEpisodeProgress() {
         const showId = {{ show.id }};
 
@@ -735,12 +784,8 @@
             const data = await response.json();
 
             if (data.success && data.episodes) {
-                // Update all episode checkboxes based on watched status
                 data.episodes.forEach(ep => {
-                    const checkbox = document.querySelector(`input[data-episode-id="${ep.episode_id}"]`);
-                    if (checkbox) {
-                        checkbox.checked = ep.is_watched;
-                    }
+                    setEpisodeWatchedState(ep.episode_id, ep.is_watched);
                 });
             }
         } catch (error) {
@@ -748,34 +793,32 @@
         }
     }
 
-    async function toggleEpisodeWatched(episodeId, isWatched) {
+    async function toggleEpisodeWatched(episodeId) {
+        const row = document.getElementById(`ep-row-${episodeId}`);
+        const isCurrentlyWatched = row?.classList.contains('episode-watched');
+        const newWatchedState = !isCurrentlyWatched;
+
+        // Optimistic update
+        setEpisodeWatchedState(episodeId, newWatchedState);
+
         try {
             const response = await fetch(`/api/profile/progress/episode/${episodeId}/toggle`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ is_watched: isWatched })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_watched: newWatchedState })
             });
 
             const data = await response.json();
 
             if (!data.success) {
+                // Revert on error
+                setEpisodeWatchedState(episodeId, isCurrentlyWatched);
                 showNotification(data.error || 'Unknown error', 'error', 'Failed to update episode');
-                // Revert checkbox state on error
-                const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
-                if (checkbox) {
-                    checkbox.checked = !isWatched;
-                }
             }
         } catch (error) {
             console.error('Error toggling episode:', error);
+            setEpisodeWatchedState(episodeId, isCurrentlyWatched);
             showNotification('Please try again.', 'error', 'Failed to update episode');
-            // Revert checkbox state on error
-            const checkbox = document.querySelector(`input[data-episode-id="${episodeId}"]`);
-            if (checkbox) {
-                checkbox.checked = !isWatched;
-            }
         }
     }
 
@@ -783,27 +826,17 @@
         try {
             const response = await fetch(`/api/profile/progress/season/${showId}/${seasonNumber}/mark-all`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_watched: isWatched })
             });
 
             const data = await response.json();
 
             if (data.success) {
-                // Update all checkboxes for this season
-                const seasonEpisodes = document.querySelectorAll(`input[data-episode-id]`);
-                seasonEpisodes.forEach(checkbox => {
-                    // We need to check if this checkbox belongs to the current season
-                    // This is a simple approach - in production you might want to add data-season-number to checkboxes
-                    const episodeDiv = checkbox.closest('details');
-                    if (episodeDiv) {
-                        const summaryText = episodeDiv.querySelector('summary')?.textContent || '';
-                        if (summaryText.includes(`Season ${seasonNumber}`)) {
-                            checkbox.checked = isWatched;
-                        }
-                    }
+                // Update all episode rows belonging to this season
+                document.querySelectorAll(`li[data-season-number="${seasonNumber}"]`).forEach(row => {
+                    const episodeId = row.id.replace('ep-row-', '');
+                    if (episodeId) setEpisodeWatchedState(parseInt(episodeId), isWatched);
                 });
             } else {
                 showNotification(data.error || 'Unknown error', 'error', 'Failed to update season');
