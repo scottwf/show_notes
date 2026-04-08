@@ -84,13 +84,28 @@ def set_member_session(member_id):
 
 @main_bp.context_processor
 def inject_household():
-    """Make current_member and all_members available in every template."""
+    """Make current_member, all_members, and unread_count available in every template."""
     if not session.get('user_id'):
         return {}
     try:
         member = get_current_member()
         members = get_user_members(session['user_id'])
-        return {'current_member': member, 'all_members': members}
+        # Lightweight unread count for the nav badge
+        db = database.get_db()
+        user_id = session['user_id']
+        member_id = session.get('member_id')
+        if member_id:
+            row = db.execute(
+                'SELECT COUNT(*) as c FROM user_notifications WHERE user_id=? AND member_id=? AND is_read=0 AND is_dismissed=0',
+                (user_id, member_id)
+            ).fetchone()
+        else:
+            row = db.execute(
+                'SELECT COUNT(*) as c FROM user_notifications WHERE user_id=? AND is_read=0 AND is_dismissed=0',
+                (user_id,)
+            ).fetchone()
+        unread_count = row['c'] if row else 0
+        return {'current_member': member, 'all_members': members, 'nav_unread_count': unread_count}
     except Exception:
         return {}
 _homepage_cache = {}
@@ -2390,6 +2405,15 @@ def show_detail(tmdb_id):
     if cast_rows:
         cast_members = [dict(row) for row in cast_rows]
 
+    # Fetch crew (creators, executive producers)
+    crew_rows = db.execute("""
+        SELECT person_name, job, person_image_url, tvmaze_person_id, sort_order
+        FROM show_crew
+        WHERE show_id = ?
+        ORDER BY CASE job WHEN 'Creator' THEN 0 WHEN 'Co-Creator' THEN 1 WHEN 'Showrunner' THEN 2 ELSE 3 END, sort_order ASC
+    """, (show_dict['id'],)).fetchall()
+    crew_members = [dict(row) for row in crew_rows] if crew_rows else []
+
     if show_dict.get('tmdb_id'):
         show_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show_dict['tmdb_id'])
         show_dict['cached_fanart_url'] = url_for('main.image_proxy', type='background', id=show_dict['tmdb_id'])
@@ -2554,6 +2578,7 @@ def show_detail(tmdb_id):
                            next_aired_episode_info=next_aired_episode_info,
                            next_up_episode=next_up_episode,
                            cast_members=cast_members,
+                           crew_members=crew_members,
                            jellyseer_url=jellyseer_url,
                            season_recaps=season_recaps,
                            show_summary=show_summary
