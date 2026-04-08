@@ -5434,14 +5434,12 @@ def calendar_ical_feed(token):
                                                 feed_filter=feed_filter,
                                                 alarm=alarm)
 
-    return Response(
-        ical_content,
-        mimetype='text/calendar',
-        headers={
-            'Content-Disposition': f'inline; filename="shownotes-{feed_filter}.ics"',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-        }
-    )
+    resp = Response(ical_content, mimetype='text/calendar')
+    resp.headers['Content-Disposition'] = f'attachment; filename="shownotes-{feed_filter}.ics"'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    # Explicitly clear Vary so iOS Calendar doesn't reject the feed
+    resp.headers['Vary'] = 'Accept-Encoding'
+    return resp
 
 
 @main_bp.route('/api/calendar/regenerate-token', methods=['POST'])

@@ -5,13 +5,22 @@
 <div class="max-w-5xl mx-auto">
 
   <!-- Back -->
-  <a href="{{ url_for('main.members') }}"
-     class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 mb-4 transition-colors">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-    </svg>
-    All Members
-  </a>
+  <div class="flex items-center gap-3 mb-4">
+    <a href="{{ url_for('main.members') }}"
+       class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      All Members
+    </a>
+    {% if viewed_user.is_subprofile %}
+    <span class="text-slate-300 dark:text-slate-600">/</span>
+    <a href="{{ url_for('main.public_profile', username=viewed_user.parent_username) }}"
+       class="text-sm text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+      @{{ viewed_user.parent_username }}
+    </a>
+    {% endif %}
+  </div>
 
   <!-- Profile Header -->
   <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6">
@@ -31,7 +40,11 @@
       <div class="flex-1 min-w-0">
         <div class="flex flex-wrap items-center gap-2">
           <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ viewed_user.display_name }}</h1>
+          {% if viewed_user.is_subprofile %}
+          <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">sub-profile of @{{ viewed_user.parent_username }}</span>
+          {% else %}
           <span class="text-sm text-slate-400">@{{ viewed_user.username }}</span>
+          {% endif %}
           {% if viewed_user.is_self %}
           <a href="{{ url_for('main.profile_settings') }}"
              class="text-xs px-2 py-0.5 rounded-full border border-slate-300 dark:border-slate-600 text-slate-500 hover:text-sky-600 hover:border-sky-400 transition-colors">
@@ -39,13 +52,33 @@
           </a>
           {% endif %}
         </div>
-        {% if viewed_user.bio %}
+        {% if viewed_user.bio and not viewed_user.is_subprofile %}
         <p class="text-slate-600 dark:text-slate-300 mt-1">{{ viewed_user.bio }}</p>
         {% endif %}
         <p class="text-xs text-slate-400 mt-1">
           Member since {{ viewed_user.plex_member_since | format_datetime('%B %Y') if viewed_user.plex_member_since else 'Unknown' }}
         </p>
       </div>
+
+      <!-- Sub-profiles list (only on default profile pages) -->
+      {% if not viewed_user.is_subprofile and viewed_user.sub_profiles %}
+      <div class="w-full border-t border-slate-100 dark:border-slate-700 pt-4 mt-1">
+        <p class="text-xs text-slate-400 mb-2">Also on this account:</p>
+        <div class="flex flex-wrap gap-2">
+          {% for sp in viewed_user.sub_profiles %}
+          <a href="{{ url_for('main.public_subprofile', username=viewed_user.username, member_id=sp.id) }}"
+             class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-700 rounded-full text-sm text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-900/30 hover:text-sky-600 dark:hover:text-sky-400 transition-colors">
+            <div class="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0"
+                 style="background-color: {{ sp.avatar_color or '#0ea5e9' }};">
+              {% if sp.avatar_url %}<img src="{{ sp.avatar_url }}" class="w-full h-full object-cover">
+              {% else %}{{ sp.display_name[0].upper() }}{% endif %}
+            </div>
+            {{ sp.display_name }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Send Recommendation -->
       {% if not viewed_user.is_self and viewed_user.allow_recommendations %}
