@@ -6317,3 +6317,134 @@ def generate_season_summary_route():
             "status": "failed",
             "error": error or "Unknown error"
         }), 500
+
+
+# ========================================
+# SOCIAL / PUBLIC PROFILES
+# ========================================
+
+@main_bp.route('/members')
+@login_required
+def members():
+    """Community page — lists all users with public profiles."""
+    db = database.get_db()
+    users = db.execute('''
+        SELECT u.id, u.username, u.bio, u.profile_photo_url,
+               u.profile_show_profile, u.profile_show_favorites,
+               u.profile_show_stats, u.profile_show_activity,
+               u.is_active,
+               MAX(pal.event_timestamp) as last_seen,
+               COUNT(DISTINCT uf.id) as favorite_count
+        FROM users u
+        LEFT JOIN plex_activity_log pal ON pal.plex_username = u.plex_username
+        LEFT JOIN user_favorites uf ON uf.user_id = u.id AND uf.is_dropped = 0
+        WHERE u.is_active = 1 AND u.profile_show_profile = 1
+        GROUP BY u.id
+        ORDER BY last_seen DESC NULLS LAST, u.username
+    ''').fetchall()
+
+    # Attach default member avatar/color for each user
+    members_data = []
+    for u in users:
+        u = dict(u)
+        dm = db.execute(
+            'SELECT avatar_url, avatar_color, display_name FROM household_members WHERE user_id = ? AND is_default = 1',
+            (u['id'],)
+        ).fetchone()
+        u['avatar_url'] = dm['avatar_url'] if dm else None
+        u['avatar_color'] = (dm['avatar_color'] if dm else None) or '#0ea5e9'
+        u['display_name'] = dm['display_name'] if dm else u['username']
+        members_data.append(u)
+
+    stats = _get_profile_stats(db)
+    return render_template('members.html', members=members_data, **stats)
+
+
+@main_bp.route('/members/<username>')
+@login_required
+def public_profile(username):
+    """Public profile page for a specific user, respecting their privacy flags."""
+    db = database.get_db()
+    viewed_user = db.execute(
+        'SELECT * FROM users WHERE username = ? AND is_active = 1',
+        (username,)
+    ).fetchone()
+
+    if not viewed_user:
+        abort(404)
+
+    if not viewed_user['profile_show_profile']:
+        flash('This profile is private.', 'info')
+        return redirect(url_for('main.members'))
+
+    viewed_user = dict(viewed_user)
+    dm = db.execute(
+        'SELECT avatar_url, avatar_color, display_name FROM household_members WHERE user_id = ? AND is_default = 1',
+        (viewed_user['id'],)
+    ).fetchone()
+    viewed_user['avatar_url'] = dm['avatar_url'] if dm else None
+    viewed_user['avatar_color'] = (dm['avatar_color'] if dm else None) or '#0ea5e9'
+    viewed_user['display_name'] = dm['display_name'] if dm else viewed_user['username']
+    viewed_user['plex_member_since'] = viewed_user.get('plex_joined_at') or viewed_user.get('created_at')
+    viewed_user['is_self'] = (session.get('user_id') == viewed_user['id'])
+
+    uid = viewed_user['id']
+
+    # Favorites (if permitted)
+    favorites = []
+    if viewed_user['profile_show_favorites']:
+        favorites = db.execute('''
+            SELECT s.id as show_db_id, s.tmdb_id, s.title, s.year, s.status,
+                   s.poster_url, s.overview, uf.added_at
+            FROM user_favorites uf
+            JOIN sonarr_shows s ON s.id = uf.show_id
+            JOIN household_members hm ON hm.id = uf.member_id AND hm.is_default = 1
+            WHERE uf.user_id = ? AND uf.is_dropped = 0
+            ORDER BY uf.added_at DESC
+            LIMIT 20
+        ''', (uid,)).fetchall()
+
+    # Public lists (if permitted)
+    lists = []
+    if viewed_user['profile_show_lists'] if 'profile_show_lists' in viewed_user else True:
+        lists = db.execute('''
+            SELECT id, name, description, updated_at,
+                   (SELECT COUNT(*) FROM user_list_items WHERE list_id = user_lists.id) as item_count
+            FROM user_lists
+            WHERE user_id = ? AND is_public = 1
+            ORDER BY updated_at DESC
+        ''', (uid,)).fetchall()
+
+    # Watch stats summary (if permitted)
+    watch_stats = None
+    if viewed_user['profile_show_stats']:
+        watch_stats = db.execute('''
+            SELECT
+                COUNT(DISTINCT CASE WHEN event_type IN ('media.play','media.scrobble') THEN show_title END) as unique_shows,
+                COUNT(CASE WHEN event_type = 'media.scrobble' THEN 1 END) as completed_episodes,
+                ROUND(SUM(CASE WHEN event_type = 'media.scrobble' THEN duration_ms ELSE 0 END) / 3600000.0, 1) as total_hours
+            FROM plex_activity_log
+            WHERE plex_username = ?
+        ''', (viewed_user.get('plex_username', ''),)).fetchone()
+
+    # Recent activity (last 10 plays, if permitted)
+    recent_activity = []
+    if viewed_user['profile_show_activity']:
+        recent_activity = db.execute('''
+            SELECT show_title, episode_title, season_number, episode_number,
+                   event_type, event_timestamp
+            FROM plex_activity_log
+            WHERE plex_username = ? AND event_type IN ('media.play','media.scrobble')
+            ORDER BY event_timestamp DESC
+            LIMIT 10
+        ''', (viewed_user.get('plex_username', ''),)).fetchall()
+
+    stats = _get_profile_stats(db)
+    return render_template('public_profile.html',
+        viewed_user=viewed_user,
+        favorites=favorites,
+        lists=lists,
+        watch_stats=watch_stats,
+        recent_activity=recent_activity,
+        **stats
+    )

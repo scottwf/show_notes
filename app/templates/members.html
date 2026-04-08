@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block page_title %}Members{% endblock %}
+
+{% block page_content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Members</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ members|length }} member{{ 's' if members|length != 1 }}</p>
+    </div>
+  </div>
+
+  {% if not members %}
+  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-12 text-center text-slate-500 dark:text-slate-400">
+    No public profiles yet.
+  </div>
+  {% else %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    {% for m in members %}
+    <a href="{{ url_for('main.public_profile', username=m.username) }}"
+       class="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex items-start gap-4 group">
+
+      <!-- Avatar -->
+      <div class="w-14 h-14 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xl font-bold overflow-hidden shadow"
+           style="background-color: {{ m.avatar_color }};">
+        {% if m.avatar_url %}
+          <img src="{{ m.avatar_url }}" alt="{{ m.display_name }}" class="w-full h-full object-cover">
+        {% else %}
+          {{ m.display_name[0].upper() }}
+        {% endif %}
+      </div>
+
+      <!-- Info -->
+      <div class="min-w-0 flex-1">
+        <div class="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 truncate transition-colors">
+          {{ m.display_name }}
+        </div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 truncate mb-2">@{{ m.username }}</div>
+        {% if m.bio %}
+        <p class="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ m.bio }}</p>
+        {% endif %}
+        <div class="flex items-center gap-3 mt-2 text-xs text-slate-400 dark:text-slate-500">
+          {% if m.profile_show_favorites and m.favorite_count %}
+          <span>{{ m.favorite_count }} favorite{{ 's' if m.favorite_count != 1 }}</span>
+          {% endif %}
+          {% if m.last_seen %}
+          <span>Active {{ m.last_seen | format_datetime('%b %d') }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
