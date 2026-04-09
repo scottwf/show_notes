@@ -2,169 +2,181 @@
 
 {% block profile_content %}
 <div>
-    <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Watch Progress</h2>
+    <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">My Shows</h2>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Tracked from your Plex watch history</p>
     </div>
 
     <!-- Status Filter Tabs -->
-    <div class="flex gap-2 mb-6 flex-wrap">
-        <button onclick="changeStatus('watching')" class="status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-sky-500 text-white" data-status="watching">
+    <div class="flex gap-2 mb-5 flex-wrap">
+        <button onclick="changeStatus('watching')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-sky-500 text-white" data-status="watching">
             Watching
         </button>
-        <button onclick="changeStatus('plan_to_watch')" class="status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="plan_to_watch">
-            Plan to Watch
+        <button onclick="changeStatus('dropped')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="dropped">
+            Dropped
         </button>
-        <button onclick="changeStatus('completed')" class="status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="completed">
+        <button onclick="changeStatus('completed')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="completed">
             Completed
         </button>
-        <button onclick="changeStatus('dropped')" class="status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="dropped">
-            Dropped
+        <button onclick="changeStatus('plan_to_watch')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="plan_to_watch">
+            Plan to Watch
+        </button>
+        <button onclick="changeStatus('favourites')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="favourites">
+            ★ Favourites
+        </button>
+        <button onclick="changeStatus('all')" class="status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300" data-status="all">
+            All
         </button>
     </div>
 
+    <!-- Dropped/Watching legend -->
+    <div id="status-legend" class="hidden mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+        <strong>Dropped</strong> = shows you've watched but haven't returned to in 90+ days and haven't finished.
+        <strong>Watching</strong> = shows watched within the last 90 days that aren't complete.
+    </div>
+
     <!-- Shows Grid -->
-    <div id="shows-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-        <!-- Shows will be loaded here -->
+    <div id="shows-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div class="col-span-full text-center py-12">
             <p class="text-slate-500 dark:text-slate-400">Loading...</p>
         </div>
     </div>
+
+    <div id="shows-count" class="mt-4 text-xs text-center text-slate-400 dark:text-slate-500"></div>
 </div>
 
 <script>
 let currentStatus = 'watching';
 
-// Load shows on page load
-document.addEventListener('DOMContentLoaded', () => loadShows(currentStatus));
+document.addEventListener('DOMContentLoaded', () => loadShows('watching'));
 
 async function loadShows(status) {
+    document.getElementById('status-legend').classList.toggle('hidden', status !== 'dropped' && status !== 'watching');
+
     try {
         const response = await fetch(`/api/profile/progress/shows?status=${status}`);
         const data = await response.json();
-
         const container = document.getElementById('shows-container');
+        const countEl = document.getElementById('shows-count');
 
         if (data.success && data.shows && data.shows.length > 0) {
+            countEl.textContent = `${data.shows.length} show${data.shows.length !== 1 ? 's' : ''}`;
+
             container.innerHTML = data.shows.map(show => {
                 const detailUrl = `/show/${show.tmdb_id}`;
                 const posterUrl = show.tmdb_id
                     ? `/image_proxy/poster/${show.tmdb_id}`
                     : '/static/logos/placeholder_poster.png';
 
-                const progressPercent = show.completion_percentage || 0;
-                const progressColor = progressPercent === 100 ? 'bg-green-500' : 'bg-sky-500';
+                const pct = show.completion_percentage || 0;
+                const progressColor = pct >= 95 ? 'bg-emerald-500' : pct >= 50 ? 'bg-sky-500' : 'bg-slate-400';
+
+                const lastWatched = show.last_watched_at ? (() => {
+                    const d = new Date(show.last_watched_at);
+                    const now = new Date();
+                    const days = Math.floor((now - d) / 86400000);
+                    if (days === 0) return 'Today';
+                    if (days === 1) return 'Yesterday';
+                    if (days < 7) return `${days}d ago`;
+                    if (days < 30) return `${Math.floor(days/7)}w ago`;
+                    if (days < 365) return `${Math.floor(days/30)}mo ago`;
+                    return `${Math.floor(days/365)}y ago`;
+                })() : '';
+
+                const statusBadgeMap = {
+                    'watching':      '<span class="text-sky-600 dark:text-sky-400">Watching</span>',
+                    'dropped':       '<span class="text-amber-600 dark:text-amber-400">Dropped</span>',
+                    'completed':     '<span class="text-emerald-600 dark:text-emerald-400">Completed</span>',
+                    'plan_to_watch': '<span class="text-slate-500">Planned</span>',
+                };
+                const statusBadge = statusBadgeMap[show.status] || '';
+                const favStar = show.is_favourite ? '<span class="text-yellow-400 mr-0.5">★</span>' : '';
 
                 return `
-                    <div class="group relative">
-                        <a href="${detailUrl}" class="block">
-                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-shadow">
-                                <img src="${posterUrl}"
-                                     alt="${show.title}"
-                                     class="w-full h-full object-cover"
-                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                <div class="group relative">
+                    <a href="${detailUrl}" class="block">
+                        <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-shadow">
+                            <img src="${posterUrl}" alt="${show.title}"
+                                 class="w-full h-full object-cover"
+                                 onerror="this.src='/static/logos/placeholder_poster.png'">
 
-                                <!-- Progress bar overlay -->
-                                ${progressPercent > 0 ? `
-                                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 p-2">
-                                    <div class="w-full bg-slate-600 rounded-full h-2">
-                                        <div class="${progressColor} h-2 rounded-full transition-all" style="width: ${progressPercent}%"></div>
-                                    </div>
-                                    <p class="text-white text-xs mt-1 text-center">${show.watched_episodes}/${show.total_episodes} episodes</p>
+                            ${pct > 0 ? `
+                            <div class="absolute bottom-0 left-0 right-0 bg-black/70 px-2 pt-2 pb-1.5">
+                                <div class="w-full bg-slate-600 rounded-full h-1.5 mb-1">
+                                    <div class="${progressColor} h-1.5 rounded-full" style="width:${Math.min(pct,100)}%"></div>
                                 </div>
-                                ` : ''}
+                                <p class="text-white text-xs text-center">${show.watched_episodes}/${show.total_episodes} eps</p>
+                            </div>` : ''}
 
-                                <!-- Status change dropdown -->
-                                <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <select onchange="updateShowStatus(${show.show_id}, this.value, event)"
-                                            class="px-2 py-1 text-xs rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 cursor-pointer">
-                                        <option value="">Change Status...</option>
-                                        <option value="watching" ${status === 'watching' ? 'disabled' : ''}>Watching</option>
-                                        <option value="plan_to_watch" ${status === 'plan_to_watch' ? 'disabled' : ''}>Plan to Watch</option>
-                                        <option value="completed" ${status === 'completed' ? 'disabled' : ''}>Completed</option>
-                                        <option value="dropped" ${status === 'dropped' ? 'disabled' : ''}>Dropped</option>
-                                    </select>
-                                </div>
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                <select onchange="updateShowStatus(${show.show_id}, this.value, event)"
+                                        class="px-1.5 py-1 text-xs rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 cursor-pointer">
+                                    <option value="">Status…</option>
+                                    <option value="watching">Watching</option>
+                                    <option value="plan_to_watch">Plan to Watch</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="dropped">Dropped</option>
+                                </select>
                             </div>
+                        </div>
+                    </a>
+                    <div class="mt-2">
+                        <a href="${detailUrl}" class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2 leading-tight">
+                            ${favStar}${show.title}
                         </a>
-                        <div class="mt-2">
-                            <a href="${detailUrl}" class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
-                                ${show.title}
-                            </a>
-                            ${show.year ? `<p class="text-xs text-slate-500 dark:text-slate-400">${show.year}</p>` : ''}
+                        <div class="flex items-center justify-between mt-0.5">
+                            ${status === 'all' || status === 'favourites' ? `<div class="text-xs">${statusBadge}</div>` : '<div></div>'}
+                            ${lastWatched ? `<p class="text-xs text-slate-400">${lastWatched}</p>` : '<p></p>'}
                         </div>
                     </div>
-                `;
+                </div>`;
             }).join('');
         } else {
+            countEl.textContent = '';
             const statusLabels = {
-                'watching': 'watching',
-                'plan_to_watch': 'planning to watch',
-                'completed': 'completed',
-                'dropped': 'dropped'
+                watching: 'currently watching', dropped: 'dropped', completed: 'completed',
+                plan_to_watch: 'planning to watch', favourites: 'in your favourites', all: 'tracked'
             };
-
             container.innerHTML = `
-                <div class="col-span-full text-center py-12">
-                    <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                <div class="col-span-full text-center py-16">
+                    <svg class="w-14 h-14 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/>
                     </svg>
-                    <p class="text-slate-500 dark:text-slate-400 mb-2">No shows ${statusLabels[status] || status}</p>
-                    <p class="text-sm text-slate-400 dark:text-slate-500">Browse shows and start tracking your progress</p>
-                </div>
-            `;
+                    <p class="text-slate-500 dark:text-slate-400 font-medium">No shows ${statusLabels[status] || status}</p>
+                    ${status === 'all' || status === 'watching' ? '<p class="text-sm text-slate-400 mt-1">Watch something on Plex and it will appear here automatically.</p>' : ''}
+                </div>`;
         }
-    } catch (error) {
-        console.error('Error loading shows:', error);
-        document.getElementById('shows-container').innerHTML = `
-            <div class="col-span-full text-center py-12 text-red-500">
-                Error loading shows. Please try again.
-            </div>
-        `;
+    } catch (err) {
+        console.error(err);
+        document.getElementById('shows-container').innerHTML =
+            '<div class="col-span-full text-center py-12 text-red-500 text-sm">Error loading shows. Please try again.</div>';
     }
 }
 
 function changeStatus(status) {
     currentStatus = status;
-
-    // Update button styles
     document.querySelectorAll('.status-btn').forEach(btn => {
-        if (btn.dataset.status === status) {
-            btn.className = 'status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-sky-500 text-white';
-        } else {
-            btn.className = 'status-btn px-4 py-2 rounded-lg font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
-        }
+        btn.className = btn.dataset.status === status
+            ? 'status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-sky-500 text-white'
+            : 'status-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
     });
-
     loadShows(status);
 }
 
 async function updateShowStatus(showId, newStatus, event) {
     event.preventDefault();
     event.stopPropagation();
-
     if (!newStatus) return;
-
     try {
-        const response = await fetch(`/api/profile/progress/show/${showId}/status`, {
+        const r = await fetch(`/api/profile/progress/show/${showId}/status`, {
             method: 'PATCH',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({status: newStatus})
         });
-
-        const data = await response.json();
-
-        if (data.success) {
-            // Reload current status view
-            loadShows(currentStatus);
-        } else {
-            alert('Error updating status: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error updating status');
-    }
-
-    // Reset the select
+        const data = await r.json();
+        if (data.success) loadShows(currentStatus);
+        else alert('Error: ' + data.error);
+    } catch(e) { alert('Error updating status'); }
     event.target.value = '';
 }
 </script>

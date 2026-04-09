@@ -268,9 +268,6 @@
             const alarms = Object.fromEntries(FEEDS.map(f => [f.key, '1d']));
 
             function feedUrl(key) {
-                // Use window.location.origin so the scheme always matches the
-                // browser (https://) — avoids the iOS "insecure connection" error
-                // that occurs when webcal:// triggers an HTTP request.
                 const origin = window.location.origin;
                 let path = PATHS[key] || '';
                 const alarm = alarms[key];
@@ -280,6 +277,13 @@
                     path += (path.includes('?') ? '&' : '?') + 'alarm=' + alarm;
                 }
                 return origin + path;
+            }
+
+            // webcals:// is the HTTPS variant of webcal://.
+            // webcal:// causes iOS to make an HTTP request → insecure warning.
+            // webcals:// forces HTTPS from the start → no warning.
+            function subscribeUrl(key) {
+                return feedUrl(key).replace(/^https?:\/\//, 'webcals://');
             }
 
             function render() {
@@ -299,7 +303,7 @@
                             <option value="2h">2 hours before</option>
                             <option value="none">No reminder</option>
                         </select>
-                        <a id="sub-${f.key}" href="${feedUrl(f.key)}"
+                        <a id="sub-${f.key}" href="${subscribeUrl(f.key)}"
                            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
                                   bg-sky-600 hover:bg-sky-700 text-white transition-colors">
                             Subscribe
@@ -323,8 +327,8 @@
                 alarms[key] = value;
                 const urlInput = document.getElementById('url-' + key);
                 const subLink  = document.getElementById('sub-' + key);
-                if (urlInput) urlInput.value = feedUrl(key);
-                if (subLink)  subLink.href   = feedUrl(key);
+                if (urlInput) urlInput.value    = feedUrl(key);
+                if (subLink)  subLink.href      = subscribeUrl(key);
             };
 
             window.copyFeedUrl = function(key) {

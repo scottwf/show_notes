@@ -1,0 +1,306 @@
+{% extends "layout.html" %}
+
+{% block title %}Notifications{% endblock %}
+
+{% block page_content %}
+<div class="container mx-auto px-4 py-6 max-w-4xl">
+
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Notifications</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Updates about your favourite shows and account activity</p>
+        </div>
+        {% if unread_notification_count > 0 %}
+        <button onclick="markAllAsRead()"
+            class="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-700 text-white rounded-lg transition-colors">
+            Mark All as Read
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Sub-tabs: All / Unread / Read -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-5">
+        <nav class="flex border-b border-slate-200 dark:border-slate-700">
+            <a href="{{ url_for('main.notifications', tab='all', type=active_type_filter) }}"
+               class="px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap
+                      {% if active_tab_filter == 'all' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200{% endif %}">
+                All
+                <span class="ml-1.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">{{ all_count }}</span>
+            </a>
+            <a href="{{ url_for('main.notifications', tab='unread', type=active_type_filter) }}"
+               class="px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap
+                      {% if active_tab_filter == 'unread' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200{% endif %}">
+                Unread
+                {% if unread_count_tab > 0 %}
+                <span class="ml-1.5 text-xs bg-red-500 text-white rounded-full px-2 py-0.5">{{ unread_count_tab }}</span>
+                {% else %}
+                <span class="ml-1.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">0</span>
+                {% endif %}
+            </a>
+            <a href="{{ url_for('main.notifications', tab='read', type=active_type_filter) }}"
+               class="px-5 py-3 text-sm font-medium transition-colors whitespace-nowrap
+                      {% if active_tab_filter == 'read' %}text-sky-600 dark:text-sky-400 border-b-2 border-sky-600 dark:border-sky-400{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200{% endif %}">
+                Read
+                <span class="ml-1.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">{{ read_count_tab }}</span>
+            </a>
+        </nav>
+
+        <!-- Type filter chips -->
+        {% if type_counts %}
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-b border-slate-100 dark:border-slate-700/60">
+            <a href="{{ url_for('main.notifications', tab=active_tab_filter) }}"
+               class="px-3 py-1 rounded-full text-xs font-medium transition-colors
+                      {% if not active_type_filter %}bg-sky-500 text-white{% else %}bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600{% endif %}">
+                All types
+            </a>
+            {% for tc in type_counts %}
+            {% set type_label = tc.t | replace('_', ' ') | title %}
+            {% set type_icon = {
+                'announcement': '📢',
+                'new_episode': '📺',
+                'new_season': '🎬',
+                'issue_report': '🔧',
+                'system': 'ℹ️',
+                'warning': '⚠️'
+            }.get(tc.t, '🔔') %}
+            <a href="{{ url_for('main.notifications', tab=active_tab_filter, type=tc.t) }}"
+               class="px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1
+                      {% if active_type_filter == tc.t %}bg-sky-500 text-white{% else %}bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600{% endif %}">
+                {{ type_icon }} {{ type_label }}
+                <span class="opacity-70">({{ tc.cnt }})</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Notification list -->
+        <div class="p-4">
+            {% if notifications %}
+            <div class="space-y-3">
+                {% for notif in notifications %}
+                {% set type_colors = {
+                    'warning': 'border-amber-500',
+                    'issue_report': 'border-orange-500',
+                    'new_episode': 'border-sky-500',
+                    'new_season': 'border-violet-500',
+                    'announcement': 'border-emerald-500'
+                } %}
+                {% set border_class = type_colors.get(notif.notif_type, 'border-sky-500') if not notif.is_read else '' %}
+                <div class="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-4
+                            {% if not notif.is_read %}border-l-4 {{ border_class }}{% endif %}
+                            hover:shadow-md transition-shadow">
+                    <div class="flex gap-4">
+                        <!-- Show Poster -->
+                        <div class="flex-shrink-0">
+                            {% if notif.show_tmdb_id %}
+                            <a href="{{ url_for('main.show_detail', tmdb_id=notif.show_tmdb_id) }}">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=notif.show_tmdb_id) }}"
+                                    alt="{{ notif.show_title }}"
+                                    class="w-14 h-20 object-cover rounded shadow-sm"
+                                    onerror="this.src='{{ url_for('static', filename='logos/placeholder_poster.png') }}';">
+                            </a>
+                            {% else %}
+                            <!-- Type icon placeholder -->
+                            {% set icon_bg = {'warning': 'bg-amber-100 dark:bg-amber-900/30', 'issue_report': 'bg-orange-100 dark:bg-orange-900/30', 'announcement': 'bg-emerald-100 dark:bg-emerald-900/30'}.get(notif.notif_type, 'bg-sky-100 dark:bg-sky-900/30') %}
+                            <div class="w-14 h-20 {{ icon_bg }} rounded flex items-center justify-center">
+                                {% if notif.notif_type == 'warning' %}
+                                <svg class="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                {% elif notif.notif_type == 'announcement' %}
+                                <svg class="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                                {% else %}
+                                <svg class="w-7 h-7 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Content -->
+                        <div class="flex-grow min-w-0">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="min-w-0 flex-grow">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="font-semibold text-slate-800 dark:text-slate-100">{{ notif.title }}</h3>
+                                        {% if not notif.is_read %}
+                                        <span class="inline-block w-2 h-2 bg-sky-500 rounded-full flex-shrink-0" title="Unread"></span>
+                                        {% endif %}
+                                        {% if notif.notif_type %}
+                                        {% set badge_colors = {'warning': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400', 'issue_report': 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400', 'announcement': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400', 'new_episode': 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400'} %}
+                                        <span class="text-xs px-2 py-0.5 rounded-full {{ badge_colors.get(notif.notif_type, 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300') }}">
+                                            {{ notif.notif_type | replace('_', ' ') | title }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-sm text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-line notification-message">{{ notif.message }}</p>
+
+                                    <!-- Action links -->
+                                    <div class="flex gap-2 mt-2 items-center flex-wrap">
+                                        {% if notif.show_tmdb_id %}
+                                        <a href="{{ url_for('main.show_detail', tmdb_id=notif.show_tmdb_id) }}"
+                                           class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded transition-colors">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/></svg>
+                                            View Show
+                                        </a>
+                                        {% endif %}
+                                        {% if notif.season_number and notif.episode_number and notif.show_tmdb_id %}
+                                        <a href="{{ url_for('main.episode_detail', tmdb_id=notif.show_tmdb_id, season_number=notif.season_number, episode_number=notif.episode_number) }}"
+                                           class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded transition-colors">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            View Episode
+                                        </a>
+                                        {% endif %}
+                                        {% if notif.service_url %}
+                                        <a href="{{ notif.service_url }}" target="_blank" rel="noopener noreferrer"
+                                           class="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded transition-colors">
+                                            Open in {% if 'sonarr' in notif.service_url.lower() %}Sonarr{% else %}Radarr{% endif %}
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Timestamp + actions -->
+                                <div class="text-right flex-shrink-0 flex flex-col items-end gap-1.5 min-w-[80px]">
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 timestamp" data-timestamp="{{ notif.created_at }}"></p>
+                                    {% if not notif.is_read %}
+                                        {% if notif.notif_type == 'issue_report' and notif.issue_report_id %}
+                                        <button onclick="resolveIssue({{ notif.id }}, {{ notif.issue_report_id }})"
+                                            class="px-2.5 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                            Resolve
+                                        </button>
+                                        {% else %}
+                                        <button onclick="markAsRead({{ notif.id }})"
+                                            class="text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                                            Mark read
+                                        </button>
+                                        {% endif %}
+                                    {% endif %}
+                                    <button onclick="dismissNotif({{ notif.id }}, this)"
+                                        class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if notifications|length >= 100 %}
+            <p class="mt-4 text-center text-xs text-slate-400">Showing most recent 100 notifications</p>
+            {% endif %}
+
+            {% else %}
+            <div class="py-16 text-center">
+                <svg class="w-14 h-14 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <p class="text-slate-500 dark:text-slate-400 font-medium">No notifications
+                {% if active_tab_filter == 'unread' %}to read{% elif active_tab_filter == 'read' %}yet{% endif %}</p>
+                {% if active_tab_filter == 'all' %}
+                <p class="text-sm text-slate-400 mt-1">You'll be notified when new episodes are available for your favourited shows.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Dismissed notifications -->
+    {% if dismissed_notifications %}
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <button onclick="toggleDismissed()" class="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+            <span class="font-medium">Dismissed ({{ dismissed_notifications|length }})</span>
+            <svg id="dismissed-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+        </button>
+        <div id="dismissed-list" class="hidden border-t border-slate-100 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/60">
+            {% for notif in dismissed_notifications %}
+            <div class="flex items-center gap-3 px-4 py-3 opacity-60 hover:opacity-100 transition-opacity">
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{{ notif.title }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ notif.message }}</p>
+                </div>
+                <button onclick="restoreNotif({{ notif.id }}, this)"
+                    class="flex-shrink-0 text-xs text-sky-600 dark:text-sky-400 hover:underline whitespace-nowrap">
+                    Restore
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Format timestamps
+    document.querySelectorAll('.timestamp').forEach(function (elem) {
+        const iso = elem.getAttribute('data-timestamp');
+        if (!iso) return;
+        try {
+            const date = new Date(iso);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            if (diffMins < 1) elem.textContent = 'Just now';
+            else if (diffMins < 60) elem.textContent = diffMins + 'm ago';
+            else if (diffHours < 24) elem.textContent = diffHours + 'h ago';
+            else if (diffDays < 7) elem.textContent = diffDays + 'd ago';
+            else elem.textContent = date.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+        } catch(e) {}
+    });
+
+    // Linkify notification messages
+    document.querySelectorAll('.notification-message').forEach(function (elem) {
+        const text = elem.textContent;
+        const linked = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-sky-600 dark:text-sky-400 hover:underline">$1</a>');
+        if (linked !== text) elem.innerHTML = linked;
+    });
+});
+
+async function markAsRead(id) {
+    const r = await fetch(`/api/profile/notification/${id}/read`, {method:'POST'});
+    if ((await r.json()).success) location.reload();
+}
+
+async function markAllAsRead() {
+    const r = await fetch('/api/profile/notifications/read-all', {method:'POST'});
+    if ((await r.json()).success) location.reload();
+}
+
+async function dismissNotif(id, btn) {
+    const r = await fetch(`/api/profile/notification/${id}/dismiss`, {method:'POST'});
+    if (!r.ok) return;
+    const card = btn.closest('.bg-slate-50, [class*="rounded-lg p-4"]');
+    if (card) { card.style.transition='opacity .3s'; card.style.opacity='0'; setTimeout(()=>card.remove(), 300); }
+}
+
+async function restoreNotif(id, btn) {
+    const r = await fetch(`/api/profile/notification/${id}/restore`, {method:'POST'});
+    if (!r.ok) return;
+    const row = btn.closest('div[class*="flex items-center"]');
+    if (row) { row.style.transition='opacity .3s'; row.style.opacity='0'; setTimeout(()=>{row.remove(); location.reload();}, 350); }
+}
+
+async function resolveIssue(notificationId, issueReportId) {
+    const notes = prompt('Resolution notes (optional):');
+    if (notes === null) return;
+    const r = await fetch(`/api/profile/notification/${notificationId}/resolve`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({resolution_notes: notes})
+    });
+    if ((await r.json()).success) location.reload();
+}
+
+function toggleDismissed() {
+    const list = document.getElementById('dismissed-list');
+    const chevron = document.getElementById('dismissed-chevron');
+    list.classList.toggle('hidden');
+    chevron.style.transform = list.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+</script>
+{% endblock %}

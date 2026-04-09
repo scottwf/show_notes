@@ -3338,37 +3338,50 @@ def profile():
     # Get profile statistics
     stats = _get_profile_stats(db, user_id, member_id=session.get('member_id'))
 
-    # Get watch history (recent 50 unique items)
+    # Get watch history — one entry per show/movie, most recent play per title
     watch_history = db.execute("""
-        SELECT
-            id, event_type, plex_username, media_type, title, show_title,
-            season_episode, view_offset_ms, duration_ms, event_timestamp,
-            tmdb_id, grandparent_rating_key,
-            MAX(event_timestamp) as latest_timestamp
-        FROM plex_activity_log
-        WHERE plex_username = ?
-        AND event_type IN ('media.stop', 'media.scrobble')
-        AND (duration_ms IS NULL OR duration_ms >= 600000)
-        GROUP BY
-            CASE
-                WHEN media_type = 'episode' THEN show_title || '-' || season_episode
-                WHEN media_type = 'movie' THEN 'movie-' || COALESCE(tmdb_id, title)
-                ELSE title
-            END
-        ORDER BY latest_timestamp DESC
-        LIMIT 50
+        WITH ranked AS (
+            SELECT
+                id, media_type, show_title, title, season_episode, tmdb_id,
+                grandparent_rating_key, event_timestamp, view_offset_ms, duration_ms,
+                CASE
+                    WHEN media_type = 'episode' THEN 'show-' || LOWER(COALESCE(show_title, title))
+                    WHEN media_type = 'movie'   THEN 'movie-' || COALESCE(CAST(tmdb_id AS TEXT), LOWER(title))
+                    ELSE LOWER(title)
+                END AS group_key,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CASE
+                        WHEN media_type = 'episode' THEN 'show-' || LOWER(COALESCE(show_title, title))
+                        WHEN media_type = 'movie'   THEN 'movie-' || COALESCE(CAST(tmdb_id AS TEXT), LOWER(title))
+                        ELSE LOWER(title)
+                    END
+                    ORDER BY event_timestamp DESC
+                ) AS rn,
+                COUNT(*) OVER (
+                    PARTITION BY CASE
+                        WHEN media_type = 'episode' THEN 'show-' || LOWER(COALESCE(show_title, title))
+                        WHEN media_type = 'movie'   THEN 'movie-' || COALESCE(CAST(tmdb_id AS TEXT), LOWER(title))
+                        ELSE LOWER(title)
+                    END
+                ) AS play_count
+            FROM plex_activity_log
+            WHERE plex_username = ?
+              AND event_type IN ('media.stop', 'media.scrobble')
+              AND (duration_ms IS NULL OR duration_ms >= 600000)
+        )
+        SELECT * FROM ranked WHERE rn = 1
+        ORDER BY event_timestamp DESC
+        LIMIT 200
     """, (s_username,)).fetchall()
 
     # Enrich watch history with show/movie data using batch queries to avoid N+1
     enriched_history = []
 
-    # Collect all tmdb_ids for movies and show titles for episodes
     movie_tmdb_ids = [item['tmdb_id'] for item in watch_history
                       if item['media_type'] == 'movie' and item['tmdb_id']]
     show_titles = [item['show_title'].lower() for item in watch_history
                    if item['media_type'] == 'episode' and item['show_title']]
 
-    # Batch fetch movies
     movies_map = {}
     if movie_tmdb_ids:
         placeholders = ','.join('?' * len(movie_tmdb_ids))
@@ -3378,7 +3391,6 @@ def profile():
         ).fetchall()
         movies_map = {m['tmdb_id']: dict(m) for m in movies}
 
-    # Batch fetch shows
     shows_map = {}
     if show_titles:
         placeholders = ','.join('?' * len(show_titles))
@@ -3394,6 +3406,7 @@ def profile():
         if item_dict['media_type'] == 'movie' and item_dict.get('tmdb_id'):
             movie = movies_map.get(item_dict['tmdb_id'])
             if movie:
+                item_dict['year'] = movie.get('year')
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=item_dict['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.movie_detail', tmdb_id=item_dict['tmdb_id'])
 
@@ -3402,8 +3415,6 @@ def profile():
             if show:
                 item_dict['cached_poster_url'] = url_for('main.image_proxy', type='poster', id=show['tmdb_id'])
                 item_dict['detail_url'] = url_for('main.show_detail', tmdb_id=show['tmdb_id'])
-
-                # Try to find episode detail link
                 if item_dict.get('season_episode'):
                     match = re.match(r'S(\d+)E(\d+)', item_dict['season_episode'])
                     if match:
@@ -3510,61 +3521,110 @@ def profile_favorites():
 @main_bp.route('/profile/notifications')
 @login_required
 def profile_notifications():
-    """Display user's notifications"""
+    """Redirect to standalone notifications page"""
+    return redirect(url_for('main.notifications'))
+
+
+@main_bp.route('/notifications')
+@login_required
+def notifications():
+    """Standalone notifications page with sub-tabs and type filters"""
     user_id = session.get('user_id')
     if not user_id:
-        flash('Please log in to view your profile.', 'warning')
+        flash('Please log in to view notifications.', 'warning')
         return redirect(url_for('main.login'))
 
     db = database.get_db()
-
-    # Get user info
     user = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
-
-    # Convert user row to dict so we can add the plex_member_since field
     user_dict = dict(user)
-    # Use the plex_joined_at from Plex API if available, otherwise fall back to created_at
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
-    # Get notifications, split into active and dismissed
     member_id = session.get('member_id')
+    tab = request.args.get('tab', 'all')       # all, unread, read
+    active_type = request.args.get('type', '')  # filter by notification type
+
     _notif_select = """
         SELECT
-            n.id, n.user_id, n.show_id, n.notification_type, n.title, n.message,
-            n.episode_id, n.season_number, n.episode_number, n.is_read, n.is_dismissed,
-            n.created_at, n.read_at, n.issue_report_id, n.service_url,
+            n.id, n.user_id, n.show_id, COALESCE(n.notification_type, n.type) as notif_type,
+            n.title, n.message, n.episode_id, n.season_number, n.episode_number,
+            n.is_read, n.is_dismissed, n.created_at, n.read_at, n.issue_report_id, n.service_url,
             s.tmdb_id as show_tmdb_id, s.title as show_title
         FROM user_notifications n
         LEFT JOIN sonarr_shows s ON n.show_id = s.id
     """
-    if member_id:
-        notifications = db.execute(
-            _notif_select + "WHERE n.user_id = ? AND n.member_id = ? AND n.is_dismissed = 0 ORDER BY n.created_at DESC LIMIT 50",
-            (user_id, member_id)
-        ).fetchall()
-        dismissed_notifications = db.execute(
-            _notif_select + "WHERE n.user_id = ? AND n.member_id = ? AND n.is_dismissed = 1 ORDER BY n.created_at DESC LIMIT 20",
-            (user_id, member_id)
-        ).fetchall()
-    else:
-        notifications = db.execute(
-            _notif_select + "WHERE n.user_id = ? AND n.is_dismissed = 0 ORDER BY n.created_at DESC LIMIT 50",
-            (user_id,)
-        ).fetchall()
-        dismissed_notifications = db.execute(
-            _notif_select + "WHERE n.user_id = ? AND n.is_dismissed = 1 ORDER BY n.created_at DESC LIMIT 20",
-            (user_id,)
-        ).fetchall()
 
-    # Get profile statistics using helper function
+    def _build_where(include_dismissed=False, extra=''):
+        clause = "n.user_id = ?"
+        params = [user_id]
+        if member_id:
+            clause += " AND (n.member_id = ? OR n.member_id IS NULL)"
+            params.append(member_id)
+        clause += f" AND n.is_dismissed = {1 if include_dismissed else 0}"
+        if not include_dismissed:
+            if tab == 'unread':
+                clause += " AND n.is_read = 0"
+            elif tab == 'read':
+                clause += " AND n.is_read = 1"
+        if active_type:
+            clause += " AND COALESCE(n.notification_type, n.type) = ?"
+            params.append(active_type)
+        if extra:
+            clause += f" {extra}"
+        return clause, params
+
+    where, params = _build_where()
+    notifications_list = db.execute(
+        _notif_select + f"WHERE {where} ORDER BY n.created_at DESC LIMIT 100",
+        params
+    ).fetchall()
+
+    dismissed_where, dismissed_params = _build_where(include_dismissed=True)
+    dismissed_notifications = db.execute(
+        _notif_select + f"WHERE {dismissed_where} ORDER BY n.created_at DESC LIMIT 20",
+        dismissed_params
+    ).fetchall()
+
+    # Distinct types for filter chips
+    base_clause = "n.user_id = ? AND n.is_dismissed = 0"
+    base_params = [user_id]
+    if member_id:
+        base_clause += " AND (n.member_id = ? OR n.member_id IS NULL)"
+        base_params.append(member_id)
+    type_counts = db.execute(
+        f"""SELECT COALESCE(notification_type, type) as t, COUNT(*) as cnt
+            FROM user_notifications n WHERE {base_clause}
+            AND COALESCE(notification_type, type) IS NOT NULL
+            GROUP BY t ORDER BY cnt DESC""",
+        base_params
+    ).fetchall()
+
+    # Counts for sub-tabs
+    unread_count = db.execute(
+        f"SELECT COUNT(*) FROM user_notifications n WHERE {base_clause} AND n.is_read = 0",
+        base_params
+    ).fetchone()[0]
+    read_count = db.execute(
+        f"SELECT COUNT(*) FROM user_notifications n WHERE {base_clause} AND n.is_read = 1",
+        base_params
+    ).fetchone()[0]
+    all_count = db.execute(
+        f"SELECT COUNT(*) FROM user_notifications n WHERE {base_clause}",
+        base_params
+    ).fetchone()[0]
+
     stats = _get_profile_stats(db, user_id, member_id=member_id)
 
-    return render_template('profile_notifications.html',
+    return render_template('notifications.html',
                          user=user_dict,
-                         notifications=notifications,
+                         notifications=notifications_list,
                          dismissed_notifications=dismissed_notifications,
-                         **stats,
-                         active_tab='notifications')
+                         type_counts=type_counts,
+                         active_tab_filter=tab,
+                         active_type_filter=active_type,
+                         all_count=all_count,
+                         unread_count_tab=unread_count,
+                         read_count_tab=read_count,
+                         **stats)
 
 
 @main_bp.route('/api/profile/favorite/<int:show_id>', methods=['POST', 'DELETE'])
@@ -4165,7 +4225,28 @@ def api_statistics_overview():
     # Get current streak
     current_streak = _calculate_current_streak(user_id)
 
-    # Convert milliseconds to hours
+    # Shows completed (>= 95% completion)
+    completed_shows = db.execute('''
+        SELECT COUNT(*) as cnt FROM user_show_progress
+        WHERE user_id = ? AND completion_percentage >= 95
+    ''', (user_id,)).fetchone()['cnt'] or 0
+
+    # Average weekly watch hours (last 12 weeks)
+    weekly_avg = db.execute('''
+        SELECT COALESCE(SUM(total_watch_time_ms), 0) / 12.0 / 3600000.0 AS avg_weekly_hours
+        FROM user_watch_statistics
+        WHERE user_id = ? AND stat_date >= date('now', '-84 days')
+    ''', (user_id,)).fetchone()['avg_weekly_hours'] or 0
+
+    # Longest single-day watch
+    best_day = db.execute('''
+        SELECT stat_date, total_watch_time_ms / 3600000.0 AS hours
+        FROM user_watch_statistics
+        WHERE user_id = ?
+        ORDER BY total_watch_time_ms DESC
+        LIMIT 1
+    ''', (user_id,)).fetchone()
+
     total_hours = (total_stats['total_watch_time_ms'] or 0) / (1000 * 60 * 60)
 
     return jsonify({
@@ -4173,7 +4254,11 @@ def api_statistics_overview():
         'total_watch_time_hours': round(total_hours, 1),
         'total_episodes': total_stats['total_episodes'] or 0,
         'total_movies': total_stats['total_movies'] or 0,
-        'current_streak_days': current_streak
+        'current_streak_days': current_streak,
+        'completed_shows': completed_shows,
+        'avg_weekly_hours': round(weekly_avg, 1),
+        'best_day_hours': round(best_day['hours'], 1) if best_day else 0,
+        'best_day_date': best_day['stat_date'] if best_day else None
     })
 
 
@@ -4396,6 +4481,35 @@ def api_statistics_top_shows():
     return jsonify({
         'success': True,
         'items': items
+    })
+
+
+@main_bp.route('/api/profile/statistics/monthly')
+@login_required
+def api_statistics_monthly():
+    """Get monthly watch summary for bar/area chart"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    db = database.get_db()
+
+    rows = db.execute('''
+        SELECT
+            strftime('%Y-%m', stat_date) AS month,
+            ROUND(SUM(total_watch_time_ms) / 3600000.0, 1) AS watch_hours,
+            SUM(episode_count) AS episodes,
+            SUM(movie_count) AS movies
+        FROM user_watch_statistics
+        WHERE user_id = ?
+          AND stat_date >= date('now', '-24 months')
+        GROUP BY month
+        ORDER BY month ASC
+    ''', (user_id,)).fetchall()
+
+    return jsonify({
+        'success': True,
+        'data': [dict(r) for r in rows]
     })
 
 
@@ -5016,28 +5130,53 @@ def api_get_progress_shows():
     if not user_id:
         return jsonify({'success': False, 'error': 'Not logged in'}), 401
 
-    status = request.args.get('status', 'watching')
+    status = request.args.get('status', 'watching')  # watching|completed|dropped|plan_to_watch|favourites|all
+    member_id = session.get('member_id')
 
     db = database.get_db()
 
-    shows = db.execute('''
-        SELECT
-            usp.id,
-            usp.show_id,
-            usp.watched_episodes,
-            usp.total_episodes,
-            usp.completion_percentage,
-            usp.status,
-            usp.last_watched_at,
-            s.title,
-            s.poster_url as poster_path,
-            s.tmdb_id,
-            s.year
-        FROM user_show_progress usp
-        JOIN sonarr_shows s ON usp.show_id = s.id
-        WHERE usp.user_id = ? AND usp.status = ?
-        ORDER BY usp.last_watched_at DESC
-    ''', (user_id, status)).fetchall()
+    # Derive status from data since status column is often NULL
+    # dropped = last watched > 90 days ago and not completed
+    # watching = last watched within 90 days and not completed
+    # completed = completion >= 95%
+    cte = '''
+        WITH progress AS (
+            SELECT
+                usp.id, usp.show_id, usp.watched_episodes, usp.total_episodes,
+                usp.completion_percentage, usp.last_watched_at,
+                s.title, s.poster_url AS poster_path, s.tmdb_id, s.year,
+                CASE
+                    WHEN usp.completion_percentage >= 95
+                         OR (usp.total_episodes > 0 AND usp.watched_episodes >= usp.total_episodes)
+                        THEN 'completed'
+                    WHEN usp.last_watched_at IS NOT NULL
+                         AND (julianday('now') - julianday(usp.last_watched_at)) <= 90
+                        THEN 'watching'
+                    WHEN usp.last_watched_at IS NOT NULL
+                        THEN 'dropped'
+                    ELSE 'plan_to_watch'
+                END AS derived_status,
+                CASE WHEN uf.id IS NOT NULL THEN 1 ELSE 0 END AS is_favourite
+            FROM user_show_progress usp
+            JOIN sonarr_shows s ON usp.show_id = s.id
+            LEFT JOIN user_favorites uf
+                ON uf.show_id = usp.show_id
+               AND uf.user_id = usp.user_id
+               AND uf.media_type = 'show'
+            WHERE usp.user_id = ? AND usp.watched_episodes > 0
+        )
+    '''
+    params = [user_id]
+
+    if status == 'favourites':
+        query = cte + "SELECT * FROM progress WHERE is_favourite = 1 ORDER BY last_watched_at DESC"
+    elif status == 'all':
+        query = cte + "SELECT * FROM progress ORDER BY last_watched_at DESC"
+    else:
+        query = cte + "SELECT * FROM progress WHERE derived_status = ? ORDER BY last_watched_at DESC"
+        params.append(status)
+
+    shows = db.execute(query, params).fetchall()
 
     shows_data = []
     for show in shows:
@@ -5051,8 +5190,9 @@ def api_get_progress_shows():
             'watched_episodes': show['watched_episodes'] or 0,
             'total_episodes': show['total_episodes'] or 0,
             'completion_percentage': round(show['completion_percentage'] or 0, 1),
-            'status': show['status'],
-            'last_watched_at': show['last_watched_at']
+            'status': show['derived_status'],
+            'last_watched_at': show['last_watched_at'],
+            'is_favourite': bool(show['is_favourite'])
         })
 
     return jsonify({

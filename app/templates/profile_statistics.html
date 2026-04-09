@@ -7,59 +7,46 @@
         <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">All-time statistics from your complete viewing history</p>
     </div>
 
-    <!-- Overview Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div class="bg-gradient-to-br from-sky-500 to-blue-600 rounded-lg p-6 text-white shadow-lg">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sky-100 text-sm font-medium">Total Watch Time</p>
-                    <p id="total-watch-hours" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-sky-100 text-xs mt-1">hours (all time)</p>
-                </div>
-                <svg class="w-12 h-12 text-sky-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            </div>
+    <!-- Overview Cards — row 1 -->
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div class="bg-gradient-to-br from-sky-500 to-blue-600 rounded-lg p-5 text-white shadow-lg">
+            <p class="text-sky-100 text-sm font-medium">Total Watch Time</p>
+            <p id="total-watch-hours" class="text-3xl font-bold mt-1">--</p>
+            <p class="text-sky-100 text-xs mt-1">hours (all time)</p>
         </div>
-
-        <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-6 text-white shadow-lg">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-purple-100 text-sm font-medium">Episodes Watched</p>
-                    <p id="total-episodes" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-purple-100 text-xs mt-1">episodes (all time)</p>
-                </div>
-                <svg class="w-12 h-12 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
-                </svg>
-            </div>
+        <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg p-5 text-white shadow-lg">
+            <p class="text-purple-100 text-sm font-medium">Episodes Watched</p>
+            <p id="total-episodes" class="text-3xl font-bold mt-1">--</p>
+            <p class="text-purple-100 text-xs mt-1">all time</p>
         </div>
-
-        <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg p-6 text-white shadow-lg">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-green-100 text-sm font-medium">Movies Watched</p>
-                    <p id="total-movies" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-green-100 text-xs mt-1">movies (all time)</p>
-                </div>
-                <svg class="w-12 h-12 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
-                </svg>
-            </div>
+        <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg p-5 text-white shadow-lg">
+            <p class="text-green-100 text-sm font-medium">Movies Watched</p>
+            <p id="total-movies" class="text-3xl font-bold mt-1">--</p>
+            <p class="text-green-100 text-xs mt-1">all time</p>
         </div>
+        <div class="bg-gradient-to-br from-orange-500 to-red-600 rounded-lg p-5 text-white shadow-lg">
+            <p class="text-orange-100 text-sm font-medium">Current Streak</p>
+            <p id="current-streak" class="text-3xl font-bold mt-1">--</p>
+            <p class="text-orange-100 text-xs mt-1">days</p>
+        </div>
+    </div>
 
-        <div class="bg-gradient-to-br from-orange-500 to-red-600 rounded-lg p-6 text-white shadow-lg">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-orange-100 text-sm font-medium">Current Streak</p>
-                    <p id="current-streak" class="text-3xl font-bold mt-1">--</p>
-                    <p class="text-orange-100 text-xs mt-1">days</p>
-                </div>
-                <svg class="w-12 h-12 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path>
-                </svg>
-            </div>
+    <!-- Overview Cards — row 2 -->
+    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white dark:bg-slate-800 rounded-lg p-5 shadow border border-slate-200 dark:border-slate-700">
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Shows Completed</p>
+            <p id="completed-shows" class="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-1">--</p>
+            <p class="text-slate-400 text-xs mt-1">series finished</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg p-5 shadow border border-slate-200 dark:border-slate-700">
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Avg per Week</p>
+            <p id="avg-weekly-hours" class="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-1">--</p>
+            <p class="text-slate-400 text-xs mt-1">hours (last 12 weeks)</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg p-5 shadow border border-slate-200 dark:border-slate-700 col-span-2">
+            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Best Day</p>
+            <p id="best-day-hours" class="text-3xl font-bold text-slate-800 dark:text-slate-100 mt-1">--</p>
+            <p id="best-day-date" class="text-slate-400 text-xs mt-1">hours watched</p>
         </div>
     </div>
 
@@ -94,6 +81,14 @@
             <div class="relative" style="height: 300px;">
                 <canvas id="hourChart"></canvas>
             </div>
+        </div>
+    </div>
+
+    <!-- Monthly Watch Summary -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 mb-8">
+        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Monthly Watch History</h3>
+        <div class="relative" style="height:240px;">
+            <canvas id="monthlyChart"></canvas>
         </div>
     </div>
 
@@ -149,6 +144,12 @@ async function loadOverview() {
             document.getElementById('total-episodes').textContent = data.total_episodes || '0';
             document.getElementById('total-movies').textContent = data.total_movies || '0';
             document.getElementById('current-streak').textContent = data.current_streak_days || '0';
+            document.getElementById('completed-shows').textContent = data.completed_shows || '0';
+            document.getElementById('avg-weekly-hours').textContent = data.avg_weekly_hours || '0';
+            if (data.best_day_hours) {
+                document.getElementById('best-day-hours').textContent = data.best_day_hours;
+                document.getElementById('best-day-date').textContent = 'hours on ' + (data.best_day_date || '');
+            }
         }
     } catch (error) {
         console.error('Error loading overview:', error);
@@ -421,11 +422,48 @@ function changeTopMediaType(type) {
 }
 
 // Initialize on page load
+async function loadMonthlyChart() {
+    try {
+        const r = await fetch('/api/profile/statistics/monthly');
+        const data = await r.json();
+        if (!data.success || !data.data.length) return;
+        const labels = data.data.map(d => {
+            const [y, m] = d.month.split('-');
+            return new Date(y, m-1).toLocaleDateString('en-US', {month:'short', year:'2-digit'});
+        });
+        const hours = data.data.map(d => d.watch_hours || 0);
+        const ctx = document.getElementById('monthlyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Hours watched',
+                    data: hours,
+                    backgroundColor: chartColors.primary + 'cc',
+                    borderColor: chartColors.primary,
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {legend:{display:false}, tooltip:{callbacks:{label: ctx => `${ctx.raw}h`}}},
+                scales: {
+                    x: {ticks:{color:chartColors.textColor, font:{size:11}}, grid:{color:chartColors.gridColor+'40'}},
+                    y: {ticks:{color:chartColors.textColor}, grid:{color:chartColors.gridColor+'40'}, beginAtZero:true}
+                }
+            }
+        });
+    } catch(e) { console.error('Monthly chart error:', e); }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     loadOverview();
     loadWatchTimeChart(currentPeriod);
     loadGenreChart();
     loadViewingPatterns();
+    loadMonthlyChart();
     loadTopItems(currentMediaType);
 });
 </script>

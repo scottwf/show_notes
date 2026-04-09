@@ -2,6 +2,62 @@
 
 {% block profile_content %}
 <div>
+    <!-- Profile Info Card -->
+    <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 p-5 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">About</h3>
+                {% if user.bio %}
+                <p class="text-sm text-slate-700 dark:text-slate-300 mb-3">{{ user.bio }}</p>
+                {% else %}
+                <p class="text-sm text-slate-400 italic mb-3">No bio set.</p>
+                {% endif %}
+                <div class="space-y-1.5 text-sm">
+                    {% if user.email %}
+                    <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        <span>{{ user.email }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <span>Member since {{ user.plex_member_since | format_datetime('%B %Y') if user.plex_member_since else 'Unknown' }}</span>
+                    </div>
+                    {% if user.plex_username %}
+                    <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        <span class="font-mono text-xs">@{{ user.plex_username }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">Profile Visibility</h3>
+                <div class="grid grid-cols-2 gap-1.5 text-xs">
+                    {% for field, label in [
+                        ('profile_show_profile','Profile'),('profile_show_activity','Activity'),
+                        ('profile_show_history','Watch History'),('profile_show_stats','Statistics'),
+                        ('profile_show_favorites','Favourites'),('profile_show_progress','Progress'),
+                        ('profile_show_lists','Lists'),('allow_recommendations','Recommendations')
+                    ] %}
+                    <div class="flex items-center gap-1.5 {% if user[field] %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+                        {% if user[field] %}
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                        {% else %}
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                        {% endif %}
+                        <span>{{ label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('main.profile_settings') }}" class="inline-flex items-center gap-1 mt-3 text-xs text-sky-600 dark:text-sky-400 hover:underline">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Edit privacy settings
+                </a>
+            </div>
+        </div>
+    </div>
+
     {# Now Playing Section #}
     {% if current_plex_event %}
       <div class="mb-8">
@@ -87,13 +143,30 @@
       </div>
     {% endif %}
 
-    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4">Recent Watch History</h2>
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">Watch History</h2>
+        <!-- Sort controls -->
+        <div id="sort-btns" class="flex gap-1.5 text-xs">
+            <button onclick="sortHistory('recent')" data-sort="recent"
+                class="sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-sky-500 text-white">Recent</button>
+            <button onclick="sortHistory('alpha')" data-sort="alpha"
+                class="sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">A–Z</button>
+            <button onclick="sortHistory('plays')" data-sort="plays"
+                class="sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Most Played</button>
+            <button onclick="sortHistory('year')" data-sort="year"
+                class="sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">Year</button>
+        </div>
+    </div>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mb-3">One entry per title — showing most recently watched episode/film.</p>
 
     {% if watch_history %}
-    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div id="history-list" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
         {% for item in watch_history %}
-        <div class="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors
-                    {% if not loop.last %}border-b border-slate-100 dark:border-slate-700/60{% endif %}">
+        <div class="history-row flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors border-b border-slate-100 dark:border-slate-700/60 last:border-0"
+             data-title="{{ (item.show_title or item.title or '') | lower }}"
+             data-ts="{{ item.event_timestamp or '' }}"
+             data-plays="{{ item.play_count or 1 }}"
+             data-year="{{ item.year or '' }}">
 
             <!-- Thumbnail -->
             <a href="{{ item.detail_url or '#' }}" class="flex-shrink-0">
@@ -130,33 +203,25 @@
                 {% else %}
                 <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{{ item.title }}</p>
                 {% endif %}
-
-                <!-- Progress bar (compact) -->
-                {% if item.view_offset_ms and item.duration_ms and item.duration_ms > 0 %}
-                {% set progress = ((item.view_offset_ms / item.duration_ms) * 100) | round %}
-                {% if progress < 95 %}
-                <div class="mt-1 w-full max-w-xs bg-slate-200 dark:bg-slate-600 rounded-full h-1">
-                    <div class="bg-sky-500 h-1 rounded-full" style="width: {{ progress }}%"></div>
-                </div>
-                {% endif %}
-                {% endif %}
             </div>
 
-            <!-- Date -->
-            <div class="flex-shrink-0 text-right hidden sm:block">
+            <!-- Play count badge + Date -->
+            <div class="flex-shrink-0 text-right flex flex-col items-end gap-1">
+                {% if item.play_count and item.play_count > 1 %}
+                <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full px-2 py-0.5">
+                    {{ item.play_count }}×
+                </span>
+                {% endif %}
                 {% if item.event_timestamp %}
-                <p class="text-xs font-medium text-slate-600 dark:text-slate-300">{{ item.event_timestamp | format_datetime('%b %d, %Y') }}</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500">{{ item.event_timestamp | format_datetime('%-I:%M %p') }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">{{ item.event_timestamp | format_datetime('%b %d, %Y') }}</p>
                 {% endif %}
             </div>
         </div>
         {% endfor %}
     </div>
 
-{% if watch_history|length >= 50 %}
-<div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-    <p>Showing most recent 50 items</p>
-</div>
+{% if watch_history|length >= 200 %}
+<div class="mt-4 text-center text-xs text-slate-400">Showing most recent 200 titles</div>
 {% endif %}
 {% else %}
 <div class="text-center py-12">
@@ -172,6 +237,26 @@
 </div>
 
 <script>
+// Sort history rows
+function sortHistory(mode) {
+    document.querySelectorAll('.sort-btn').forEach(b => {
+        b.className = b.dataset.sort === mode
+            ? 'sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-sky-500 text-white'
+            : 'sort-btn px-3 py-1 rounded-full font-medium transition-colors bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600';
+    });
+    const list = document.getElementById('history-list');
+    if (!list) return;
+    const rows = Array.from(list.querySelectorAll('.history-row'));
+    rows.sort((a, b) => {
+        if (mode === 'recent') return (b.dataset.ts || '').localeCompare(a.dataset.ts || '');
+        if (mode === 'alpha')  return (a.dataset.title || '').localeCompare(b.dataset.title || '');
+        if (mode === 'plays')  return parseInt(b.dataset.plays || 1) - parseInt(a.dataset.plays || 1);
+        if (mode === 'year')   return (b.dataset.year || '0').localeCompare(a.dataset.year || '0');
+        return 0;
+    });
+    rows.forEach(r => list.appendChild(r));
+}
+
     // Now Playing Favorite toggle functionality
     let isNowPlayingFavorite = false;
 

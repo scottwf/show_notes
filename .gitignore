@@ -240,3 +240,6 @@ db_backups/
 
 # Local reference screenshots
 reference/
+
+# Promotional content (local drafts, not for publishing)
+promotion/
