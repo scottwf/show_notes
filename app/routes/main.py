@@ -2572,6 +2572,17 @@ def show_detail(tmdb_id):
     except Exception as e:
         current_app.logger.debug(f"Could not fetch summaries: {e}")
 
+    # Cutoff disclaimer: read from settings, pass to template if disclaimer is enabled
+    cutoff_disclaimer = None
+    try:
+        settings_row = db.execute('SELECT summary_show_disclaimer, llm_knowledge_cutoff_date FROM settings LIMIT 1').fetchone()
+        if settings_row and settings_row['summary_show_disclaimer'] not in ('0', 0, None) and settings_row['llm_knowledge_cutoff_date']:
+            import datetime as _dt
+            cutoff_date = _dt.datetime.strptime(settings_row['llm_knowledge_cutoff_date'], '%Y-%m-%d').date()
+            cutoff_disclaimer = cutoff_date.strftime('%B %Y')
+    except Exception:
+        pass
+
     return render_template('show_detail.html',
                            show=show_dict,
                            seasons_with_episodes=seasons_with_episodes,
@@ -2581,7 +2592,8 @@ def show_detail(tmdb_id):
                            crew_members=crew_members,
                            jellyseer_url=jellyseer_url,
                            season_recaps=season_recaps,
-                           show_summary=show_summary
+                           show_summary=show_summary,
+                           cutoff_disclaimer=cutoff_disclaimer
                            )
 
 def get_next_up_episode(currently_watched, last_watched, show_info, seasons_with_episodes, user_prefs=None):
@@ -6499,6 +6511,39 @@ def create_problem_report():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@main_bp.route('/api/summary/feedback', methods=['POST'])
+@login_required
+def summary_feedback():
+    """Submit a thumbs up/down rating or problem report on an AI summary."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'success': False, 'error': 'Not logged in'}), 401
+
+    data = request.get_json() or {}
+    summary_type = data.get('summary_type')   # episode, season, show
+    show_id      = data.get('show_id')
+    season_number = data.get('season_number')
+    episode_id   = data.get('episode_id')
+    rating       = data.get('rating')          # 1, -1, or None
+    report_type  = data.get('report_type')     # inaccurate, outdated, spoilers, other
+    notes        = data.get('notes', '').strip()
+
+    if not summary_type:
+        return jsonify({'success': False, 'error': 'summary_type required'}), 400
+    if rating not in (1, -1, None):
+        return jsonify({'success': False, 'error': 'rating must be 1, -1, or null'}), 400
+
+    db = database.get_db()
+    db.execute('''
+        INSERT INTO summary_feedback
+            (user_id, summary_type, show_id, season_number, episode_id, rating, report_type, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, summary_type, show_id, season_number, episode_id, rating, report_type, notes or None))
+    db.commit()
+
+    return jsonify({'success': True})
 
 
 @main_bp.route('/api/generate-show-summary', methods=['POST'])

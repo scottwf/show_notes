@@ -2488,11 +2488,17 @@ def ai_save_settings():
     """Save AI/LLM provider settings."""
     fields = ['preferred_llm_provider', 'ollama_url', 'ollama_model_name',
               'openai_api_key', 'openai_model_name',
-              'openrouter_api_key', 'openrouter_model_name']
+              'openrouter_api_key', 'openrouter_model_name',
+              'gemini_api_key', 'gemini_model_name',
+              'llm_knowledge_cutoff_date', 'summary_length']
 
     for field in fields:
         value = request.form.get(field, '').strip()
         set_setting(field, value if value else None)
+
+    # Checkbox booleans
+    set_setting('summary_only_watched',    '1' if request.form.get('summary_only_watched') else '0')
+    set_setting('summary_show_disclaimer', '1' if request.form.get('summary_show_disclaimer') else '0')
 
     flash('AI settings saved successfully.', 'success')
     return redirect(url_for('admin.ai_settings'))
