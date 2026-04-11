@@ -19,6 +19,17 @@ from flask import current_app
 from .database import get_db, get_setting
 
 
+def _get_provider_model(provider):
+    """Return the configured model name for a supported provider."""
+    if provider == 'ollama':
+        return get_setting('ollama_model_name') or 'llama2'
+    if provider == 'openai':
+        return get_setting('openai_model_name') or 'gpt-3.5-turbo'
+    if provider == 'openrouter':
+        return get_setting('openrouter_model_name') or 'openai/gpt-4o-mini'
+    return None
+
+
 def get_summarizable_seasons():
     """
     Find seasons that are eligible for LLM summarization.
@@ -35,6 +46,7 @@ def get_summarizable_seasons():
     db = get_db()
     provider = get_setting('preferred_llm_provider')
     cutoff_date = get_setting('llm_knowledge_cutoff_date')
+    summary_only_watched = get_setting('summary_only_watched')
 
     if not provider or provider == 'none' or provider == '':
         current_app.logger.info("No LLM provider configured, no seasons to summarize")
@@ -45,32 +57,46 @@ def get_summarizable_seasons():
         return []
 
     # Determine current model name
-    if provider == 'ollama':
-        model = get_setting('ollama_model_name') or 'llama2'
-    elif provider == 'openai':
-        model = get_setting('openai_model_name') or 'gpt-3.5-turbo'
-    else:
+    model = _get_provider_model(provider)
+    if not model:
         return []
 
-    rows = db.execute("""
+    watched_filter = ""
+    watched_params = []
+    if summary_only_watched not in ('0', 0, None, False):
+        watched_filter = """
+            AND EXISTS (
+                SELECT 1
+                FROM plex_activity_log pal
+                WHERE pal.show_title IS NOT NULL
+                  AND LOWER(pal.show_title) = LOWER(s.title)
+            )
+        """
+
+    # Skip genres where recap-style summaries are generally low-value.
+    rows = db.execute(f"""
         SELECT s.tmdb_id, s.title as show_title, ss.season_number,
                ss.episode_count, ss.episode_file_count,
                MAX(e.air_date_utc) as last_air_date
         FROM sonarr_seasons ss
         JOIN sonarr_shows s ON s.id = ss.show_id
         JOIN sonarr_episodes e ON e.season_id = ss.id
-        LEFT JOIN season_summaries sm ON sm.tmdb_id = s.tmdb_id
+        LEFT JOIN show_summaries sm ON sm.show_id = s.id
             AND sm.season_number = ss.season_number
-            AND sm.llm_provider = ? AND sm.llm_model = ?
+            AND sm.episode_number IS NULL
+            AND sm.provider = ? AND sm.model = ?
             AND sm.status = 'completed'
         WHERE ss.season_number > 0
             AND ss.episode_count > 0
             AND ss.episode_file_count = ss.episode_count
+            AND LOWER(COALESCE(s.genres, '')) NOT LIKE '%reality%'
+            AND LOWER(COALESCE(s.genres, '')) NOT LIKE '%news%'
             AND sm.id IS NULL
+            {watched_filter}
         GROUP BY ss.id
         HAVING last_air_date IS NOT NULL AND last_air_date < ?
         ORDER BY s.title, ss.season_number
-    """, (provider, model, cutoff_date)).fetchall()
+    """, (provider, model, *watched_params, cutoff_date)).fetchall()
 
     return [dict(row) for row in rows]
 
@@ -160,24 +186,43 @@ def generate_season_summary(tmdb_id, season_number):
     if not provider or provider in ('none', ''):
         return False, "No LLM provider configured"
 
-    if provider == 'ollama':
-        model = get_setting('ollama_model_name') or 'llama2'
-    elif provider == 'openai':
-        model = get_setting('openai_model_name') or 'gpt-3.5-turbo'
-    else:
+    model = _get_provider_model(provider)
+    if not model:
         return False, f"Unknown provider: {provider}"
 
     prompt, show_title = build_season_recap_prompt(tmdb_id, season_number)
     if not prompt:
         return False, f"Could not build prompt for tmdb_id={tmdb_id} season={season_number}"
 
-    # Upsert a 'generating' status row
-    db.execute("""
-        INSERT INTO season_summaries (tmdb_id, show_title, season_number, llm_provider, llm_model, prompt_text, status, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'generating', CURRENT_TIMESTAMP)
-        ON CONFLICT(tmdb_id, season_number, llm_provider, llm_model) DO UPDATE SET
-            status = 'generating', prompt_text = excluded.prompt_text, updated_at = CURRENT_TIMESTAMP
-    """, (tmdb_id, show_title, season_number, provider, model, prompt))
+    show_row = db.execute(
+        "SELECT id FROM sonarr_shows WHERE tmdb_id = ?",
+        (tmdb_id,),
+    ).fetchone()
+    if not show_row:
+        return False, f"Show not found for tmdb_id={tmdb_id}"
+
+    show_id = show_row['id']
+    existing_row = db.execute("""
+        SELECT id
+        FROM show_summaries
+        WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
+          AND provider = ? AND model = ?
+    """, (show_id, season_number, provider, model)).fetchone()
+
+    if existing_row:
+        db.execute("""
+            UPDATE show_summaries
+            SET status = 'generating', prompt_text = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (prompt, existing_row['id']))
+    else:
+        db.execute("""
+            INSERT INTO show_summaries (
+                show_id, season_number, episode_number, summary_text, raw_llm_response,
+                provider, model, prompt_key, prompt_text, status, created_at, updated_at
+            )
+            VALUES (?, ?, NULL, NULL, NULL, ?, ?, ?, ?, 'generating', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (show_id, season_number, provider, model, 'season_recap', prompt))
     db.commit()
 
     current_app.logger.info(f"Generating summary for '{show_title}' Season {season_number} with {provider}/{model}")
@@ -186,19 +231,22 @@ def generate_season_summary(tmdb_id, season_number):
 
     if error:
         db.execute("""
-            UPDATE season_summaries SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE tmdb_id = ? AND season_number = ? AND llm_provider = ? AND llm_model = ?
-        """, (error, tmdb_id, season_number, provider, model))
+            UPDATE show_summaries
+            SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
+              AND provider = ? AND model = ?
+        """, (error, show_id, season_number, provider, model))
         db.commit()
         current_app.logger.error(f"Summary generation failed for '{show_title}' S{season_number}: {error}")
         return False, error
 
     db.execute("""
-        UPDATE season_summaries SET
+        UPDATE show_summaries SET
             summary_text = ?, raw_llm_response = ?, status = 'completed',
             error_message = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE tmdb_id = ? AND season_number = ? AND llm_provider = ? AND llm_model = ?
-    """, (response_text, response_text, tmdb_id, season_number, provider, model))
+        WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
+          AND provider = ? AND model = ?
+    """, (response_text, response_text, show_id, season_number, provider, model))
     db.commit()
 
     current_app.logger.info(f"Summary completed for '{show_title}' Season {season_number}")
@@ -221,11 +269,8 @@ def generate_show_summary(tmdb_id):
     if not provider or provider in ('none', ''):
         return False, "No LLM provider configured"
 
-    if provider == 'ollama':
-        model = get_setting('ollama_model_name') or 'llama2'
-    elif provider == 'openai':
-        model = get_setting('openai_model_name') or 'gpt-3.5-turbo'
-    else:
+    model = _get_provider_model(provider)
+    if not model:
         return False, f"Unknown provider: {provider}"
 
     show = db.execute("SELECT title, overview FROM sonarr_shows WHERE tmdb_id = ?", (tmdb_id,)).fetchone()
@@ -234,9 +279,13 @@ def generate_show_summary(tmdb_id):
 
     # Get all completed season summaries for this show
     summaries = db.execute("""
-        SELECT season_number, summary_text FROM season_summaries
-        WHERE tmdb_id = ? AND llm_provider = ? AND llm_model = ? AND status = 'completed'
-        ORDER BY season_number
+        SELECT sm.season_number, sm.summary_text
+        FROM show_summaries sm
+        JOIN sonarr_shows s ON s.id = sm.show_id
+        WHERE s.tmdb_id = ? AND sm.provider = ? AND sm.model = ?
+          AND sm.season_number IS NOT NULL AND sm.episode_number IS NULL
+          AND sm.status = 'completed'
+        ORDER BY sm.season_number
     """, (tmdb_id, provider, model)).fetchall()
 
     # Manual show generation should not fail just because season summaries
@@ -251,9 +300,10 @@ def generate_show_summary(tmdb_id):
             FROM sonarr_seasons ss
             JOIN sonarr_shows s ON s.id = ss.show_id
             JOIN sonarr_episodes e ON e.season_id = ss.id
-            LEFT JOIN season_summaries sm ON sm.tmdb_id = s.tmdb_id
+            LEFT JOIN show_summaries sm ON sm.show_id = s.id
                 AND sm.season_number = ss.season_number
-                AND sm.llm_provider = ? AND sm.llm_model = ?
+                AND sm.episode_number IS NULL
+                AND sm.provider = ? AND sm.model = ?
                 AND sm.status = 'completed'
             WHERE s.tmdb_id = ?
                 AND ss.season_number > 0
@@ -272,9 +322,10 @@ def generate_show_summary(tmdb_id):
                 SELECT ss.season_number
                 FROM sonarr_seasons ss
                 JOIN sonarr_shows s ON s.id = ss.show_id
-                LEFT JOIN season_summaries sm ON sm.tmdb_id = s.tmdb_id
+                LEFT JOIN show_summaries sm ON sm.show_id = s.id
                     AND sm.season_number = ss.season_number
-                    AND sm.llm_provider = ? AND sm.llm_model = ?
+                    AND sm.episode_number IS NULL
+                    AND sm.provider = ? AND sm.model = ?
                     AND sm.status = 'completed'
                 WHERE s.tmdb_id = ?
                     AND ss.season_number > 0
@@ -294,9 +345,13 @@ def generate_show_summary(tmdb_id):
                 first_error = error
 
         summaries = db.execute("""
-            SELECT season_number, summary_text FROM season_summaries
-            WHERE tmdb_id = ? AND llm_provider = ? AND llm_model = ? AND status = 'completed'
-            ORDER BY season_number
+            SELECT sm.season_number, sm.summary_text
+            FROM show_summaries sm
+            JOIN sonarr_shows s ON s.id = sm.show_id
+            WHERE s.tmdb_id = ? AND sm.provider = ? AND sm.model = ?
+              AND sm.season_number IS NOT NULL AND sm.episode_number IS NULL
+              AND sm.status = 'completed'
+            ORDER BY sm.season_number
         """, (tmdb_id, provider, model)).fetchall()
 
         if not summaries:
@@ -328,22 +383,46 @@ Guidelines:
 - Use markdown formatting
 - Spoilers are fine since this summarizes completed content"""
 
-    # Upsert generating status
-    db.execute("""
-        INSERT INTO show_summaries (tmdb_id, show_title, llm_provider, llm_model, prompt_text, status, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'generating', CURRENT_TIMESTAMP)
-        ON CONFLICT(tmdb_id, llm_provider, llm_model) DO UPDATE SET
-            status = 'generating', prompt_text = excluded.prompt_text, updated_at = CURRENT_TIMESTAMP
-    """, (tmdb_id, show['title'], provider, model, prompt))
+    show_row = db.execute(
+        "SELECT id FROM sonarr_shows WHERE tmdb_id = ?",
+        (tmdb_id,),
+    ).fetchone()
+    if not show_row:
+        return False, f"Show not found for tmdb_id={tmdb_id}"
+
+    show_id = show_row['id']
+    existing_row = db.execute("""
+        SELECT id
+        FROM show_summaries
+        WHERE show_id = ? AND season_number IS NULL AND episode_number IS NULL
+          AND provider = ? AND model = ?
+    """, (show_id, provider, model)).fetchone()
+
+    if existing_row:
+        db.execute("""
+            UPDATE show_summaries
+            SET status = 'generating', prompt_text = ?, error_message = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (prompt, existing_row['id']))
+    else:
+        db.execute("""
+            INSERT INTO show_summaries (
+                show_id, season_number, episode_number, summary_text, raw_llm_response,
+                provider, model, prompt_key, prompt_text, status, created_at, updated_at
+            )
+            VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?, 'generating', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (show_id, provider, model, 'show_summary', prompt))
     db.commit()
 
     response_text, error = get_llm_response(prompt, llm_model_name=model, provider=provider)
 
     if error:
         db.execute("""
-            UPDATE show_summaries SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE tmdb_id = ? AND llm_provider = ? AND llm_model = ?
-        """, (error, tmdb_id, provider, model))
+            UPDATE show_summaries
+            SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE show_id = ? AND season_number IS NULL AND episode_number IS NULL
+              AND provider = ? AND model = ?
+        """, (error, show_id, provider, model))
         db.commit()
         return False, error
 
@@ -351,8 +430,9 @@ Guidelines:
         UPDATE show_summaries SET
             summary_text = ?, raw_llm_response = ?, status = 'completed',
             error_message = NULL, updated_at = CURRENT_TIMESTAMP
-        WHERE tmdb_id = ? AND llm_provider = ? AND llm_model = ?
-    """, (response_text, response_text, tmdb_id, provider, model))
+        WHERE show_id = ? AND season_number IS NULL AND episode_number IS NULL
+          AND provider = ? AND model = ?
+    """, (response_text, response_text, show_id, provider, model))
     db.commit()
 
     current_app.logger.info(f"Show summary completed for '{show['title']}'")
@@ -440,10 +520,12 @@ def get_season_summary(tmdb_id, season_number):
     """
     db = get_db()
     row = db.execute("""
-        SELECT summary_text, llm_provider, llm_model, updated_at
-        FROM season_summaries
-        WHERE tmdb_id = ? AND season_number = ? AND status = 'completed'
-        ORDER BY updated_at DESC LIMIT 1
+        SELECT sm.summary_text, sm.provider AS llm_provider, sm.model AS llm_model, sm.updated_at
+        FROM show_summaries sm
+        JOIN sonarr_shows s ON s.id = sm.show_id
+        WHERE s.tmdb_id = ? AND sm.season_number = ? AND sm.episode_number IS NULL
+          AND sm.status = 'completed'
+        ORDER BY sm.updated_at DESC LIMIT 1
     """, (tmdb_id, season_number)).fetchone()
 
     return dict(row) if row else None
@@ -458,10 +540,12 @@ def get_show_summary(tmdb_id):
     """
     db = get_db()
     row = db.execute("""
-        SELECT summary_text, llm_provider, llm_model, updated_at
-        FROM show_summaries
-        WHERE tmdb_id = ? AND status = 'completed'
-        ORDER BY updated_at DESC LIMIT 1
+        SELECT sm.summary_text, sm.provider AS llm_provider, sm.model AS llm_model, sm.updated_at
+        FROM show_summaries sm
+        JOIN sonarr_shows s ON s.id = sm.show_id
+        WHERE s.tmdb_id = ? AND sm.season_number IS NULL AND sm.episode_number IS NULL
+          AND sm.status = 'completed'
+        ORDER BY sm.updated_at DESC LIMIT 1
     """, (tmdb_id,)).fetchone()
 
     return dict(row) if row else None
@@ -477,28 +561,25 @@ def get_summary_queue_status():
     db = get_db()
     provider = get_setting('preferred_llm_provider') or ''
     model = ''
-    if provider == 'ollama':
-        model = get_setting('ollama_model_name') or ''
-    elif provider == 'openai':
-        model = get_setting('openai_model_name') or ''
+    model = _get_provider_model(provider) or ''
 
     completed = db.execute(
-        "SELECT COUNT(*) as cnt FROM season_summaries WHERE status = 'completed'"
+        "SELECT COUNT(*) as cnt FROM show_summaries WHERE season_number IS NOT NULL AND episode_number IS NULL AND status = 'completed'"
     ).fetchone()['cnt']
 
     failed = db.execute(
-        "SELECT COUNT(*) as cnt FROM season_summaries WHERE status = 'failed'"
+        "SELECT COUNT(*) as cnt FROM show_summaries WHERE season_number IS NOT NULL AND episode_number IS NULL AND status = 'failed'"
     ).fetchone()['cnt']
 
     generating = db.execute(
-        "SELECT COUNT(*) as cnt FROM season_summaries WHERE status = 'generating'"
+        "SELECT COUNT(*) as cnt FROM show_summaries WHERE season_number IS NOT NULL AND episode_number IS NULL AND status = 'generating'"
     ).fetchone()['cnt']
 
     # Count summarizable seasons (pending work)
     pending = len(get_summarizable_seasons()) if provider else 0
 
     last_generated = db.execute(
-        "SELECT updated_at FROM season_summaries WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 1"
+        "SELECT updated_at FROM show_summaries WHERE season_number IS NOT NULL AND episode_number IS NULL AND status = 'completed' ORDER BY updated_at DESC LIMIT 1"
     ).fetchone()
 
     return {

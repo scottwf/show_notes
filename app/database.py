@@ -688,44 +688,33 @@ def init_db():
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE season_summaries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tmdb_id INTEGER NOT NULL,
-                show_title TEXT,
-                season_number INTEGER NOT NULL,
-                summary_text TEXT,
-                raw_llm_response TEXT,
-                llm_provider TEXT NOT NULL,
-                llm_model TEXT NOT NULL,
-                prompt_text TEXT,
-                status TEXT DEFAULT 'pending',
-                error_message TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(tmdb_id, season_number, llm_provider, llm_model)
-            );
-
             CREATE TABLE show_summaries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tmdb_id INTEGER NOT NULL,
-                show_title TEXT,
+                show_id INTEGER NOT NULL,
+                season_number INTEGER,
+                episode_number INTEGER,
                 summary_text TEXT,
                 raw_llm_response TEXT,
-                llm_provider TEXT NOT NULL,
-                llm_model TEXT NOT NULL,
+                provider TEXT,
+                model TEXT,
+                prompt_key TEXT,
                 prompt_text TEXT,
                 status TEXT DEFAULT 'pending',
                 error_message TEXT,
+                api_usage_id INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(tmdb_id, llm_provider, llm_model)
+                FOREIGN KEY (show_id) REFERENCES sonarr_shows(id) ON DELETE CASCADE,
+                FOREIGN KEY (api_usage_id) REFERENCES api_usage(id) ON DELETE SET NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_llm_prompts_key ON llm_prompts(prompt_key);
-            CREATE INDEX IF NOT EXISTS idx_season_summaries_tmdb_season ON season_summaries(tmdb_id, season_number);
-            CREATE INDEX IF NOT EXISTS idx_season_summaries_status ON season_summaries(status);
-            CREATE INDEX IF NOT EXISTS idx_show_summaries_tmdb ON show_summaries(tmdb_id);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_show ON show_summaries(show_id);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_lookup ON show_summaries(show_id, season_number, episode_number);
             CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status);
+            CREATE INDEX IF NOT EXISTS idx_show_summaries_api_usage ON show_summaries(api_usage_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_show_summaries_identity
+                ON show_summaries(show_id, COALESCE(season_number, -1), COALESCE(episode_number, -1), COALESCE(provider, ''), COALESCE(model, ''));
             CREATE INDEX IF NOT EXISTS idx_api_usage_provider ON api_usage(provider);
             CREATE INDEX IF NOT EXISTS idx_api_usage_timestamp ON api_usage(timestamp);
 

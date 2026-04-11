@@ -92,12 +92,11 @@ ADMIN_SEARCHABLE_ROUTES = [
     {'title': 'Service Settings', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.settings')},
     {'title': 'Admin Tasks (Sync)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.tasks')},
     {'title': 'Logbook', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logbook_view')},
-    {'title': 'View Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logs_view')},
+    {'title': 'Logs', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.logs_view')},
 
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
     {'title': 'AI / LLM Settings', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_settings')},
-    {'title': 'AI Summaries & LLM Usage', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_summaries')},
     {'title': 'Recap Pipeline (Subtitle-First)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.recap_pipeline')},
 ]
 
@@ -368,85 +367,8 @@ def tasks():
 @login_required
 @admin_required
 def ai_summaries():
-    """Renders the AI Summaries & LLM Usage admin page."""
-    db = get_db()
-
-    def safe_value(query, params=None):
-        try:
-            result = db.execute(query, params or ()).fetchone()
-            return result[0] if result and result[0] is not None else 0
-        except Exception:
-            return 0
-
-    # --- Usage stats ---
-    total_calls = safe_value('SELECT COUNT(*) FROM api_usage')
-    total_tokens = safe_value('SELECT SUM(total_tokens) FROM api_usage')
-    total_cost = safe_value('SELECT SUM(cost_usd) FROM api_usage')
-    avg_processing_time = safe_value('SELECT AVG(processing_time_ms) FROM api_usage WHERE processing_time_ms IS NOT NULL')
-
-    # Last 7 days
-    calls_7d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
-    tokens_7d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
-    cost_7d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-7 days')")
-
-    # Last 30 days
-    calls_30d = safe_value("SELECT COUNT(*) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
-    tokens_30d = safe_value("SELECT SUM(total_tokens) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
-    cost_30d = safe_value("SELECT SUM(cost_usd) FROM api_usage WHERE timestamp >= DATETIME('now', '-30 days')")
-
-    # Per-provider breakdown
-    provider_stats = db.execute("""
-        SELECT provider,
-               COUNT(*) as calls,
-               SUM(total_tokens) as tokens,
-               SUM(cost_usd) as cost,
-               AVG(processing_time_ms) as avg_time
-        FROM api_usage
-        GROUP BY provider
-        ORDER BY calls DESC
-    """).fetchall()
-
-    # --- Summary queue status ---
-    try:
-        from ..summary_services import get_summary_queue_status
-        queue_status = get_summary_queue_status()
-    except Exception:
-        queue_status = {
-            'pending_count': 0, 'completed_count': 0, 'failed_count': 0,
-            'generating_count': 0, 'last_generated_at': None,
-            'current_provider': '', 'current_model': '',
-        }
-
-    # --- All summaries list ---
-    season_summaries = db.execute("""
-        SELECT ss.id, ss.tmdb_id, ss.show_title, ss.season_number, ss.status,
-               ss.llm_provider, ss.llm_model, ss.summary_text, ss.error_message,
-               ss.created_at, ss.updated_at
-        FROM season_summaries ss
-        ORDER BY ss.updated_at DESC
-    """).fetchall()
-
-    show_summaries = db.execute("""
-        SELECT sh.id, sh.tmdb_id, sh.show_title, sh.status,
-               sh.llm_provider, sh.llm_model, sh.summary_text, sh.error_message,
-               sh.created_at, sh.updated_at
-        FROM show_summaries sh
-        ORDER BY sh.updated_at DESC
-    """).fetchall()
-
-    return render_template('admin_ai_summaries.html',
-        title='AI Summaries & LLM Usage',
-        total_calls=total_calls,
-        total_tokens=total_tokens,
-        total_cost=total_cost,
-        avg_processing_time=avg_processing_time,
-        calls_7d=calls_7d, tokens_7d=tokens_7d, cost_7d=cost_7d,
-        calls_30d=calls_30d, tokens_30d=tokens_30d, cost_30d=cost_30d,
-        provider_stats=provider_stats,
-        queue_status=queue_status,
-        season_summaries=season_summaries,
-        show_summaries=show_summaries,
-    )
+    """Legacy AI summaries page now redirects to consolidated AI admin."""
+    return redirect(url_for('admin.ai_settings'))
 
 # ============================================================================
 # LOG MANAGEMENT
@@ -461,7 +383,10 @@ def logs_view():
 
     Allows admins to view application logs, select log files, and stream live logs.
     """
-    return render_template('admin_logs.html', title='View Logs')
+    default_tab = request.args.get('tab', 'files')
+    if default_tab not in {'files', 'events'}:
+        default_tab = 'files'
+    return render_template('admin_logs.html', title='View Logs', default_tab=default_tab)
 
 @admin_bp.route('/watch-history')
 @login_required
@@ -2063,8 +1988,8 @@ def resolve_issue_report(report_id):
 @login_required
 @admin_required
 def event_logs():
-    """Display system event logs page"""
-    return render_template('admin_event_logs.html', title='System Event Logs')
+    """Legacy event logs page now redirects to merged logs view."""
+    return redirect(url_for('admin.logs_view', tab='events'))
 
 
 @admin_bp.route('/api/event-logs', methods=['GET'])
@@ -2427,6 +2352,22 @@ def api_update_problem_report(report_id):
 # AI / LLM MANAGEMENT
 # ============================================================================
 
+def _get_show_summaries_schema_mode(db):
+    """Return the summary schema mode used by show_summaries."""
+    try:
+        columns = {
+            row['name']
+            for row in db.execute("PRAGMA table_info(show_summaries)").fetchall()
+        }
+    except Exception:
+        return 'missing'
+
+    if {'show_id', 'season_number', 'episode_number'}.issubset(columns):
+        return 'episode'
+    if {'tmdb_id', 'show_title'}.issubset(columns):
+        return 'legacy'
+    return 'unknown'
+
 @admin_bp.route('/ai')
 @login_required
 @admin_required
@@ -2446,17 +2387,212 @@ def ai_settings():
         'SELECT id, title, season_count, status FROM sonarr_shows ORDER BY title'
     ).fetchall()
 
+    summary_schema_mode = _get_show_summaries_schema_mode(db)
+
     # Summary counts per show
-    summary_counts = db.execute('''
-        SELECT
-            s.id as show_id, s.title,
-            SUM(CASE WHEN sm.episode_number IS NOT NULL THEN 1 ELSE 0 END) as episode_count,
-            SUM(CASE WHEN sm.episode_number IS NULL AND sm.season_number IS NOT NULL THEN 1 ELSE 0 END) as season_count
-        FROM show_summaries sm
-        JOIN sonarr_shows s ON sm.show_id = s.id
-        GROUP BY sm.show_id
-        ORDER BY s.title
-    ''').fetchall()
+    if summary_schema_mode == 'episode':
+        summary_counts = db.execute('''
+            SELECT
+                s.id as show_id,
+                s.title,
+                SUM(CASE WHEN sm.episode_number IS NOT NULL THEN 1 ELSE 0 END) as episode_count,
+                SUM(CASE WHEN sm.episode_number IS NULL AND sm.season_number IS NOT NULL THEN 1 ELSE 0 END) as season_count
+            FROM show_summaries sm
+            JOIN sonarr_shows s ON sm.show_id = s.id
+            GROUP BY sm.show_id
+            ORDER BY s.title
+        ''').fetchall()
+    elif summary_schema_mode == 'legacy':
+        summary_counts = db.execute('''
+            SELECT
+                NULL as show_id,
+                show_title as title,
+                COUNT(*) as episode_count,
+                0 as season_count
+            FROM show_summaries
+            GROUP BY tmdb_id, show_title
+            ORDER BY show_title
+        ''').fetchall()
+    else:
+        summary_counts = []
+
+    feedback_map = {}
+    try:
+        feedback_rows = db.execute('''
+            SELECT
+                summary_type,
+                show_id,
+                COALESCE(season_number, 0) as season_number,
+                SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as upvotes,
+                SUM(CASE WHEN rating = -1 THEN 1 ELSE 0 END) as downvotes,
+                SUM(CASE WHEN report_type IS NOT NULL THEN 1 ELSE 0 END) as reports
+            FROM summary_feedback
+            GROUP BY summary_type, show_id, COALESCE(season_number, 0)
+        ''').fetchall()
+        feedback_map = {
+            (row['summary_type'], row['show_id'], row['season_number']): row
+            for row in feedback_rows
+        }
+    except Exception:
+        feedback_map = {}
+
+    summary_records = []
+    if summary_schema_mode == 'episode':
+        try:
+            unified_summary_rows = db.execute('''
+                SELECT
+                    sm.id,
+                    sm.show_id,
+                    s.tmdb_id,
+                    s.title,
+                    sm.season_number,
+                    sm.episode_number,
+                    ep.id AS episode_id,
+                    ep.title AS episode_title,
+                    sm.status,
+                    sm.provider,
+                    sm.model,
+                    sm.summary_text,
+                    sm.error_message,
+                    sm.created_at,
+                    sm.updated_at
+                FROM show_summaries sm
+                JOIN sonarr_shows s ON s.id = sm.show_id
+                LEFT JOIN sonarr_episodes ep
+                    ON ep.show_id = sm.show_id
+                   AND ep.season_number = sm.season_number
+                   AND ep.episode_number = sm.episode_number
+                ORDER BY sm.updated_at DESC
+            ''').fetchall()
+            for row in unified_summary_rows:
+                if row['season_number'] is None and row['episode_number'] is None:
+                    summary_type = 'show'
+                    summary_type_label = 'Series'
+                    feedback = feedback_map.get(('show', row['show_id'], 0))
+                elif row['episode_number'] is None:
+                    summary_type = 'season'
+                    summary_type_label = 'Season'
+                    feedback = feedback_map.get(('season', row['show_id'], row['season_number']))
+                else:
+                    summary_type = 'episode'
+                    summary_type_label = 'Episode'
+                    feedback = None
+
+                summary_records.append({
+                    'record_key': f"{summary_type}-{row['id']}",
+                    'summary_type': summary_type,
+                    'summary_type_label': summary_type_label,
+                    'show_id': row['show_id'],
+                    'tmdb_id': row['tmdb_id'],
+                    'title': row['title'] or f"Show #{row['show_id']}",
+                    'season_number': row['season_number'],
+                    'episode_number': row['episode_number'],
+                    'episode_id': row['episode_id'],
+                    'episode_title': row['episode_title'],
+                    'status': row['status'],
+                    'provider': row['provider'],
+                    'model': row['model'],
+                    'updated_at': row['updated_at'],
+                    'created_at': row['created_at'],
+                    'summary_text': row['summary_text'],
+                    'error_message': row['error_message'],
+                    'upvotes': feedback['upvotes'] if feedback else 0,
+                    'downvotes': feedback['downvotes'] if feedback else 0,
+                    'reports': feedback['reports'] if feedback else 0,
+                })
+        except Exception:
+            pass
+    else:
+        try:
+            show_summary_rows = db.execute('''
+                SELECT
+                    sh.id,
+                    sh.tmdb_id,
+                    COALESCE(s.id, NULL) as show_id,
+                    COALESCE(s.title, sh.show_title) as title,
+                    sh.status,
+                    sh.llm_provider as provider,
+                    sh.llm_model as model,
+                    sh.summary_text,
+                    sh.error_message,
+                    sh.created_at,
+                    sh.updated_at
+                FROM show_summaries sh
+                LEFT JOIN sonarr_shows s ON s.tmdb_id = sh.tmdb_id
+                ORDER BY sh.updated_at DESC
+            ''').fetchall()
+            for row in show_summary_rows:
+                feedback = feedback_map.get(('show', row['show_id'], 0))
+                summary_records.append({
+                    'record_key': f"show-{row['id']}",
+                    'summary_type': 'show',
+                    'summary_type_label': 'Series',
+                    'show_id': row['show_id'],
+                    'tmdb_id': row['tmdb_id'],
+                    'title': row['title'] or f"TMDB #{row['tmdb_id']}",
+                    'season_number': None,
+                    'episode_number': None,
+                    'episode_id': None,
+                    'episode_title': None,
+                    'status': row['status'],
+                    'provider': row['provider'],
+                    'model': row['model'],
+                    'updated_at': row['updated_at'],
+                    'created_at': row['created_at'],
+                    'summary_text': row['summary_text'],
+                    'error_message': row['error_message'],
+                    'upvotes': feedback['upvotes'] if feedback else 0,
+                    'downvotes': feedback['downvotes'] if feedback else 0,
+                    'reports': feedback['reports'] if feedback else 0,
+                })
+        except Exception:
+            pass
+
+        try:
+            season_summary_rows = db.execute('''
+                SELECT
+                    ss.id,
+                    ss.tmdb_id,
+                    COALESCE(s.id, NULL) as show_id,
+                    COALESCE(s.title, ss.show_title) as title,
+                    ss.season_number,
+                    ss.status,
+                    ss.llm_provider as provider,
+                    ss.llm_model as model,
+                    ss.summary_text,
+                    ss.error_message,
+                    ss.created_at,
+                    ss.updated_at
+                FROM season_summaries ss
+                LEFT JOIN sonarr_shows s ON s.tmdb_id = ss.tmdb_id
+                ORDER BY ss.updated_at DESC
+            ''').fetchall()
+            for row in season_summary_rows:
+                feedback = feedback_map.get(('season', row['show_id'], row['season_number']))
+                summary_records.append({
+                    'record_key': f"season-{row['id']}",
+                    'summary_type': 'season',
+                    'summary_type_label': 'Season',
+                    'show_id': row['show_id'],
+                    'tmdb_id': row['tmdb_id'],
+                    'title': row['title'] or f"TMDB #{row['tmdb_id']}",
+                    'season_number': row['season_number'],
+                    'episode_number': None,
+                    'episode_id': None,
+                    'episode_title': None,
+                    'status': row['status'],
+                    'provider': row['provider'],
+                    'model': row['model'],
+                    'updated_at': row['updated_at'],
+                    'created_at': row['created_at'],
+                    'summary_text': row['summary_text'],
+                    'error_message': row['error_message'],
+                    'upvotes': feedback['upvotes'] if feedback else 0,
+                    'downvotes': feedback['downvotes'] if feedback else 0,
+                    'reports': feedback['reports'] if feedback else 0,
+                })
+        except Exception:
+            pass
 
     # API usage logs (most recent 100)
     logs = db.execute(
@@ -2477,6 +2613,8 @@ def ai_settings():
                            prompts=prompts,
                            shows=shows,
                            summary_counts=summary_counts,
+                           summary_records=summary_records,
+                           summary_schema_mode=summary_schema_mode,
                            logs=logs,
                            log_stats=log_stats)
 
@@ -2615,6 +2753,13 @@ def ai_generate():
     """Generate AI summaries for a show's episodes and seasons."""
     import time as time_mod
     from ..llm_services import generate_episode_summary, generate_season_recap
+    db = get_db()
+
+    if _get_show_summaries_schema_mode(db) != 'episode':
+        return jsonify({
+            'success': False,
+            'error': 'This database still uses the legacy AI summary schema. The settings page can load, but manual generation requires the newer summary tables.'
+        }), 400
 
     data = request.json
     show_id = data.get('show_id')
@@ -2623,7 +2768,6 @@ def ai_generate():
     if not show_id:
         return jsonify({'success': False, 'error': 'show_id is required'})
 
-    db = get_db()
     show = db.execute('SELECT * FROM sonarr_shows WHERE id = ?', (show_id,)).fetchone()
     if not show:
         return jsonify({'success': False, 'error': 'Show not found'})
@@ -2671,8 +2815,10 @@ def ai_generate():
         for ep in episodes:
             # Check if summary already exists
             existing = db.execute(
-                'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number = ?',
-                (show_id, sn, ep['episode_number'])
+                '''SELECT id FROM show_summaries
+                   WHERE show_id = ? AND season_number = ? AND episode_number = ?
+                     AND provider = ? AND model = ?''',
+                (show_id, sn, ep['episode_number'], provider, model)
             ).fetchone()
 
             if existing:
@@ -2711,8 +2857,10 @@ def ai_generate():
 
         # Generate season recap if we have episode summaries
         existing_recap = db.execute(
-            'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number IS NULL',
-            (show_id, sn)
+            '''SELECT id FROM show_summaries
+               WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
+                 AND provider = ? AND model = ?''',
+            (show_id, sn, provider, model)
         ).fetchone()
 
         if existing_recap:
@@ -2756,6 +2904,12 @@ def ai_delete_summaries():
         return jsonify({'success': False, 'error': 'show_id required'})
 
     db = get_db()
+    if _get_show_summaries_schema_mode(db) != 'episode':
+        return jsonify({
+            'success': False,
+            'error': 'This database still uses the legacy AI summary schema. Bulk delete from the Generate tab is disabled until the summary tables are upgraded.'
+        }), 400
+
     db.execute('DELETE FROM show_summaries WHERE show_id = ?', (show_id,))
     db.commit()
     return jsonify({'success': True})

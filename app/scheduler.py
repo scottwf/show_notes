@@ -176,8 +176,10 @@ def scheduled_ai_summaries():
 
                 # Check if season recap already exists
                 existing_recap = db.execute(
-                    'SELECT id FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number IS NULL',
-                    (show['id'], sn)
+                    '''SELECT id FROM show_summaries
+                       WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
+                         AND provider = ? AND model = ?''',
+                    (show['id'], sn, provider, model)
                 ).fetchone()
                 if existing_recap:
                     continue
@@ -192,8 +194,10 @@ def scheduled_ai_summaries():
                 episode_texts = []
                 for ep in episodes:
                     existing = db.execute(
-                        'SELECT summary_text FROM show_summaries WHERE show_id = ? AND season_number = ? AND episode_number = ?',
-                        (show['id'], sn, ep['episode_number'])
+                        '''SELECT summary_text FROM show_summaries
+                           WHERE show_id = ? AND season_number = ? AND episode_number = ?
+                             AND provider = ? AND model = ?''',
+                        (show['id'], sn, ep['episode_number'], provider, model)
                     ).fetchone()
 
                     if existing:

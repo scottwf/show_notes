@@ -13,19 +13,7 @@
   <!-- Tab Navigation -->
   <div class="relative mb-0">
     <nav class="flex flex-wrap gap-1 overflow-x-auto pb-0" aria-label="Tabs">
-      <button type="button" data-tab="settings" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 border-slate-200 dark:border-slate-700 shadow-sm -mb-px z-10">
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-          Settings
-        </span>
-      </button>
-      <button type="button" data-tab="prompts" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-          Prompts
-        </span>
-      </button>
-      <button type="button" data-tab="generate" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+      <button type="button" data-tab="generate" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 border-slate-200 dark:border-slate-700 shadow-sm -mb-px z-10">
         <span class="flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           Generate
@@ -37,11 +25,363 @@
           Logs
         </span>
       </button>
+      <button type="button" data-tab="prompts" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+          Prompts
+        </span>
+      </button>
+      <button type="button" data-tab="settings" class="ai-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          Settings
+        </span>
+      </button>
     </nav>
   </div>
 
+  <!-- ==================== GENERATE TAB ==================== -->
+  <div data-panel="generate" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Generate Summaries</h3>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">Generate AI summaries for shows with upcoming new seasons. The system will create episode summaries and season recaps for completed seasons that don't already have them.</p>
+
+    {% if summary_schema_mode != 'episode' %}
+    <div class="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+      This database is still using the legacy AI summary schema. The page can render again, but manual generation and bulk deletion in this tab stay disabled until the summary tables are upgraded.
+    </div>
+    {% endif %}
+
+    <!-- Show selection for manual generation -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Select Show</label>
+      <select id="generate-show-select" {% if summary_schema_mode != 'episode' %}disabled{% endif %} class="w-full max-w-md px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60">
+        <option value="">-- Select a show --</option>
+        {% for show in shows %}
+        <option value="{{ show.id }}">{{ show.title }} ({{ show.season_count }} seasons{% if show.status == 'continuing' %}, continuing{% endif %})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Season (optional)</label>
+      <input type="number" id="generate-season-input" min="1" placeholder="All completed seasons" {% if summary_schema_mode != 'episode' %}disabled{% endif %}
+        class="w-full max-w-xs px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60">
+      <p class="text-xs text-slate-400 mt-1">Leave blank to generate for all completed seasons missing summaries.</p>
+    </div>
+
+    <button type="button" id="generate-btn" {% if summary_schema_mode != 'episode' %}disabled{% endif %} class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-md shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60">
+      Generate Summaries
+    </button>
+
+    <!-- Generation output -->
+    <div id="generate-output" class="mt-6 hidden">
+      <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+        <pre id="generate-log" class="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono"></pre>
+      </div>
+    </div>
+
+    <!-- Existing summaries -->
+    <div class="mt-8">
+      <h4 class="text-md font-semibold text-slate-800 dark:text-slate-100 mb-3">Existing Summaries</h4>
+      {% if summary_counts %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+          <thead class="bg-slate-50 dark:bg-slate-900">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Show</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Episode Summaries</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Season Recaps</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+            {% for sc in summary_counts %}
+            <tr>
+              <td class="px-4 py-2 text-sm text-slate-800 dark:text-slate-200">{{ sc.title }}</td>
+              <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">{{ sc.episode_count }}</td>
+              <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
+                {% if summary_schema_mode == 'episode' %}
+                {{ sc.season_count }}
+                {% else %}
+                Legacy
+                {% endif %}
+              </td>
+              <td class="px-4 py-2">
+                {% if summary_schema_mode == 'episode' and sc.show_id %}
+                <button type="button" data-show-id="{{ sc.show_id }}" class="delete-summaries-btn text-xs text-red-500 hover:text-red-600 transition-colors">Delete All</button>
+                {% else %}
+                <span class="text-xs text-slate-400">Unavailable</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">No summaries generated yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="mt-8">
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-3">
+        <div>
+          <h4 class="text-md font-semibold text-slate-800 dark:text-slate-100">Summary Records</h4>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Search, filter, and sort across stored series and season summaries. Provider/model and user feedback are linked here. Per-summary API usage attribution needs the schema upgrade because `api_usage` rows are not yet linked to individual summary records.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <input id="summary-search-input" type="search" placeholder="Search title or model"
+          class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+        <select id="summary-type-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+          <option value="">All Types</option>
+          <option value="show">Series</option>
+          <option value="season">Season</option>
+          <option value="episode">Episode</option>
+        </select>
+        <select id="summary-status-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+          <option value="">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="generating">Generating</option>
+          <option value="failed">Failed</option>
+        </select>
+        <select id="summary-provider-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+          <option value="">All Providers</option>
+          <option value="ollama">Ollama</option>
+          <option value="openai">OpenAI</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </div>
+
+      <div class="flex flex-wrap gap-3 mb-4">
+        <select id="summary-sort-select" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+          <option value="updated_desc">Updated: Newest</option>
+          <option value="updated_asc">Updated: Oldest</option>
+          <option value="title_asc">Title: A-Z</option>
+          <option value="title_desc">Title: Z-A</option>
+          <option value="feedback_desc">Feedback: Most Activity</option>
+        </select>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input id="summary-feedback-only" type="checkbox" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+          Show only summaries with feedback
+        </label>
+      </div>
+
+      {% if summary_records %}
+      <div class="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+          <thead class="bg-slate-50 dark:bg-slate-900">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Title</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Type</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">LLM</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Feedback</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Updated</th>
+            </tr>
+          </thead>
+          <tbody id="summary-records-tbody" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+            {% for record in summary_records %}
+            <tr class="summary-record-row"
+                data-type="{{ record.summary_type }}"
+                data-title="{{ record.title|lower }}"
+                data-model="{{ (record.model or '')|lower }}"
+                data-status="{{ record.status or '' }}"
+                data-provider="{{ record.provider or '' }}"
+                data-updated="{{ record.updated_at or '' }}"
+                data-feedback="{{ record.upvotes + record.downvotes + record.reports }}">
+              <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-200">
+                <div class="font-medium">{{ record.title }}</div>
+                <div class="mt-1 flex flex-wrap gap-2 text-xs">
+                  {% if record.tmdb_id %}
+                  <a href="{{ url_for('main.show_detail', tmdb_id=record.tmdb_id) }}" class="text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">View show</a>
+                  {% endif %}
+                {% if record.tmdb_id and record.season_number is not none %}
+                  <a href="{{ url_for('main.show_detail', tmdb_id=record.tmdb_id) }}#season-{{ record.season_number }}" class="text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">Jump to season</a>
+                  {% endif %}
+                  {% if record.tmdb_id and record.season_number is not none and record.episode_number is not none %}
+                  <a href="{{ url_for('main.episode_detail', tmdb_id=record.tmdb_id, season_number=record.season_number, episode_number=record.episode_number) }}" class="text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300">View episode</a>
+                  {% endif %}
+                </div>
+                {% if record.season_number is not none %}
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Season {{ record.season_number }}{% if record.episode_number is not none %}, Episode {{ record.episode_number }}{% if record.episode_title %}: {{ record.episode_title }}{% endif %}{% endif %}
+                </div>
+                {% endif %}
+                {% if record.error_message %}
+                <div class="text-xs text-red-500 mt-1">{{ record.error_message[:140] }}{% if record.error_message|length > 140 %}...{% endif %}</div>
+                {% endif %}
+                {% if record.summary_text %}
+                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                  <button type="button"
+                    class="summary-full-btn text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+                    data-summary-title="{{ record.title }}{% if record.season_number is not none %} Season {{ record.season_number }}{% endif %}"
+                    data-summary-model="{{ record.provider or '--' }} / {{ record.model or '--' }}">
+                    View full summary
+                  </button>
+                  <span class="text-slate-400">Preview below remains shortened for scanning.</span>
+                </div>
+                <div class="summary-full-text hidden">{{ record.summary_text }}</div>
+                <details class="mt-2">
+                  <summary class="cursor-pointer text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">Preview summary</summary>
+                  <div class="mt-2 max-w-3xl text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ record.summary_text[:1200] }}{% if record.summary_text|length > 1200 %}...{% endif %}</div>
+                </details>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ record.summary_type_label }}</td>
+              <td class="px-4 py-3 text-xs">
+                <span class="px-2 py-0.5 rounded-full font-medium
+                  {% if record.status == 'completed' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+                  {% elif record.status == 'generating' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400
+                  {% elif record.status == 'failed' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
+                  {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                  {{ record.status or 'unknown' }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                <div>{{ record.provider or '--' }}</div>
+                <div class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ record.model or '--' }}</div>
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                <div>Up: {{ record.upvotes }}</div>
+                <div>Down: {{ record.downvotes }}</div>
+                <div>Reports: {{ record.reports }}</div>
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">{{ record.updated_at or '--' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p id="summary-records-empty" class="hidden px-4 py-8 text-center text-sm text-slate-500">No summaries match the current filters.</p>
+      {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">No summary records available yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <dialog id="summary-full-dialog" class="w-full max-w-5xl rounded-xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+    <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+      <div>
+        <h4 id="summary-full-title" class="text-lg font-semibold">Summary</h4>
+        <p id="summary-full-meta" class="mt-1 text-xs text-slate-500 dark:text-slate-400"></p>
+      </div>
+      <button type="button" id="summary-full-close" class="rounded-md px-3 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200">Close</button>
+    </div>
+    <div class="max-h-[75vh] overflow-y-auto px-6 py-5">
+      <pre id="summary-full-body" class="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200"></pre>
+    </div>
+  </dialog>
+
+  <!-- ==================== LOGS TAB ==================== -->
+  <div data-panel="logs" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+    <!-- Summary stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
+        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total Calls</h4>
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">{{ log_stats.total_calls or 0 }}</p>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
+        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total Cost</h4>
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">${{ '%.4f' % (log_stats.total_cost or 0) }}</p>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
+        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">This Week</h4>
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">{{ log_stats.week_calls or 0 }}</p>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
+        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Week Cost</h4>
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">${{ '%.4f' % (log_stats.week_cost or 0) }}</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-4 mb-4">
+      <select id="log-provider-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
+        <option value="">All Providers</option>
+        <option value="ollama">Ollama</option>
+        <option value="openai">OpenAI</option>
+        <option value="openrouter">OpenRouter</option>
+      </select>
+      <button type="button" id="refresh-logs-btn" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium rounded-md transition-colors">
+        Refresh
+      </button>
+    </div>
+
+    <!-- Logs table -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+        <thead class="bg-slate-50 dark:bg-slate-900">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Time</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Provider</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Model</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tokens</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cost</th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Time (ms)</th>
+          </tr>
+        </thead>
+        <tbody id="logs-tbody" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+          {% for log in logs %}
+          <tr>
+            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.timestamp }}</td>
+            <td class="px-4 py-2 text-xs">
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                {% if log.provider == 'ollama' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
+                {% elif log.provider == 'openai' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
+                {% else %}bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400{% endif %}">
+                {{ log.provider }}
+              </span>
+            </td>
+            <td class="px-4 py-2 text-xs text-slate-700 dark:text-slate-300 font-mono">{{ log.endpoint }}</td>
+            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.total_tokens or '--' }}</td>
+            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ '$%.5f' % log.cost_usd if log.cost_usd else '--' }}</td>
+            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.processing_time_ms or '--' }}</td>
+          </tr>
+          {% endfor %}
+          {% if not logs %}
+          <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">No API usage logged yet.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ==================== PROMPTS TAB ==================== -->
+  <div data-panel="prompts" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">Edit the prompt templates used for AI-generated summaries. Use <code class="text-sky-600 dark:text-sky-400">{placeholder}</code> syntax for dynamic values.</p>
+
+    {% for prompt in prompts %}
+    <div class="mb-8 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ prompt.prompt_name }}</h3>
+          <code class="text-xs text-slate-400">{{ prompt.prompt_key }}</code>
+        </div>
+        <span class="text-xs text-slate-400">{{ prompt.updated_at or 'Default' }}</span>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">{{ prompt.description }}</p>
+      <form method="POST" action="{{ url_for('admin.ai_save_prompt') }}">
+        <input type="hidden" name="prompt_key" value="{{ prompt.prompt_key }}">
+        <textarea name="prompt_template" rows="8"
+          class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm font-mono focus:ring-2 focus:ring-sky-500">{{ prompt.prompt_template }}</textarea>
+        <div class="flex items-center justify-between mt-3">
+          <button type="button" data-key="{{ prompt.prompt_key }}" class="reset-prompt-btn text-xs text-red-500 hover:text-red-600 transition-colors">
+            Reset to Default
+          </button>
+          <button type="submit" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
+            Save Prompt
+          </button>
+        </div>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+
   <!-- ==================== SETTINGS TAB ==================== -->
-  <div data-panel="settings" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+  <div data-panel="settings" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
     <form id="ai-settings-form" method="POST" action="{{ url_for('admin.ai_save_settings') }}">
       <!-- Active Provider -->
       <div class="mb-6">
@@ -242,179 +582,6 @@
         </button>
       </div>
     </form>
-  </div>
-
-  <!-- ==================== PROMPTS TAB ==================== -->
-  <div data-panel="prompts" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
-    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">Edit the prompt templates used for AI-generated summaries. Use <code class="text-sky-600 dark:text-sky-400">{placeholder}</code> syntax for dynamic values.</p>
-
-    {% for prompt in prompts %}
-    <div class="mb-8 border border-slate-200 dark:border-slate-700 rounded-lg p-5">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100">{{ prompt.prompt_name }}</h3>
-          <code class="text-xs text-slate-400">{{ prompt.prompt_key }}</code>
-        </div>
-        <span class="text-xs text-slate-400">{{ prompt.updated_at or 'Default' }}</span>
-      </div>
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">{{ prompt.description }}</p>
-      <form method="POST" action="{{ url_for('admin.ai_save_prompt') }}">
-        <input type="hidden" name="prompt_key" value="{{ prompt.prompt_key }}">
-        <textarea name="prompt_template" rows="8"
-          class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm font-mono focus:ring-2 focus:ring-sky-500">{{ prompt.prompt_template }}</textarea>
-        <div class="flex items-center justify-between mt-3">
-          <button type="button" data-key="{{ prompt.prompt_key }}" class="reset-prompt-btn text-xs text-red-500 hover:text-red-600 transition-colors">
-            Reset to Default
-          </button>
-          <button type="submit" class="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm transition-colors">
-            Save Prompt
-          </button>
-        </div>
-      </form>
-    </div>
-    {% endfor %}
-  </div>
-
-  <!-- ==================== GENERATE TAB ==================== -->
-  <div data-panel="generate" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
-    <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Generate Summaries</h3>
-    <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">Generate AI summaries for shows with upcoming new seasons. The system will create episode summaries and season recaps for completed seasons that don't already have them.</p>
-
-    <!-- Show selection for manual generation -->
-    <div class="mb-6">
-      <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Select Show</label>
-      <select id="generate-show-select" class="w-full max-w-md px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-sky-500">
-        <option value="">-- Select a show --</option>
-        {% for show in shows %}
-        <option value="{{ show.id }}">{{ show.title }} ({{ show.season_count }} seasons{% if show.status == 'continuing' %}, continuing{% endif %})</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="mb-6">
-      <label class="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Season (optional)</label>
-      <input type="number" id="generate-season-input" min="1" placeholder="All completed seasons"
-        class="w-full max-w-xs px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-sky-500">
-      <p class="text-xs text-slate-400 mt-1">Leave blank to generate for all completed seasons missing summaries.</p>
-    </div>
-
-    <button type="button" id="generate-btn" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-md shadow-sm transition-colors">
-      Generate Summaries
-    </button>
-
-    <!-- Generation output -->
-    <div id="generate-output" class="mt-6 hidden">
-      <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto">
-        <pre id="generate-log" class="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono"></pre>
-      </div>
-    </div>
-
-    <!-- Existing summaries -->
-    <div class="mt-8">
-      <h4 class="text-md font-semibold text-slate-800 dark:text-slate-100 mb-3">Existing Summaries</h4>
-      {% if summary_counts %}
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-          <thead class="bg-slate-50 dark:bg-slate-900">
-            <tr>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Show</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Episode Summaries</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Season Recaps</th>
-              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-            {% for sc in summary_counts %}
-            <tr>
-              <td class="px-4 py-2 text-sm text-slate-800 dark:text-slate-200">{{ sc.title }}</td>
-              <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">{{ sc.episode_count }}</td>
-              <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">{{ sc.season_count }}</td>
-              <td class="px-4 py-2">
-                <button type="button" data-show-id="{{ sc.show_id }}" class="delete-summaries-btn text-xs text-red-500 hover:text-red-600 transition-colors">Delete All</button>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <p class="text-sm text-slate-500 dark:text-slate-400">No summaries generated yet.</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- ==================== LOGS TAB ==================== -->
-  <div data-panel="logs" class="hidden bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
-    <!-- Summary stats -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total Calls</h4>
-        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">{{ log_stats.total_calls or 0 }}</p>
-      </div>
-      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total Cost</h4>
-        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">${{ '%.4f' % (log_stats.total_cost or 0) }}</p>
-      </div>
-      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">This Week</h4>
-        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">{{ log_stats.week_calls or 0 }}</p>
-      </div>
-      <div class="bg-slate-50 dark:bg-slate-700 p-4 rounded-lg">
-        <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Week Cost</h4>
-        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400">${{ '%.4f' % (log_stats.week_cost or 0) }}</p>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="flex flex-wrap gap-4 mb-4">
-      <select id="log-provider-filter" class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-sm">
-        <option value="">All Providers</option>
-        <option value="ollama">Ollama</option>
-        <option value="openai">OpenAI</option>
-        <option value="openrouter">OpenRouter</option>
-      </select>
-      <button type="button" id="refresh-logs-btn" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium rounded-md transition-colors">
-        Refresh
-      </button>
-    </div>
-
-    <!-- Logs table -->
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-        <thead class="bg-slate-50 dark:bg-slate-900">
-          <tr>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Time</th>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Provider</th>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Model</th>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Tokens</th>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cost</th>
-            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Time (ms)</th>
-          </tr>
-        </thead>
-        <tbody id="logs-tbody" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-          {% for log in logs %}
-          <tr>
-            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.timestamp }}</td>
-            <td class="px-4 py-2 text-xs">
-              <span class="px-2 py-0.5 rounded-full text-xs font-medium
-                {% if log.provider == 'ollama' %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400
-                {% elif log.provider == 'openai' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                {% else %}bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400{% endif %}">
-                {{ log.provider }}
-              </span>
-            </td>
-            <td class="px-4 py-2 text-xs text-slate-700 dark:text-slate-300 font-mono">{{ log.endpoint }}</td>
-            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.total_tokens or '--' }}</td>
-            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ '$%.5f' % log.cost_usd if log.cost_usd else '--' }}</td>
-            <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{{ log.processing_time_ms or '--' }}</td>
-          </tr>
-          {% endfor %}
-          {% if not logs %}
-          <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">No API usage logged yet.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
   </div>
 </div>
 {% endblock %}

@@ -4,41 +4,186 @@
 
 {% block admin_extra_css %}
 <style>
-    /* Optional: if you need very specific styles not easily done with Tailwind */
     #logDisplay {
-        white-space: pre-wrap; /* Allows wrapping long lines but preserves whitespace */
-        word-break: break-all; /* Breaks long words/strings if they would overflow */
+        white-space: pre-wrap;
+        word-break: break-all;
     }
 </style>
 {% endblock %}
 
-{% block admin_page_header %}Application Logs{% endblock %}
+{% block admin_page_header %}Logs{% endblock %}
 
 {% block admin_page_content %}
 <div class="container mx-auto p-4">
-    <div class="mb-4 flex flex-wrap items-center gap-4">
-        <div>
-            <label for="logFileSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Log File:</label>
-            <select id="logFileSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                <!-- Options will be populated by JavaScript -->
-            </select>
+    <div class="mb-0">
+        <nav class="flex flex-wrap gap-1 overflow-x-auto pb-0" aria-label="Log Tabs">
+            <button type="button" data-log-tab="files"
+                class="log-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 {% if default_tab == 'files' %}bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 border-slate-200 dark:border-slate-700 shadow-sm -mb-px z-10{% else %}bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800{% endif %}">
+                Application Logs
+            </button>
+            <button type="button" data-log-tab="events"
+                class="log-tab relative px-6 py-3 font-medium text-sm rounded-t-lg border border-b-0 transition-all duration-150 {% if default_tab == 'events' %}bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 border-slate-200 dark:border-slate-700 shadow-sm -mb-px z-10{% else %}bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-transparent hover:bg-slate-200 dark:hover:bg-slate-800{% endif %}">
+                Event Logs
+            </button>
+        </nav>
+    </div>
+
+    <div data-log-panel="files" class="{% if default_tab != 'files' %}hidden {% endif %}bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+        <div class="mb-4 flex flex-wrap items-center gap-4">
+            <div>
+                <label for="logFileSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Log File:</label>
+                <select id="logFileSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+            </div>
+            <div>
+                <label for="logSearchInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Logs:</label>
+                <input type="text" id="logSearchInput" class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md p-2" placeholder="Filter displayed logs...">
+            </div>
         </div>
-        <div>
-            <label for="logSearchInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Logs:</label>
-            <input type="text" id="logSearchInput" class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md p-2" placeholder="Filter displayed logs...">
+
+        <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-2">
+            <div id="logDisplayWrapper" class="h-[60vh] overflow-y-auto rounded-md bg-gray-50 dark:bg-gray-900 p-3">
+                <pre id="logDisplay" class="text-xs text-gray-800 dark:text-gray-200"></pre>
+            </div>
+            <div id="logStatus" class="mt-2 text-sm text-gray-600 dark:text-gray-400"></div>
         </div>
     </div>
 
-    <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-2">
-        <div id="logDisplayWrapper" class="h-[60vh] overflow-y-auto rounded-md bg-gray-50 dark:bg-gray-900 p-3">
-            <pre id="logDisplay" class="text-xs text-gray-800 dark:text-gray-200"></pre>
+    <div data-log-panel="events" class="{% if default_tab != 'events' %}hidden {% endif %}bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-b-lg rounded-tr-lg shadow-sm p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+                <label for="level-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Level</label>
+                <select id="level-filter" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+                    <option value="">All Levels</option>
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                    <option value="debug">Debug</option>
+                </select>
+            </div>
+            <div>
+                <label for="component-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Component</label>
+                <select id="component-filter" class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+                    <option value="">All Components</option>
+                    <option value="webhook">Webhook</option>
+                    <option value="sync">Sync</option>
+                    <option value="notification">Notification</option>
+                    <option value="enrichment">Enrichment</option>
+                    <option value="auth">Auth</option>
+                    <option value="admin">Admin</option>
+                    <option value="api">API</option>
+                    <option value="system">System</option>
+                </select>
+            </div>
+            <div>
+                <label for="search-filter" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search</label>
+                <input type="text" id="search-filter" placeholder="Search messages..."
+                    class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-sky-500 focus:border-transparent">
+            </div>
+            <div class="flex items-end">
+                <button id="refresh-btn"
+                    class="w-full px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800">
+                    Refresh
+                </button>
+            </div>
         </div>
-         <div id="logStatus" class="mt-2 text-sm text-gray-600 dark:text-gray-400"></div>
+
+        <div class="hidden md:block overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-900">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Component</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Message</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-tbody-desktop" class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700"></tbody>
+            </table>
+        </div>
+
+        <div id="logs-mobile" class="md:hidden space-y-3"></div>
+
+        <div class="mt-4 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
+            <div class="text-sm text-gray-700 dark:text-gray-300">
+                <span id="pagination-info">Showing 0 of 0 events</span>
+            </div>
+            <div class="flex space-x-2">
+                <button id="prev-page" disabled
+                    class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    Previous
+                </button>
+                <button id="next-page" disabled
+                    class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    Next
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="log-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75" onclick="closeModal()"></div>
+        <div class="inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+            <div class="bg-white dark:bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Event Details</h3>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="modal-content" class="space-y-4"></div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const tabButtons = document.querySelectorAll('.log-tab');
+        const tabPanels = document.querySelectorAll('[data-log-panel]');
+        const fileTabUrl = '{{ url_for("admin.logs_view", tab="files") }}';
+        const eventTabUrl = '{{ url_for("admin.logs_view", tab="events") }}';
+
+        function activateLogTab(targetTab, pushState = true) {
+            tabButtons.forEach(button => {
+                const active = button.dataset.logTab === targetTab;
+                button.classList.toggle('bg-white', active);
+                button.classList.toggle('dark:bg-slate-800', active);
+                button.classList.toggle('text-sky-600', active);
+                button.classList.toggle('dark:text-sky-400', active);
+                button.classList.toggle('border-slate-200', active);
+                button.classList.toggle('dark:border-slate-700', active);
+                button.classList.toggle('shadow-sm', active);
+                button.classList.toggle('-mb-px', active);
+                button.classList.toggle('z-10', active);
+                button.classList.toggle('bg-slate-100', !active);
+                button.classList.toggle('dark:bg-slate-900', !active);
+                button.classList.toggle('text-slate-600', !active);
+                button.classList.toggle('dark:text-slate-400', !active);
+                button.classList.toggle('border-transparent', !active);
+                button.classList.toggle('hover:bg-slate-200', !active);
+                button.classList.toggle('dark:hover:bg-slate-800', !active);
+            });
+
+            tabPanels.forEach(panel => {
+                panel.classList.toggle('hidden', panel.dataset.logPanel !== targetTab);
+            });
+
+            if (pushState) {
+                history.replaceState({}, '', targetTab === 'events' ? eventTabUrl : fileTabUrl);
+            }
+        }
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => activateLogTab(button.dataset.logTab));
+        });
+
+        activateLogTab('{{ default_tab }}', false);
+
         const logFileSelect = document.getElementById('logFileSelect');
         const logSearchInput = document.getElementById('logSearchInput');
         const logDisplay = document.getElementById('logDisplay');
@@ -46,20 +191,20 @@
         const logStatus = document.getElementById('logStatus');
 
         let currentEventSource = null;
-        let displayedLogLines = []; // To store all lines for client-side filtering
+        let displayedLogLines = [];
 
         async function fetchLogFiles() {
             try {
                 const response = await fetch('{{ url_for("admin.logs_list") }}');
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const files = await response.json();
-                logFileSelect.innerHTML = ''; // Clear existing options
+                logFileSelect.innerHTML = '';
                 files.forEach(file => {
                     const option = new Option(file, file);
                     logFileSelect.add(option);
                 });
                 if (files.length > 0) {
-                    logFileSelect.value = files.find(f => f === 'shownotes.log') || files[0]; // Default to shownotes.log or first file
+                    logFileSelect.value = files.find(f => f === 'shownotes.log') || files[0];
                     loadLogContent(logFileSelect.value);
                 }
             } catch (error) {
@@ -71,8 +216,8 @@
         async function loadLogContent(filename) {
             if (!filename) return;
             logStatus.textContent = `Loading ${filename}...`;
-            displayedLogLines = []; // Reset lines
-            logDisplay.innerHTML = ''; // Clear previous content
+            displayedLogLines = [];
+            logDisplay.innerHTML = '';
 
             if (currentEventSource) {
                 currentEventSource.close();
@@ -80,17 +225,13 @@
             }
 
             try {
-                // Fetch initial last N lines
                 const response = await fetch(`{{ url_for("admin.get_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const initialLines = await response.json();
-                initialLines.forEach(line => {
-                    displayedLogLines.push(line);
-                });
-                filterAndDisplayLogs(); // Display initial lines
-                logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Scroll to bottom
+                initialLines.forEach(line => displayedLogLines.push(line));
+                filterAndDisplayLogs();
+                logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight;
 
-                // Start SSE
                 currentEventSource = new EventSource(`{{ url_for("admin.stream_log_content", filename="PLACEHOLDER_FILENAME") }}`.replace("PLACEHOLDER_FILENAME", encodeURIComponent(filename)));
                 logStatus.textContent = `Streaming updates for ${filename}...`;
 
@@ -102,7 +243,7 @@
                         const lineElement = document.createElement('div');
                         lineElement.textContent = line;
                         logDisplay.appendChild(lineElement);
-                        logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight; // Auto-scroll
+                        logDisplayWrapper.scrollTop = logDisplayWrapper.scrollHeight;
                     }
                 };
 
@@ -111,7 +252,6 @@
                     logStatus.textContent = `Error streaming ${filename}. Connection closed.`;
                     if (currentEventSource) currentEventSource.close();
                 };
-
             } catch (error) {
                 console.error('Error loading log content:', error);
                 logDisplay.textContent = 'Error loading log content.';
@@ -121,7 +261,7 @@
 
         function filterAndDisplayLogs() {
             const searchTerm = logSearchInput.value.toLowerCase();
-            logDisplay.innerHTML = ''; // Clear existing lines
+            logDisplay.innerHTML = '';
 
             const fragment = document.createDocumentFragment();
             displayedLogLines.forEach(line => {
@@ -142,7 +282,8 @@
             filterAndDisplayLogs();
         });
 
-        fetchLogFiles(); // Initial fetch
+        fetchLogFiles();
     });
 </script>
+<script src="{{ url_for('static', filename='admin_event_logs.js') }}"></script>
 {% endblock %}

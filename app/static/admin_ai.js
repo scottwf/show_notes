@@ -187,6 +187,121 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // ======================== SUMMARY RECORD FILTERS ========================
+  const summaryRows = Array.from(document.querySelectorAll('.summary-record-row'));
+  const summaryTbody = document.getElementById('summary-records-tbody');
+  const summaryEmpty = document.getElementById('summary-records-empty');
+  const summarySearchInput = document.getElementById('summary-search-input');
+  const summaryTypeFilter = document.getElementById('summary-type-filter');
+  const summaryStatusFilter = document.getElementById('summary-status-filter');
+  const summaryProviderFilter = document.getElementById('summary-provider-filter');
+  const summarySortSelect = document.getElementById('summary-sort-select');
+  const summaryFeedbackOnly = document.getElementById('summary-feedback-only');
+
+  function compareSummaryRows(a, b, mode) {
+    if (mode === 'title_asc') {
+      return a.dataset.title.localeCompare(b.dataset.title);
+    }
+    if (mode === 'title_desc') {
+      return b.dataset.title.localeCompare(a.dataset.title);
+    }
+    if (mode === 'updated_asc') {
+      return (a.dataset.updated || '').localeCompare(b.dataset.updated || '');
+    }
+    if (mode === 'feedback_desc') {
+      return Number(b.dataset.feedback || 0) - Number(a.dataset.feedback || 0)
+        || (b.dataset.updated || '').localeCompare(a.dataset.updated || '');
+    }
+    return (b.dataset.updated || '').localeCompare(a.dataset.updated || '');
+  }
+
+  function updateSummaryRecordsTable() {
+    if (!summaryRows.length || !summaryTbody) return;
+
+    const search = (summarySearchInput?.value || '').trim().toLowerCase();
+    const type = summaryTypeFilter?.value || '';
+    const status = summaryStatusFilter?.value || '';
+    const provider = summaryProviderFilter?.value || '';
+    const sort = summarySortSelect?.value || 'updated_desc';
+    const feedbackOnly = !!summaryFeedbackOnly?.checked;
+
+    const visibleRows = summaryRows.filter(row => {
+      const matchesSearch = !search
+        || row.dataset.title.includes(search)
+        || row.dataset.model.includes(search);
+      const matchesType = !type || row.dataset.type === type;
+      const matchesStatus = !status || row.dataset.status === status;
+      const matchesProvider = !provider || row.dataset.provider === provider;
+      const matchesFeedback = !feedbackOnly || Number(row.dataset.feedback || 0) > 0;
+      return matchesSearch && matchesType && matchesStatus && matchesProvider && matchesFeedback;
+    });
+
+    summaryRows
+      .slice()
+      .sort((a, b) => compareSummaryRows(a, b, sort))
+      .forEach(row => {
+        row.classList.add('hidden');
+        summaryTbody.appendChild(row);
+      });
+
+    visibleRows
+      .slice()
+      .sort((a, b) => compareSummaryRows(a, b, sort))
+      .forEach(row => {
+        row.classList.remove('hidden');
+        summaryTbody.appendChild(row);
+      });
+
+    if (summaryEmpty) {
+      summaryEmpty.classList.toggle('hidden', visibleRows.length > 0);
+    }
+  }
+
+  [summarySearchInput, summaryTypeFilter, summaryStatusFilter, summaryProviderFilter, summarySortSelect, summaryFeedbackOnly]
+    .filter(Boolean)
+    .forEach(control => control.addEventListener('input', updateSummaryRecordsTable));
+
+  [summaryTypeFilter, summaryStatusFilter, summaryProviderFilter, summarySortSelect, summaryFeedbackOnly]
+    .filter(Boolean)
+    .forEach(control => control.addEventListener('change', updateSummaryRecordsTable));
+
+  updateSummaryRecordsTable();
+
+  // ======================== FULL SUMMARY VIEWER ========================
+  const summaryDialog = document.getElementById('summary-full-dialog');
+  const summaryDialogTitle = document.getElementById('summary-full-title');
+  const summaryDialogMeta = document.getElementById('summary-full-meta');
+  const summaryDialogBody = document.getElementById('summary-full-body');
+  const summaryDialogClose = document.getElementById('summary-full-close');
+
+  document.querySelectorAll('.summary-full-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!summaryDialog || !summaryDialogBody) return;
+      const row = btn.closest('.summary-record-row');
+      const fullText = row?.querySelector('.summary-full-text')?.textContent || '';
+      summaryDialogTitle.textContent = btn.dataset.summaryTitle || 'Summary';
+      summaryDialogMeta.textContent = btn.dataset.summaryModel || '';
+      summaryDialogBody.textContent = fullText.trim();
+      summaryDialog.showModal();
+    });
+  });
+
+  if (summaryDialogClose && summaryDialog) {
+    summaryDialogClose.addEventListener('click', () => summaryDialog.close());
+    summaryDialog.addEventListener('click', (event) => {
+      const rect = summaryDialog.getBoundingClientRect();
+      const clickedBackdrop = (
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom
+      );
+      if (clickedBackdrop) {
+        summaryDialog.close();
+      }
+    });
+  }
+
   // ======================== REFRESH LOGS ========================
   const refreshLogsBtn = document.getElementById('refresh-logs-btn');
   if (refreshLogsBtn) {
