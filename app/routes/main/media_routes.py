@@ -37,6 +37,9 @@ def home():
     """
     route_started_at = time.perf_counter()
     timings = []
+    recent_activity_limit = 12
+    homepage_premiere_limit = 12
+    homepage_movie_limit = 12
 
     def mark_timing(label, started_at):
         elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -64,7 +67,7 @@ def home():
 
     # Get currently playing/paused item from Tautulli (real-time data)
     # Single API call returns both the user's session and total stream count
-    from ..utils import get_tautulli_data
+    from ...utils import get_tautulli_data
 
     current_plex_event = None
     s_username = user['plex_username'] if user['plex_username'] else user['username']
@@ -157,8 +160,8 @@ def home():
                     ELSE title
                 END
             ORDER BY latest_timestamp DESC
-            LIMIT 8
-        """, (s_username,)).fetchall()
+            LIMIT ?
+        """, (s_username, recent_activity_limit)).fetchall()
 
         movie_tmdb_ids = [dict(i)['tmdb_id'] for i in recent_watched
                           if dict(i)['media_type'] == 'movie' and dict(i).get('tmdb_id')]
@@ -213,8 +216,9 @@ def home():
         return recent_shows_enriched
 
     def load_premieres():
-        now = datetime.datetime.now(timezone.utc).isoformat()
-        seven_days_ago = (datetime.datetime.now(timezone.utc) - datetime.timedelta(days=7)).isoformat()
+        now_dt = datetime.datetime.now(timezone.utc).replace(microsecond=0)
+        now = now_dt.isoformat().replace('+00:00', 'Z')
+        seven_days_ago = (now_dt - datetime.timedelta(days=7)).isoformat().replace('+00:00', 'Z')
 
         _fav_member_id = session.get('member_id')
         if _fav_member_id:
@@ -287,12 +291,15 @@ def home():
                 JOIN sonarr_shows s ON ss.show_id = s.id
                 WHERE s.id IN ({placeholders})
                     AND e.episode_number = 1
-                    AND ss.season_number > 0
+                    AND ss.season_number > 1
                     AND e.air_date_utc IS NOT NULL
                     AND e.air_date_utc >= ?
-                ORDER BY e.air_date_utc ASC
-                LIMIT 8
-            """, (*tracked_show_ids, seven_days_ago)).fetchall()
+                ORDER BY
+                    CASE WHEN e.air_date_utc >= ? THEN 0 ELSE 1 END ASC,
+                    CASE WHEN e.air_date_utc >= ? THEN e.air_date_utc END ASC,
+                    CASE WHEN e.air_date_utc < ? THEN e.air_date_utc END DESC
+                LIMIT ?
+            """, (*tracked_show_ids, seven_days_ago, now, now, now, homepage_premiere_limit)).fetchall()
 
         all_series_premieres = db.execute("""
             SELECT
@@ -313,9 +320,12 @@ def home():
                 AND ss.season_number = 1
                 AND e.air_date_utc IS NOT NULL
                 AND e.air_date_utc >= ?
-            ORDER BY e.air_date_utc ASC
-            LIMIT 8
-        """, (seven_days_ago,)).fetchall()
+            ORDER BY
+                CASE WHEN e.air_date_utc >= ? THEN 0 ELSE 1 END ASC,
+                CASE WHEN e.air_date_utc >= ? THEN e.air_date_utc END ASC,
+                CASE WHEN e.air_date_utc < ? THEN e.air_date_utc END DESC
+            LIMIT ?
+        """, (seven_days_ago, now, now, now, homepage_premiere_limit)).fetchall()
 
         formatted_favorited_premieres = []
         for ep in favorited_season_premieres:
@@ -358,6 +368,16 @@ def home():
         }
 
     def load_movies():
+        availability_expr = (
+            "COALESCE("
+            "m.availability_date, "
+            "m.digital_release_date, "
+            "m.release_date, "
+            "m.physical_release_date, "
+            "m.in_cinemas_date"
+            ")"
+        )
+
         recently_synced = db.execute("""
             SELECT
                 m.tmdb_id,
@@ -368,15 +388,15 @@ def home():
                 m.status,
                 m.release_date,
                 m.has_file,
-                m.last_synced_at
+                m.last_synced_at,
+                m.movie_file_added_date
             FROM radarr_movies m
-            WHERE m.release_date IS NOT NULL
-                AND m.release_date <= date('now')
-            ORDER BY m.last_synced_at DESC
-            LIMIT 6
-        """).fetchall()
+            WHERE COALESCE(m.has_file, 0) = 1
+            ORDER BY COALESCE(m.movie_file_added_date, m.last_synced_at, m.release_date) DESC
+            LIMIT ?
+        """, (homepage_movie_limit,)).fetchall()
 
-        coming_soon_movies = db.execute("""
+        coming_soon_movies = db.execute(f"""
             SELECT
                 m.tmdb_id,
                 m.title,
@@ -386,13 +406,20 @@ def home():
                 m.status,
                 m.release_date,
                 m.has_file,
-                m.last_synced_at
+                m.last_synced_at,
+                m.availability_date,
+                m.digital_release_date,
+                m.physical_release_date,
+                m.in_cinemas_date,
+                {availability_expr} as display_release_date
             FROM radarr_movies m
-            WHERE m.release_date IS NOT NULL
-                AND m.release_date > date('now')
-            ORDER BY m.release_date ASC
-            LIMIT 6
-        """).fetchall()
+            WHERE COALESCE(m.has_file, 0) = 0
+                AND COALESCE(m.monitored, 1) = 1
+                AND {availability_expr} IS NOT NULL
+                AND {availability_expr} > date('now')
+            ORDER BY {availability_expr} ASC, m.title COLLATE NOCASE ASC
+            LIMIT ?
+        """, (homepage_movie_limit,)).fetchall()
 
         formatted_recently_downloaded = []
         for movie in recently_synced:
@@ -408,6 +435,11 @@ def home():
             movie_dict['cached_poster_url'] = _get_media_image_url('poster', movie['tmdb_id'], variant='thumb')
             movie_dict['movie_url'] = url_for('main.movie_detail', tmdb_id=movie['tmdb_id'])
             movie_dict['badge_text'] = 'Coming Soon'
+            movie_dict['display_release_date'] = (
+                movie_dict.get('display_release_date')
+                or movie_dict.get('availability_date')
+                or movie_dict.get('release_date')
+            )
             formatted_coming_soon.append(movie_dict)
 
         return {
@@ -1180,7 +1212,7 @@ def report_issue(media_type, media_id):
 
         # Send Pushover notification to admins
         try:
-            from ..utils import send_pushover_notification
+            from ...utils import send_pushover_notification
 
             # Build notification message
             push_title = f"Issue Report: {title}"

@@ -285,7 +285,7 @@ def profile():
     user_dict['plex_member_since'] = user_dict.get('plex_joined_at') or user_dict.get('created_at')
 
     # Get currently playing/paused item from Tautulli (real-time data)
-    from ..utils import get_tautulli_current_activity
+    from ...utils import get_tautulli_current_activity
 
     current_plex_event = None
     s_username = user['plex_username'] if user['plex_username'] else user['username']
@@ -1127,4 +1127,3 @@ def change_password():
 # ========================================
 # RECOMMENDATIONS
 # ========================================
-

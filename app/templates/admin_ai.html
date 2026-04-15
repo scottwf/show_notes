@@ -127,7 +127,7 @@
       <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-3">
         <div>
           <h4 class="text-md font-semibold text-slate-800 dark:text-slate-100">Summary Records</h4>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Search, filter, and sort across stored series and season summaries. Provider/model and user feedback are linked here. Per-summary API usage attribution needs the schema upgrade because `api_usage` rows are not yet linked to individual summary records.</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Search, filter, and sort across stored series, season, and episode summaries. Provider/model, linked API usage, and user feedback are shown when available.</p>
         </div>
       </div>
 
@@ -178,6 +178,7 @@
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Type</th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">LLM</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Usage</th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Feedback</th>
               <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Updated</th>
             </tr>
@@ -243,6 +244,16 @@
               <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
                 <div>{{ record.provider or '--' }}</div>
                 <div class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ record.model or '--' }}</div>
+              </td>
+              <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
+                {% if record.api_usage_id %}
+                <div>ID: {{ record.api_usage_id }}</div>
+                <div>Tokens: {{ record.total_tokens or '--' }}</div>
+                <div>Cost: {% if record.cost_usd is not none %}${{ '%.5f' % record.cost_usd }}{% else %}--{% endif %}</div>
+                <div>Time: {{ record.processing_time_ms or '--' }} ms</div>
+                {% else %}
+                <span class="text-slate-400">Not linked</span>
+                {% endif %}
               </td>
               <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-400">
                 <div>Up: {{ record.upvotes }}</div>

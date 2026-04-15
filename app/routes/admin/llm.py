@@ -484,6 +484,11 @@ def ai_settings():
                     sm.model,
                     sm.summary_text,
                     sm.error_message,
+                    sm.api_usage_id,
+                    au.timestamp AS api_timestamp,
+                    au.total_tokens,
+                    au.cost_usd,
+                    au.processing_time_ms,
                     sm.created_at,
                     sm.updated_at
                 FROM show_summaries sm
@@ -492,6 +497,7 @@ def ai_settings():
                     ON ep.show_id = sm.show_id
                    AND ep.season_number = sm.season_number
                    AND ep.episode_number = sm.episode_number
+                LEFT JOIN api_usage au ON au.id = sm.api_usage_id
                 ORDER BY sm.updated_at DESC
             ''').fetchall()
             for row in unified_summary_rows:
@@ -526,6 +532,11 @@ def ai_settings():
                     'created_at': row['created_at'],
                     'summary_text': row['summary_text'],
                     'error_message': row['error_message'],
+                    'api_usage_id': row['api_usage_id'],
+                    'api_timestamp': row['api_timestamp'],
+                    'total_tokens': row['total_tokens'],
+                    'cost_usd': row['cost_usd'],
+                    'processing_time_ms': row['processing_time_ms'],
                     'upvotes': feedback['upvotes'] if feedback else 0,
                     'downvotes': feedback['downvotes'] if feedback else 0,
                     'reports': feedback['reports'] if feedback else 0,
@@ -782,7 +793,7 @@ def ai_test_connection():
 def ai_generate():
     """Generate AI summaries for a show's episodes and seasons."""
     import time as time_mod
-    from ..llm_services import generate_episode_summary, generate_season_recap
+    from ...llm_services import generate_episode_summary, generate_season_recap
     db = get_db()
 
     if _get_show_summaries_schema_mode(db) != 'episode':
@@ -862,9 +873,10 @@ def ai_generate():
                 continue
 
             log_lines.append(f"S{sn}E{ep['episode_number']}: Generating summary for \"{ep['title']}\"...")
-            summary, error = generate_episode_summary(
+            summary, error, api_usage_id = generate_episode_summary(
                 show['title'], sn, ep['episode_number'],
-                ep['title'], ep['overview']
+                ep['title'], ep['overview'],
+                return_usage_id=True,
             )
 
             if error:
@@ -873,9 +885,9 @@ def ai_generate():
 
             # Save to database
             db.execute(
-                '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                (show_id, sn, ep['episode_number'], summary, provider, model, 'episode_summary')
+                '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key, api_usage_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (show_id, sn, ep['episode_number'], summary, provider, model, 'episode_summary', api_usage_id)
             )
             db.commit()
             episode_count += 1
@@ -900,15 +912,20 @@ def ai_generate():
         if episode_summary_texts:
             log_lines.append(f"Season {sn}: Generating season recap...")
             recap_text = "\n\n".join(episode_summary_texts)
-            recap, error = generate_season_recap(show['title'], sn, recap_text)
+            recap, error, api_usage_id = generate_season_recap(
+                show['title'],
+                sn,
+                recap_text,
+                return_usage_id=True,
+            )
 
             if error:
                 log_lines.append(f"  Error: {error}")
             else:
                 db.execute(
-                    '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
-                       VALUES (?, ?, NULL, ?, ?, ?, ?)''',
-                    (show_id, sn, recap, provider, model, 'season_recap')
+                    '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key, api_usage_id)
+                       VALUES (?, ?, NULL, ?, ?, ?, ?, ?)''',
+                    (show_id, sn, recap, provider, model, 'season_recap', api_usage_id)
                 )
                 db.commit()
                 season_count += 1
@@ -975,7 +992,7 @@ def ai_logs_data():
 @admin_required
 def recap_pipeline():
     """Renders the subtitle-first recap pipeline admin page."""
-    from ..recap_pipeline import get_recap_pipeline_status
+    from ...recap_pipeline import get_recap_pipeline_status
 
     db = get_db()
     status = get_recap_pipeline_status()
@@ -1028,7 +1045,7 @@ def recap_pipeline():
 @admin_required
 def recap_pipeline_generate_season():
     """Trigger subtitle-first season recap generation."""
-    from ..recap_pipeline import generate_season_recap
+    from ...recap_pipeline import generate_season_recap
 
     tmdb_id = request.form.get('tmdb_id', type=int)
     season_number = request.form.get('season_number', type=int)
@@ -1067,7 +1084,7 @@ def recap_pipeline_generate_season():
 @admin_required
 def recap_pipeline_generate_episode():
     """Trigger subtitle-first episode recap generation."""
-    from ..recap_pipeline import generate_episode_recap
+    from ...recap_pipeline import generate_episode_recap
 
     tmdb_id = request.form.get('tmdb_id', type=int)
     season_number = request.form.get('season_number', type=int)

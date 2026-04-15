@@ -92,6 +92,11 @@ CREATE TABLE IF NOT EXISTS radarr_movies (
     overview TEXT,
     status TEXT,
     release_date TEXT,
+    digital_release_date TEXT,
+    physical_release_date TEXT,
+    in_cinemas_date TEXT,
+    availability_date TEXT,
+    movie_file_added_date TEXT,
     original_language TEXT,
     production_countries TEXT,
     studios TEXT,
@@ -104,6 +109,7 @@ CREATE TABLE IF NOT EXISTS radarr_movies (
     fanart_url TEXT,
     path_on_disk TEXT,
     has_file BOOLEAN,
+    monitored BOOLEAN,
     last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -4,6 +4,15 @@ from flask import current_app, url_for
 from . import database
 from .utils import _trigger_image_cache
 
+
+def _first_present(*values):
+    """Return the first non-empty value."""
+    for value in values:
+        if value not in (None, '', []):
+            return value
+    return None
+
+
 def get_all_radarr_movies():
     """
     Fetches a list of all movies from the configured Radarr instance.
@@ -120,6 +129,17 @@ def sync_radarr_library():
             # Convert genres list to JSON string
             genres_list = movie_data.get('genres', [])
             genres_json = json.dumps(genres_list) if genres_list else None
+            movie_file = movie_data.get('movieFile') or {}
+            has_file = movie_data.get('hasFile')
+            if has_file is None:
+                has_file = bool(movie_file)
+
+            availability_date = _first_present(
+                movie_data.get('digitalRelease'),
+                movie_data.get('releaseDate'),
+                movie_data.get('physicalRelease'),
+                movie_data.get('inCinemas'),
+            )
 
             movie_to_insert = {
                 'radarr_id': radarr_movie_id,
@@ -130,7 +150,15 @@ def sync_radarr_library():
                 'overview': movie_data.get('overview'),
                 'poster_url': poster_url,
                 'fanart_url': fanart_url,
-                'release_date': movie_data.get('releaseDate'), # Or physicalRelease / digitalRelease if preferred
+                'path_on_disk': _first_present(movie_data.get('path'), movie_file.get('path')),
+                'has_file': 1 if has_file else 0,
+                'monitored': 1 if movie_data.get('monitored') else 0,
+                'release_date': movie_data.get('releaseDate'),
+                'digital_release_date': movie_data.get('digitalRelease'),
+                'physical_release_date': movie_data.get('physicalRelease'),
+                'in_cinemas_date': movie_data.get('inCinemas'),
+                'availability_date': availability_date,
+                'movie_file_added_date': movie_file.get('dateAdded'),
                 'original_language_name': original_language_name,
                 'studio': movie_data.get('studio'),
                 'runtime': movie_data.get('runtime'),
@@ -239,4 +267,3 @@ def sync_radarr_library():
 
 # --- Jinja Filters ---
 import datetime
-

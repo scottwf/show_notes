@@ -67,7 +67,7 @@ def sync_sonarr():
     Returns:
         A redirect to the 'admin.tasks' page.
     """
-    from ..utils import sync_sonarr_library
+    from ...utils import sync_sonarr_library
     import threading
 
     flash("Sonarr library sync started in background. Check Event Logs for progress.", "info")
@@ -157,7 +157,7 @@ def sync_radarr():
     Returns:
         A redirect to the 'admin.tasks' page.
     """
-    from ..utils import sync_radarr_library
+    from ...utils import sync_radarr_library
     import threading
 
     flash("Radarr library sync started in background. Check Event Logs for progress.", "info")

@@ -121,11 +121,11 @@
       </div>
     {% endif %}
 
-    {# Recently Watched This Week Section #}
+    {# Recently Watched Section #}
     {% if recent_shows %}
       <div class="mb-12">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">Recently Watched This Week</h2>
+          <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">Recently Watched (Last 7 Days)</h2>
           <a href="{{ url_for('main.watch_history') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
             View Full History →
           </a>
@@ -161,7 +161,7 @@
       </div>
     {% endif %}
 
-    {# Your Upcoming Season Premieres #}
+    {# Upcoming Season Premieres #}
     {% if favorited_season_premieres %}
       <div class="mb-12">
         <div class="flex items-center justify-between mb-4">
@@ -169,7 +169,7 @@
             <svg class="w-6 h-6 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
             </svg>
-            New & Upcoming Season Premieres
+            Upcoming Season Premieres
           </h2>
           <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
             View All →
@@ -297,7 +297,7 @@
       </div>
     {% endif %}
 
-    {# Recently Added to Library #}
+    {# Recently Added Movies #}
     {% if recently_downloaded %}
       <div class="mb-12">
         <div class="flex items-center justify-between mb-4">
@@ -305,7 +305,7 @@
             <svg class="w-6 h-6 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
               <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"></path>
             </svg>
-            Recently Added to Library
+            Recently Added Movies
           </h2>
           <a href="{{ url_for('main.calendar') }}" class="text-sky-600 dark:text-sky-400 hover:underline text-sm font-medium">
             View All →
@@ -377,9 +377,9 @@
                       {{ movie.title }}
                     </a>
                   </h3>
-                  {% if movie.release_date %}
+                  {% if movie.display_release_date %}
                   <p class="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                    {{ movie.release_date[:10] }}
+                    {{ movie.display_release_date | format_datetime('%b %d') }}
                   </p>
                   {% endif %}
                 </div>

@@ -455,7 +455,7 @@ def onboarding_services():
 
             # Automatically queue library imports in background
             import threading
-            from ..utils import sync_radarr_library, sync_sonarr_library, sync_tautulli_watch_history, process_activity_log_for_watch_status
+            from ...utils import sync_radarr_library, sync_sonarr_library, sync_tautulli_watch_history, process_activity_log_for_watch_status
 
             def run_background_imports(radarr, sonarr, tautulli):
                 """Run all initial library imports in sequence"""
@@ -510,7 +510,7 @@ def onboarding_test_service():
     Expects JSON payload with 'service', 'url', and 'key' (API key).
     Returns JSON indicating success or failure.
     """
-    from ..utils import (
+    from ...utils import (
         test_sonarr_connection_with_params,
         test_radarr_connection_with_params,
         test_bazarr_connection_with_params,
@@ -557,4 +557,3 @@ def onboarding_test_service():
     except Exception as e:
         current_app.logger.error(f"Service test error for {service}: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-

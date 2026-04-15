@@ -204,14 +204,15 @@ def scheduled_ai_summaries():
                         episode_texts.append(f"E{ep['episode_number']}: {existing['summary_text']}")
                         continue
 
-                    summary, error = generate_episode_summary(
-                        show['title'], sn, ep['episode_number'], ep['title'], ep['overview']
+                    summary, error, api_usage_id = generate_episode_summary(
+                        show['title'], sn, ep['episode_number'], ep['title'], ep['overview'],
+                        return_usage_id=True,
                     )
                     if summary:
                         db.execute(
-                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
-                               VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                            (show['id'], sn, ep['episode_number'], summary, provider, model, 'episode_summary')
+                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key, api_usage_id)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                            (show['id'], sn, ep['episode_number'], summary, provider, model, 'episode_summary', api_usage_id)
                         )
                         db.commit()
                         total_episodes += 1
@@ -220,12 +221,17 @@ def scheduled_ai_summaries():
 
                 # Generate season recap
                 if episode_texts:
-                    recap, error = generate_season_recap(show['title'], sn, "\n\n".join(episode_texts))
+                    recap, error, api_usage_id = generate_season_recap(
+                        show['title'],
+                        sn,
+                        "\n\n".join(episode_texts),
+                        return_usage_id=True,
+                    )
                     if recap:
                         db.execute(
-                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key)
-                               VALUES (?, ?, NULL, ?, ?, ?, ?)''',
-                            (show['id'], sn, recap, provider, model, 'season_recap')
+                            '''INSERT INTO show_summaries (show_id, season_number, episode_number, summary_text, provider, model, prompt_key, api_usage_id)
+                               VALUES (?, ?, NULL, ?, ?, ?, ?, ?)''',
+                            (show['id'], sn, recap, provider, model, 'season_recap', api_usage_id)
                         )
                         db.commit()
                         total_seasons += 1

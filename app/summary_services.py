@@ -178,7 +178,7 @@ def generate_season_summary(tmdb_id, season_number):
     Returns:
         tuple: (success: bool, error_message: str or None)
     """
-    from .llm_services import get_llm_response
+    from .llm_services import get_llm_response_with_usage
 
     db = get_db()
     provider = get_setting('preferred_llm_provider')
@@ -227,15 +227,19 @@ def generate_season_summary(tmdb_id, season_number):
 
     current_app.logger.info(f"Generating summary for '{show_title}' Season {season_number} with {provider}/{model}")
 
-    response_text, error = get_llm_response(prompt, llm_model_name=model, provider=provider)
+    response_text, error, api_usage_id = get_llm_response_with_usage(
+        prompt,
+        llm_model_name=model,
+        provider=provider,
+    )
 
     if error:
         db.execute("""
             UPDATE show_summaries
-            SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+            SET status = 'failed', error_message = ?, api_usage_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
               AND provider = ? AND model = ?
-        """, (error, show_id, season_number, provider, model))
+        """, (error, api_usage_id, show_id, season_number, provider, model))
         db.commit()
         current_app.logger.error(f"Summary generation failed for '{show_title}' S{season_number}: {error}")
         return False, error
@@ -243,10 +247,10 @@ def generate_season_summary(tmdb_id, season_number):
     db.execute("""
         UPDATE show_summaries SET
             summary_text = ?, raw_llm_response = ?, status = 'completed',
-            error_message = NULL, updated_at = CURRENT_TIMESTAMP
+            error_message = NULL, api_usage_id = ?, updated_at = CURRENT_TIMESTAMP
         WHERE show_id = ? AND season_number = ? AND episode_number IS NULL
           AND provider = ? AND model = ?
-    """, (response_text, response_text, show_id, season_number, provider, model))
+    """, (response_text, response_text, api_usage_id, show_id, season_number, provider, model))
     db.commit()
 
     current_app.logger.info(f"Summary completed for '{show_title}' Season {season_number}")
@@ -261,7 +265,7 @@ def generate_show_summary(tmdb_id):
     Returns:
         tuple: (success: bool, error_message: str or None)
     """
-    from .llm_services import get_llm_response
+    from .llm_services import get_llm_response_with_usage
 
     db = get_db()
     provider = get_setting('preferred_llm_provider')
@@ -414,25 +418,29 @@ Guidelines:
         """, (show_id, provider, model, 'show_summary', prompt))
     db.commit()
 
-    response_text, error = get_llm_response(prompt, llm_model_name=model, provider=provider)
+    response_text, error, api_usage_id = get_llm_response_with_usage(
+        prompt,
+        llm_model_name=model,
+        provider=provider,
+    )
 
     if error:
         db.execute("""
             UPDATE show_summaries
-            SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+            SET status = 'failed', error_message = ?, api_usage_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE show_id = ? AND season_number IS NULL AND episode_number IS NULL
               AND provider = ? AND model = ?
-        """, (error, show_id, provider, model))
+        """, (error, api_usage_id, show_id, provider, model))
         db.commit()
         return False, error
 
     db.execute("""
         UPDATE show_summaries SET
             summary_text = ?, raw_llm_response = ?, status = 'completed',
-            error_message = NULL, updated_at = CURRENT_TIMESTAMP
+            error_message = NULL, api_usage_id = ?, updated_at = CURRENT_TIMESTAMP
         WHERE show_id = ? AND season_number IS NULL AND episode_number IS NULL
           AND provider = ? AND model = ?
-    """, (response_text, response_text, show_id, provider, model))
+    """, (response_text, response_text, api_usage_id, show_id, provider, model))
     db.commit()
 
     current_app.logger.info(f"Show summary completed for '{show['title']}'")

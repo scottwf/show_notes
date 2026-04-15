@@ -105,7 +105,7 @@ def admin_users():
     current_app.logger.debug(f"admin_users: aggregate queries {(time.monotonic()-t2)*1000:.0f}ms")
 
     t3 = time.monotonic()
-    from ..utils import get_jellyseer_user_requests
+    from ...utils import get_jellyseer_user_requests
     jellyseer_counts = get_jellyseer_user_requests()
     current_app.logger.debug(f"admin_users: jellyseerr {(time.monotonic()-t3)*1000:.0f}ms")
 

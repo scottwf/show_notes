@@ -17,7 +17,7 @@ def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens
                    total_tokens=None, cost_usd=None, processing_time_ms=None):
     """Log an LLM API call to the api_usage table."""
     try:
-        db.execute(
+        cursor = db.execute(
             """INSERT INTO api_usage (timestamp, provider, endpoint, prompt_tokens,
                completion_tokens, total_tokens, cost_usd, processing_time_ms)
                VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)""",
@@ -25,8 +25,34 @@ def _log_api_usage(db, provider, endpoint, prompt_tokens=None, completion_tokens
              cost_usd, processing_time_ms)
         )
         db.commit()
+        return cursor.lastrowid
     except Exception as e:
         current_app.logger.error(f"Failed to log API usage: {e}", exc_info=True)
+        return None
+
+
+def get_llm_response_with_usage(prompt_text, llm_model_name=None, provider=None):
+    """
+    Get a response from the configured LLM provider and return the api_usage row id.
+
+    Returns:
+        tuple: (response_text, error_message, api_usage_id)
+    """
+    db = get_db()
+    if provider is None:
+        provider = get_setting("preferred_llm_provider")
+
+    if not provider or provider.lower() == "none" or provider == "":
+        return None, "No LLM provider configured. Set one in Admin > AI settings.", None
+
+    if provider == "openai":
+        return _call_openai(db, prompt_text, llm_model_name)
+    elif provider == "ollama":
+        return _call_ollama(db, prompt_text, llm_model_name)
+    elif provider == "openrouter":
+        return _call_openrouter(db, prompt_text, llm_model_name)
+    else:
+        return None, f"Unsupported LLM provider: {provider}", None
 
 
 def get_llm_response(prompt_text, llm_model_name=None, provider=None):
@@ -41,21 +67,12 @@ def get_llm_response(prompt_text, llm_model_name=None, provider=None):
     Returns:
         tuple: (response_text, error_message) - one will be None.
     """
-    db = get_db()
-    if provider is None:
-        provider = get_setting("preferred_llm_provider")
-
-    if not provider or provider.lower() == "none" or provider == "":
-        return None, "No LLM provider configured. Set one in Admin > AI settings."
-
-    if provider == "openai":
-        return _call_openai(db, prompt_text, llm_model_name)
-    elif provider == "ollama":
-        return _call_ollama(db, prompt_text, llm_model_name)
-    elif provider == "openrouter":
-        return _call_openrouter(db, prompt_text, llm_model_name)
-    else:
-        return None, f"Unsupported LLM provider: {provider}"
+    response_text, error_message, _api_usage_id = get_llm_response_with_usage(
+        prompt_text,
+        llm_model_name=llm_model_name,
+        provider=provider,
+    )
+    return response_text, error_message
 
 
 def _call_openai(db, prompt_text, llm_model_name=None):
@@ -80,19 +97,19 @@ def _call_openai(db, prompt_text, llm_model_name=None):
         usage = completion.usage
         cost = _estimate_openai_cost(model, usage.prompt_tokens, usage.completion_tokens)
 
-        _log_api_usage(db, "openai", model,
+        api_usage_id = _log_api_usage(db, "openai", model,
                        prompt_tokens=usage.prompt_tokens,
                        completion_tokens=usage.completion_tokens,
                        total_tokens=usage.total_tokens,
                        cost_usd=cost if cost > 0 else None,
                        processing_time_ms=elapsed_ms)
         current_app.logger.info(f"OpenAI response: {model}, {usage.total_tokens} tokens, ${cost:.5f}, {elapsed_ms}ms")
-        return text, None
+        return text, None, api_usage_id
     except Exception as e:
         msg = f"OpenAI API request failed: {e}"
         current_app.logger.error(msg, exc_info=True)
-        _log_api_usage(db, "openai", model, cost_usd=0)
-        return None, msg
+        api_usage_id = _log_api_usage(db, "openai", model, cost_usd=0)
+        return None, msg, api_usage_id
 
 
 def _call_ollama(db, prompt_text, llm_model_name=None):
@@ -117,16 +134,16 @@ def _call_ollama(db, prompt_text, llm_model_name=None):
         completion_tokens = data.get("eval_count")
         total = (prompt_tokens or 0) + (completion_tokens or 0) if prompt_tokens or completion_tokens else None
 
-        _log_api_usage(db, "ollama", model,
+        api_usage_id = _log_api_usage(db, "ollama", model,
                        prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
                        total_tokens=total, cost_usd=0, processing_time_ms=elapsed_ms)
         current_app.logger.info(f"Ollama response: {model}, {elapsed_ms}ms")
-        return text, None
+        return text, None, api_usage_id
     except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
         msg = f"Ollama API request failed: {e}"
         current_app.logger.error(msg, exc_info=True)
-        _log_api_usage(db, "ollama", model, cost_usd=0)
-        return None, msg
+        api_usage_id = _log_api_usage(db, "ollama", model, cost_usd=0)
+        return None, msg, api_usage_id
 
 
 def _call_openrouter(db, prompt_text, llm_model_name=None):
@@ -153,19 +170,19 @@ def _call_openrouter(db, prompt_text, llm_model_name=None):
         completion_tokens = usage.completion_tokens if usage else None
         total_tokens = usage.total_tokens if usage else None
 
-        _log_api_usage(db, "openrouter", model,
+        api_usage_id = _log_api_usage(db, "openrouter", model,
                        prompt_tokens=prompt_tokens,
                        completion_tokens=completion_tokens,
                        total_tokens=total_tokens,
                        cost_usd=None,  # OpenRouter reports cost separately
                        processing_time_ms=elapsed_ms)
         current_app.logger.info(f"OpenRouter response: {model}, {total_tokens} tokens, {elapsed_ms}ms")
-        return text, None
+        return text, None, api_usage_id
     except Exception as e:
         msg = f"OpenRouter API request failed: {e}"
         current_app.logger.error(msg, exc_info=True)
-        _log_api_usage(db, "openrouter", model, cost_usd=0)
-        return None, msg
+        api_usage_id = _log_api_usage(db, "openrouter", model, cost_usd=0)
+        return None, msg, api_usage_id
 
 
 def _estimate_openai_cost(model, prompt_tokens, completion_tokens):
@@ -190,7 +207,7 @@ def get_prompt_template(prompt_key):
     return row['prompt_template'] if row else None
 
 
-def generate_episode_summary(show_title, season_number, episode_number, episode_title, episode_overview):
+def generate_episode_summary(show_title, season_number, episode_number, episode_title, episode_overview, return_usage_id=False):
     """
     Generate an AI summary for a single episode.
 
@@ -208,10 +225,13 @@ def generate_episode_summary(show_title, season_number, episode_number, episode_
         episode_title=episode_title or "Unknown",
         episode_overview=episode_overview or "No description available."
     )
-    return get_llm_response(prompt)
+    summary_text, error_message, api_usage_id = get_llm_response_with_usage(prompt)
+    if return_usage_id:
+        return summary_text, error_message, api_usage_id
+    return summary_text, error_message
 
 
-def generate_season_recap(show_title, season_number, episode_summaries_text):
+def generate_season_recap(show_title, season_number, episode_summaries_text, return_usage_id=False):
     """
     Generate an AI recap for an entire season.
 
@@ -230,4 +250,7 @@ def generate_season_recap(show_title, season_number, episode_summaries_text):
         season_number=season_number,
         episode_summaries=episode_summaries_text or "No individual episode summaries available."
     )
-    return get_llm_response(prompt)
+    recap_text, error_message, api_usage_id = get_llm_response_with_usage(prompt)
+    if return_usage_id:
+        return recap_text, error_message, api_usage_id
+    return recap_text, error_message

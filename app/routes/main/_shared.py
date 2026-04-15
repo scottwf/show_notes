@@ -5,6 +5,7 @@ import re
 import sqlite3
 import time
 import datetime
+import threading
 from datetime import timezone
 import urllib.parse
 import logging
@@ -19,6 +20,8 @@ from ... import database
 
 
 last_plex_event = None
+_homepage_cache = {}
+_homepage_cache_lock = threading.Lock()
 
 # ── Household member helpers ──────────────────────────────────────────────────
 
@@ -128,7 +131,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
                            If None, fetches from Tautulli directly.
         member_id: Household member to scope favorite/notification counts to.
     """
-    from ..utils import get_tautulli_activity
+    from ...utils import get_tautulli_activity
     import pytz
     from datetime import datetime as _dt
 
@@ -362,4 +365,3 @@ def _calculate_show_completion(user_id, show_id):
 # ============================================================================
 # Watch Progress API Endpoints
 # ============================================================================
-

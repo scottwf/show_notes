@@ -372,7 +372,7 @@ def sonarr_webhook():
                     # Fall back to full sync so availability still updates even with partial webhook payloads.
                     run_full_sync = True
                 else:
-                    from ..utils import update_sonarr_episode
+                    from ...utils import update_sonarr_episode
                     import threading
 
                     # Optimistically mark downloaded episodes as available immediately.
@@ -488,7 +488,7 @@ def sonarr_webhook():
                                                 'available_after_targeted': available_count,
                                                 'updated_count': updated_count
                                             })
-                                            from ..utils import sync_sonarr_library
+                                            from ...utils import sync_sonarr_library
                                             sync_sonarr_library()
                                 except Exception as verify_err:
                                     current_app.logger.warning(f"Targeted Sonarr availability verification failed: {verify_err}")
@@ -590,7 +590,7 @@ def sonarr_webhook():
             current_app.logger.info(f"Sonarr webhook event '{event_type}' detected, triggering full library sync as a fallback.")
             
             # Import here to avoid circular imports
-            from ..utils import sync_sonarr_library
+            from ...utils import sync_sonarr_library
             
             try:
                 # Trigger the sync in a background thread to avoid blocking the webhook response
@@ -702,7 +702,7 @@ def radarr_webhook():
             current_app.logger.info(f"Radarr webhook event '{event_type}' detected, triggering library sync")
             
             # Import here to avoid circular imports
-            from ..utils import sync_radarr_library
+            from ...utils import sync_radarr_library
             
             try:
                 # Trigger the sync in a background thread to avoid blocking the webhook response
@@ -737,4 +737,3 @@ def radarr_webhook():
     except Exception as e:
         current_app.logger.error(f"Error processing Radarr webhook: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
