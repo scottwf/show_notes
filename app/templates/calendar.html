@@ -55,6 +55,90 @@
         </button>
     </div>
 
+    <!-- ── Single Day View (mobile) ──────────────────────────────── -->
+    <div class="md:hidden mb-8">
+
+      <!-- Day navigator -->
+      <div class="flex items-center justify-between mb-3">
+        <button @click="prevDay()"
+                class="w-10 h-10 flex items-center justify-center rounded-xl
+                       bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300
+                       hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors text-xl font-bold">
+          ‹
+        </button>
+
+        <div class="text-center flex-1 px-2">
+          <div class="text-xs font-bold text-sky-500 uppercase tracking-wider"
+               x-text="mobileDay.toLocaleDateString('en-US', { weekday: 'long' })">
+          </div>
+          <div class="text-3xl font-extrabold text-slate-800 dark:text-slate-100 leading-none my-0.5"
+               x-text="mobileDay.getDate()">
+          </div>
+          <div class="text-xs text-slate-500 dark:text-slate-400"
+               x-text="mobileDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })">
+          </div>
+        </div>
+
+        <button @click="nextDay()"
+                class="w-10 h-10 flex items-center justify-center rounded-xl
+                       bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300
+                       hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors text-xl font-bold">
+          ›
+        </button>
+      </div>
+
+      <!-- Week dots strip -->
+      <div class="flex justify-center items-center gap-2 mb-4">
+        <template x-for="dot in weekDots" :key="dot.key">
+          <div class="rounded-full transition-all"
+               :class="{
+                 'w-2.5 h-2.5 bg-sky-400': dot.isToday && dot.isCurrent,
+                 'w-2 h-2 bg-sky-500/60': dot.isToday && !dot.isCurrent,
+                 'w-2 h-2 bg-blue-500': !dot.isToday && dot.hasEvents && dot.isCurrent,
+                 'w-1.5 h-1.5 bg-blue-400/60': !dot.isToday && dot.hasEvents && !dot.isCurrent,
+                 'w-1.5 h-1.5 bg-slate-600': !dot.hasEvents
+               }">
+          </div>
+        </template>
+      </div>
+
+      <!-- Events for current day -->
+      <div class="flex flex-col gap-2">
+        <template x-if="mobileDayEvents.length === 0">
+          <div class="bg-slate-100 dark:bg-slate-800 rounded-xl p-6 text-center">
+            <p class="text-slate-500 dark:text-slate-400 text-sm">Nothing airing today</p>
+            <button @click="nextDay()"
+                    class="mt-2 text-xs text-sky-500 hover:underline">
+              Check tomorrow →
+            </button>
+          </div>
+        </template>
+        <template x-for="chip in mobileDayEvents" :key="chip.show_title">
+          <a :href="chip.url"
+             class="flex items-center justify-between px-4 py-3 rounded-xl font-semibold
+                    cursor-pointer hover:opacity-80 transition-opacity border-l-4"
+             :class="{
+               'bg-blue-900/80 border-blue-500 text-blue-100':       chip.type === 'episode' && !chip.is_premiere,
+               'bg-purple-900/80 border-purple-500 text-purple-100': chip.is_premiere || chip.type === 'premiere',
+               'bg-red-900/80 border-red-500 text-red-100':          chip.type === 'finale'
+             }">
+            <div class="min-w-0">
+              <div class="text-sm font-bold truncate" x-text="chip.show_title"></div>
+              <div class="text-xs opacity-70 mt-0.5"
+                   x-text="chip.count > 1
+                     ? chip.count + ' episodes'
+                     : 'S' + String(chip.season_number).padStart(2,'0') + 'E' + String(chip.episode_number).padStart(2,'0') + (chip.episode_title ? ' · ' + chip.episode_title : '')">
+              </div>
+            </div>
+            <svg class="w-4 h-4 flex-shrink-0 ml-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+        </template>
+      </div>
+    </div>
+    <!-- ── End single day view ─────────────────────────────────────── -->
+
     <!-- ── Week Grid (desktop) ─────────────────────────────────────── -->
     <div class="hidden md:block mb-8">
 
