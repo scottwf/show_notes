@@ -27,6 +27,89 @@ from ._shared import (
     _calculate_show_completion, MEMBER_AVATAR_COLORS,
 )
 
+def _build_events_by_date(upcoming, premieres, finales):
+    """
+    Bucket formatted calendar events into a dict keyed by YYYY-MM-DD.
+
+    Each value is a list of event dicts with shape:
+        show_title, show_url, episode_url, season_number, episode_number,
+        episode_title, type ('episode'|'premiere'|'finale'),
+        is_favorited, is_premiere, is_finale, is_series_premiere
+
+    Args:
+        upcoming: formatted tracked_upcoming episodes (list of dicts)
+        premieres: formatted series_premieres (list of dicts)
+        finales: formatted season_finales (list of dicts)
+
+    Returns:
+        dict[str, list[dict]]
+    """
+    events_by_date = {}
+
+    def _date_key(date_str):
+        """Extract YYYY-MM-DD from an ISO datetime string or return None."""
+        if not date_str:
+            return None
+        try:
+            return str(date_str)[:10]
+        except Exception:
+            return None
+
+    def _add(date_key, event):
+        if date_key:
+            events_by_date.setdefault(date_key, []).append(event)
+
+    for ep in upcoming:
+        key = _date_key(ep.get('air_date_utc'))
+        _add(key, {
+            'show_title': ep.get('show_title', ''),
+            'show_url': ep.get('show_url', ''),
+            'episode_url': ep.get('episode_url', ''),
+            'season_number': ep.get('season_number'),
+            'episode_number': ep.get('episode_number'),
+            'episode_title': ep.get('episode_title', ''),
+            'type': 'episode',
+            'is_favorited': ep.get('is_favorited', False),
+            'is_premiere': ep.get('is_season_premiere', False),
+            'is_finale': False,
+            'is_series_premiere': ep.get('is_series_premiere', False),
+        })
+
+    for ep in premieres:
+        key = _date_key(ep.get('premiere_date') or ep.get('air_date_utc'))
+        _add(key, {
+            'show_title': ep.get('show_title', ''),
+            'show_url': ep.get('show_url', ''),
+            'episode_url': ep.get('episode_url', ''),
+            'season_number': ep.get('season_number'),
+            'episode_number': ep.get('episode_number'),
+            'episode_title': ep.get('episode_title', ''),
+            'type': 'premiere',
+            'is_favorited': ep.get('is_favorited', False),
+            'is_premiere': True,
+            'is_finale': False,
+            'is_series_premiere': ep.get('is_series_premiere', False),
+        })
+
+    for ep in finales:
+        key = _date_key(ep.get('finale_date') or ep.get('air_date_utc'))
+        _add(key, {
+            'show_title': ep.get('show_title', ''),
+            'show_url': ep.get('show_url', ''),
+            'episode_url': ep.get('episode_url', ''),
+            'season_number': ep.get('season_number'),
+            'episode_number': ep.get('episode_number'),
+            'episode_title': ep.get('episode_title', ''),
+            'type': 'finale',
+            'is_favorited': ep.get('is_favorited', False),
+            'is_premiere': False,
+            'is_finale': True,
+            'is_series_premiere': False,
+        })
+
+    return events_by_date
+
+
 @main_bp.route('/calendar')
 @login_required
 def calendar():
@@ -102,10 +185,17 @@ def calendar():
             ep_dict['finale_date'] = ep.get('air_date_utc')
         formatted_finales.append(ep_dict)
 
+    events_by_date = _build_events_by_date(
+        formatted_upcoming,
+        formatted_premieres,
+        formatted_finales,
+    )
+
     return render_template('calendar.html',
                          upcoming_episodes=formatted_upcoming,
                          series_premieres=formatted_premieres,
-                         season_finales=formatted_finales)
+                         season_finales=formatted_finales,
+                         events_by_date=events_by_date)
 
 @main_bp.route('/calendar/feed/<token>.ics')
 def calendar_ical_feed(token):
