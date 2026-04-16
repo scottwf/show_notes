@@ -19,6 +19,7 @@ from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from ... import database
+from ...data_transforms import format_datetime_simple
 from . import main_bp
 from ._shared import (
     get_current_member, get_user_members, set_member_session,
@@ -215,10 +216,34 @@ def home():
 
         return recent_shows_enriched
 
+    def _relative_date_label(date_val, today_local):
+        """Return 'Today', 'Tomorrow', 'Yesterday', or None for other dates."""
+        if not date_val:
+            return None
+        try:
+            if isinstance(date_val, str):
+                dt = datetime.datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+            else:
+                dt = date_val
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            air_date = dt.astimezone().date()
+            delta = (air_date - today_local).days
+            if delta == 0:
+                return 'Today'
+            if delta == 1:
+                return 'Tomorrow'
+            if delta == -1:
+                return 'Yesterday'
+        except (ValueError, AttributeError):
+            pass
+        return None
+
     def load_premieres():
         now_dt = datetime.datetime.now(timezone.utc).replace(microsecond=0)
         now = now_dt.isoformat().replace('+00:00', 'Z')
         seven_days_ago = (now_dt - datetime.timedelta(days=7)).isoformat().replace('+00:00', 'Z')
+        today_local = datetime.datetime.now().date()
 
         _fav_member_id = session.get('member_id')
         if _fav_member_id:
@@ -337,8 +362,10 @@ def home():
                                              season_number=ep['season_number'],
                                              episode_number=ep['episode_number'])
             ep_dict['is_favorited'] = ep['show_db_id'] in favorited_ids
-            ep_dict['premiere_type'] = f"Season {ep['season_number']} Premiere"
+            ep_dict['premiere_type'] = f"S{ep['season_number']}"
             ep_dict['is_newly_aired'] = ep['air_date_utc'] and ep['air_date_utc'] < now
+            rel = _relative_date_label(ep['air_date_utc'], today_local)
+            ep_dict['date_label'] = rel if rel else format_datetime_simple(ep['air_date_utc'], '%b %d')
             ep_dict['user_requested'] = False
             if user_tag_ids and ep['tags']:
                 show_tag_ids = [int(tag_id) for tag_id in str(ep['tags']).split(',') if tag_id.strip().isdigit()]
@@ -356,6 +383,8 @@ def home():
                                                episode_number=show['episode_number'])
             show_dict['premiere_type'] = 'Series Premiere'
             show_dict['is_newly_aired'] = show['premiere_date'] and show['premiere_date'] < now
+            rel = _relative_date_label(show['premiere_date'], today_local)
+            show_dict['date_label'] = rel if rel else format_datetime_simple(show['premiere_date'], '%b %d')
             show_dict['user_requested'] = False
             if user_tag_ids and show['tags']:
                 show_tag_ids = [int(tag_id) for tag_id in str(show['tags']).split(',') if tag_id.strip().isdigit()]

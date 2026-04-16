@@ -192,7 +192,7 @@
                     NEW
                   </div>
                   {% else %}
-                  <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg">
+                  <div class="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-md font-semibold shadow-lg whitespace-nowrap">
                     {{ show.premiere_type }}
                   </div>
                   {% endif %}
@@ -219,9 +219,9 @@
                       {{ show.show_title }}
                     </a>
                   </h3>
-                  {% if show.air_date_utc %}
+                  {% if show.date_label %}
                   <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
-                    {% if show.is_newly_aired %}Aired{% else %}Airs{% endif %} {{ show.air_date_utc | format_datetime('%b %d') }}
+                    {% if show.date_label in ('Today', 'Tomorrow', 'Yesterday') %}{{ show.date_label }}{% elif show.is_newly_aired %}Aired {{ show.date_label }}{% else %}Airs {{ show.date_label }}{% endif %}
                   </p>
                   {% endif %}
                 </div>
@@ -284,9 +284,9 @@
                       {{ show.show_title }}
                     </a>
                   </h3>
-                  {% if show.premiere_date %}
+                  {% if show.date_label %}
                   <p class="text-xs mt-1 font-medium {% if show.is_newly_aired %}text-emerald-600 dark:text-emerald-400{% else %}text-sky-600 dark:text-sky-400{% endif %}">
-                    {% if show.is_newly_aired %}Premiered{% else %}Premieres{% endif %} {{ show.premiere_date | format_datetime('%b %d') }}
+                    {% if show.date_label in ('Today', 'Tomorrow', 'Yesterday') %}{{ show.date_label }}{% elif show.is_newly_aired %}Premiered {{ show.date_label }}{% else %}Premieres {{ show.date_label }}{% endif %}
                   </p>
                   {% endif %}
                 </div>

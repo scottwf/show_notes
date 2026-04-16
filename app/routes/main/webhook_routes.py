@@ -354,6 +354,7 @@ def sonarr_webhook():
 
         if event_type == 'Download':
             current_app.logger.info(f"Sonarr webhook event 'Download' detected, triggering targeted episode update.")
+            is_upgrade = payload.get('isUpgrade', False)
             try:
                 # Extract necessary info from the payload
                 series_id = payload.get('series', {}).get('id')
@@ -516,62 +517,66 @@ def sonarr_webhook():
                                     })
                                     current_app.logger.error(f"TVMaze enrichment failed: {e_enrich}")
 
-                                # Create notifications for users who favorited this show
-                                try:
-                                    db = database.get_db()
+                                # Create notifications for users who favorited this show.
+                                # Skip upgrades — the episode already exists, no need to notify again.
+                                if is_upgrade:
+                                    syslog.info(SystemLogger.NOTIFICATION, f"Skipping notifications for file upgrade: {series_title}")
+                                else:
+                                    try:
+                                        db = database.get_db()
 
-                                    # Find the show in our database
-                                    show = db.execute(
-                                        'SELECT id, tmdb_id, title FROM sonarr_shows WHERE sonarr_id = ?',
-                                        (series_id,)
-                                    ).fetchone()
+                                        # Find the show in our database
+                                        show = db.execute(
+                                            'SELECT id, tmdb_id, title FROM sonarr_shows WHERE sonarr_id = ?',
+                                            (series_id,)
+                                        ).fetchone()
 
-                                    if show:
-                                        # Find users who favorited this show
-                                        favorited_users = db.execute('''
-                                            SELECT user_id FROM user_favorites
-                                            WHERE show_id = ? AND is_dropped = 0
-                                        ''', (show['id'],)).fetchall()
+                                        if show:
+                                            # Find users who favorited this show
+                                            favorited_users = db.execute('''
+                                                SELECT user_id FROM user_favorites
+                                                WHERE show_id = ? AND is_dropped = 0
+                                            ''', (show['id'],)).fetchall()
 
-                                        # Create notification for each user
-                                        for user in favorited_users:
-                                            for episode in episodes_info:
-                                                season_num = episode.get('seasonNumber')
-                                                episode_num = episode.get('episodeNumber')
-                                                episode_title = episode.get('title', f'Episode {episode_num}')
+                                            # Create notification for each user
+                                            for user in favorited_users:
+                                                for episode in episodes_info:
+                                                    season_num = episode.get('seasonNumber')
+                                                    episode_num = episode.get('episodeNumber')
+                                                    episode_title = episode.get('title', f'Episode {episode_num}')
 
-                                                notification_title = f"New Episode: {series_title}"
-                                                notification_message = f"S{season_num:02d}E{episode_num:02d}: {episode_title} is now available!"
+                                                    notification_title = f"New Episode: {series_title}"
+                                                    notification_message = f"S{season_num:02d}E{episode_num:02d}: {episode_title} is now available!"
 
-                                                db.execute('''
-                                                    INSERT INTO user_notifications
-                                                    (user_id, show_id, notification_type, title, message, season_number, episode_number)
-                                                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                                                ''', (
-                                                    user['user_id'],
-                                                    show['id'],
-                                                    'new_episode',
-                                                    notification_title,
-                                                    notification_message,
-                                                    season_num,
-                                                    episode_num
-                                                ))
+                                                    db.execute('''
+                                                        INSERT INTO user_notifications
+                                                        (user_id, show_id, notification_type, title, message, season_number, episode_number)
+                                                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                                                    ''', (
+                                                        user['user_id'],
+                                                        show['id'],
+                                                        'new_episode',
+                                                        notification_title,
+                                                        notification_message,
+                                                        season_num,
+                                                        episode_num
+                                                    ))
 
-                                        db.commit()
-                                        current_app.logger.info(f"Created notifications for {len(favorited_users)} users about {len(episodes_info)} new episodes")
-                                        syslog.success(SystemLogger.NOTIFICATION, f"Created {len(favorited_users)} notifications for {series_title}", {
-                                            'user_count': len(favorited_users),
-                                            'episode_count': len(episodes_info)
+                                            db.commit()
+                                            current_app.logger.info(f"Created notifications for {len(favorited_users)} users about {len(episodes_info)} new episodes")
+                                            syslog.success(SystemLogger.NOTIFICATION, f"Created {len(favorited_users)} notifications for {series_title}", {
+                                                'user_count': len(favorited_users),
+                                                'episode_count': len(episodes_info)
+                                            })
+                                        else:
+                                            current_app.logger.warning(f"Show with sonarr_id {series_id} not found in database")
+                                            syslog.warning(SystemLogger.SYNC, f"Show not found in database: sonarr_id {series_id}")
+
+                                    except Exception as e:
+                                        current_app.logger.error(f"Error creating notifications: {e}", exc_info=True)
+                                        syslog.error(SystemLogger.NOTIFICATION, f"Failed to create notifications for {series_title}", {
+                                            'error': str(e)
                                         })
-                                    else:
-                                        current_app.logger.warning(f"Show with sonarr_id {series_id} not found in database")
-                                        syslog.warning(SystemLogger.SYNC, f"Show not found in database: sonarr_id {series_id}")
-
-                                except Exception as e:
-                                    current_app.logger.error(f"Error creating notifications: {e}", exc_info=True)
-                                    syslog.error(SystemLogger.NOTIFICATION, f"Failed to create notifications for {series_title}", {
-                                        'error': str(e)
-                                    })
 
                             except Exception as e:
                                 current_app.logger.error(f"Error in background targeted Sonarr sync: {e}", exc_info=True)
