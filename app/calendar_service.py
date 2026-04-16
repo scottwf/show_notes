@@ -313,8 +313,9 @@ def build_calendar_data(db):
     now = now_utc.strftime('%Y-%m-%d %H:%M:%S')
     today = now_utc.date().isoformat()
 
-    # Get all upcoming episodes (next 30 days, limit 200)
-    thirty_days_later = (now_utc.date() + dt.timedelta(days=30)).isoformat()
+    # Get episodes for the week grid window: 7 days back + 28 days ahead
+    seven_days_ago = (now_utc.date() - dt.timedelta(days=7)).isoformat()
+    twenty_eight_days_later = (now_utc.date() + dt.timedelta(days=28)).isoformat()
 
     upcoming_episodes = db.execute("""
         SELECT
@@ -339,8 +340,8 @@ def build_calendar_data(db):
           AND e.air_date_utc <= ?
           AND ss.season_number > 0
         ORDER BY e.air_date_utc ASC
-        LIMIT 200
-    """, (now, thirty_days_later + ' 23:59:59')).fetchall()
+        LIMIT 400
+    """, (seven_days_ago, twenty_eight_days_later + ' 23:59:59')).fetchall()
 
     # Get all premieres (season premiere = episode 1, not yet downloaded)
     premieres = db.execute("""
