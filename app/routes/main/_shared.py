@@ -156,7 +156,7 @@ def _get_profile_stats(db, user_id=None, now_playing_count=None, member_id=None)
 
     # Consolidated query for all count statistics to reduce database round-trips
     today_filter = f"event_timestamp >= '{today_utc_start}'"
-    play_events = "('media.play', 'media.scrobble')"
+    play_events = "('media.scrobble')"
 
     if user_id:
         if member_id:
