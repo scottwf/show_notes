@@ -545,7 +545,17 @@ def sonarr_webhook():
                                                     episode_num = episode.get('episodeNumber')
                                                     episode_title = episode.get('title', f'Episode {episode_num}')
 
-                                                    notification_title = f"New Episode: {series_title}"
+                                                    finale_type = episode.get('finaleType')
+                                                    if finale_type == 'series':
+                                                        notification_type = 'series_finale'
+                                                        notification_title = f"Series Finale: {series_title}"
+                                                    elif finale_type == 'season':
+                                                        notification_type = 'season_finale'
+                                                        notification_title = f"Season Finale: {series_title}"
+                                                    else:
+                                                        notification_type = 'new_episode'
+                                                        notification_title = f"New Episode: {series_title}"
+
                                                     notification_message = f"S{season_num:02d}E{episode_num:02d}: {episode_title} is now available!"
 
                                                     db.execute('''
@@ -555,7 +565,7 @@ def sonarr_webhook():
                                                     ''', (
                                                         user['user_id'],
                                                         show['id'],
-                                                        'new_episode',
+                                                        notification_type,
                                                         notification_title,
                                                         notification_message,
                                                         season_num,
