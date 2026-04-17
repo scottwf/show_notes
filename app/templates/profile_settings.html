@@ -121,6 +121,32 @@
             </div>
         </div>
 
+        <!-- Notification Preferences -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700">
+            <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">Notification Preferences</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Control when you get notified about season and series finales.</p>
+            <div class="space-y-3">
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="radio" name="finale-notifications" value="all"
+                           {% if user.finale_notifications != 'favorites' %}checked{% endif %}
+                           class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">All shows</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Notify me when any season or series finale is available, even if I haven't favorited the show</p>
+                    </div>
+                </label>
+                <label class="flex items-start p-4 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
+                    <input type="radio" name="finale-notifications" value="favorites"
+                           {% if user.finale_notifications == 'favorites' %}checked{% endif %}
+                           class="mt-1 w-4 h-4 text-sky-600 border-slate-300 dark:border-slate-600 focus:ring-sky-500 focus:ring-offset-0">
+                    <div class="ml-3">
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Favorites only</span>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Only notify me about finales for shows I've favorited</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
         <!-- Household Profiles -->
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 border border-slate-200 dark:border-slate-700" id="add-profile">
             <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-1">Profiles</h3>
@@ -441,6 +467,8 @@ document.getElementById('profile-settings-form').addEventListener('submit', asyn
         formData.append('profile_show_history', document.getElementById('profile-show-history').checked);
         formData.append('profile_show_progress', document.getElementById('profile-show-progress').checked);
         formData.append('allow_recommendations', document.getElementById('allow-recommendations').checked);
+        const finaleNotif = document.querySelector('input[name="finale-notifications"]:checked');
+        formData.append('finale_notifications', finaleNotif ? finaleNotif.value : 'all');
 
         if (photoFile) {
             formData.append('photo', photoFile);

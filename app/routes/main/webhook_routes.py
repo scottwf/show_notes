@@ -532,11 +532,37 @@ def sonarr_webhook():
                                         ).fetchone()
 
                                         if show:
-                                            # Find users who favorited this show
-                                            favorited_users = db.execute('''
-                                                SELECT user_id FROM user_favorites
-                                                WHERE show_id = ? AND is_dropped = 0
-                                            ''', (show['id'],)).fetchall()
+                                            # Determine if any episode in this batch is a finale
+                                            is_finale_batch = any(
+                                                ep.get('finaleType') in ('season', 'series')
+                                                for ep in episodes_info
+                                            )
+
+                                            if is_finale_batch:
+                                                # Finales: notify all users by default.
+                                                # Users with finale_notifications='favorites' only get notified if they favorited.
+                                                favorited_user_ids = {
+                                                    row['user_id'] for row in db.execute(
+                                                        'SELECT user_id FROM user_favorites WHERE show_id = ? AND is_dropped = 0',
+                                                        (show['id'],)
+                                                    ).fetchall()
+                                                }
+                                                all_users = db.execute(
+                                                    "SELECT id as user_id, finale_notifications FROM users"
+                                                ).fetchall()
+                                                notify_users = [
+                                                    u for u in all_users
+                                                    if u['finale_notifications'] == 'all'
+                                                    or u['user_id'] in favorited_user_ids
+                                                ]
+                                            else:
+                                                # Regular episodes: favorites only
+                                                notify_users = db.execute('''
+                                                    SELECT user_id FROM user_favorites
+                                                    WHERE show_id = ? AND is_dropped = 0
+                                                ''', (show['id'],)).fetchall()
+
+                                            favorited_users = notify_users
 
                                             # Create notification for each user
                                             for user in favorited_users:

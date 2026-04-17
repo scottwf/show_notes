@@ -145,7 +145,8 @@ def init_db():
                 profile_show_activity BOOLEAN DEFAULT 1,
                 profile_show_history BOOLEAN DEFAULT 1,
                 profile_show_progress BOOLEAN DEFAULT 1,
-                allow_recommendations BOOLEAN DEFAULT 1
+                allow_recommendations BOOLEAN DEFAULT 1,
+                finale_notifications TEXT NOT NULL DEFAULT 'all'
             );
             CREATE TABLE settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

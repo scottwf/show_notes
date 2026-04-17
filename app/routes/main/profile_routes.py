@@ -952,6 +952,9 @@ def update_profile_settings():
         profile_show_history = request.form.get('profile_show_history') == 'true'
         profile_show_progress = request.form.get('profile_show_progress') == 'true'
         allow_recommendations = request.form.get('allow_recommendations') == 'true'
+        finale_notifications = request.form.get('finale_notifications', 'all')
+        if finale_notifications not in ('all', 'favorites'):
+            finale_notifications = 'all'
 
         # Validate bio length
         if len(bio) > 500:
@@ -1004,11 +1007,12 @@ def update_profile_settings():
             UPDATE users
             SET bio = ?, profile_show_profile = ?, profile_show_lists = ?,
                 profile_show_favorites = ?, profile_show_history = ?,
-                profile_show_progress = ?, allow_recommendations = ?
+                profile_show_progress = ?, allow_recommendations = ?,
+                finale_notifications = ?
             WHERE id = ?
         ''', (bio, profile_show_profile, profile_show_lists,
               profile_show_favorites, profile_show_history, profile_show_progress,
-              allow_recommendations, user_id))
+              allow_recommendations, finale_notifications, user_id))
 
         # Handle photo: sub-profiles save to household_members.avatar_url only;
         # primary account saves to users.profile_photo_url and syncs default member row.
