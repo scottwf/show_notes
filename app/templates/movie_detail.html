@@ -72,6 +72,15 @@
                                 </path>
                             </svg>
                         </button>
+
+                        <!-- Share Button -->
+                        <button onclick="shareCurrentPage('{{ movie.title }}')"
+                            class="flex-shrink-0 p-3 rounded-full bg-slate-100/20 dark:bg-slate-700/50 hover:bg-slate-200/30 dark:hover:bg-slate-600/70 transition-colors shadow-md hover:shadow-lg"
+                            title="Share this movie">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                            </svg>
+                        </button>
                         {% endif %}
                     </div>
                     {% if movie.year %}
@@ -561,5 +570,34 @@
             closeRecommendModal();
         }
     });
+</script>
+
+<!-- Share toast -->
+<div id="share-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2 bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 text-sm font-medium rounded-full shadow-lg pointer-events-none">
+    Link copied!
+</div>
+
+<script>
+async function shareCurrentPage(title) {
+    const url = window.location.href;
+    try {
+        if (navigator.share) {
+            await navigator.share({ title: title, url: url });
+        } else {
+            await navigator.clipboard.writeText(url);
+            showShareToast();
+        }
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            await navigator.clipboard.writeText(url).catch(() => {});
+            showShareToast();
+        }
+    }
+}
+function showShareToast() {
+    const toast = document.getElementById('share-toast');
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 2000);
+}
 </script>
 {% endblock %}

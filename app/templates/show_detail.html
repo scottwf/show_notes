@@ -114,6 +114,16 @@
                             <span>{% if show_summary %}Regenerate Summary{% else %}AI Summary{% endif %}</span>
                         </button>
 
+                        <!-- Share -->
+                        <button onclick="shareCurrentPage('{{ show.title }}')"
+                            class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-slate-300/50 dark:border-slate-600/50 text-slate-400 dark:text-slate-500 hover:border-sky-400/60 hover:bg-sky-400/10 hover:text-sky-500 dark:hover:text-sky-400"
+                            title="Share this show">
+                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                            </svg>
+                            <span>Share</span>
+                        </button>
+
                         <!-- Report Issue (secondary / low-key) -->
                         <button onclick="openReportModal()"
                             class="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 border-slate-300/50 dark:border-slate-600/50 text-slate-400 dark:text-slate-500 hover:border-rose-400/60 hover:bg-rose-400/10 hover:text-rose-500 dark:hover:text-rose-400"
@@ -1545,5 +1555,34 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </form>
 </dialog>
+
+<!-- Share toast -->
+<div id="share-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-2 bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 text-sm font-medium rounded-full shadow-lg pointer-events-none">
+    Link copied!
+</div>
+
+<script>
+async function shareCurrentPage(title) {
+    const url = window.location.href;
+    try {
+        if (navigator.share) {
+            await navigator.share({ title: title, url: url });
+        } else {
+            await navigator.clipboard.writeText(url);
+            showShareToast();
+        }
+    } catch (e) {
+        if (e.name !== 'AbortError') {
+            await navigator.clipboard.writeText(url).catch(() => {});
+            showShareToast();
+        }
+    }
+}
+function showShareToast() {
+    const toast = document.getElementById('share-toast');
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 2000);
+}
+</script>
 
 {% endblock %}
