@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Safe area padding for iOS devices with home indicator */
+.safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 .keyboard-selected {
     @apply bg-gray-200 dark:bg-gray-700;
 }
