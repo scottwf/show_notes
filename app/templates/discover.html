@@ -7,27 +7,212 @@
     <!-- Header -->
     <div class="mb-8">
         <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Discover</h1>
-        <p class="text-lg text-slate-600 dark:text-slate-400">Explore trending shows and upcoming movies</p>
+        <p class="text-lg text-slate-600 dark:text-slate-400">Popular content, recommendations, and trending picks</p>
     </div>
 
     <!-- Tab Navigation -->
-    <div class="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700">
+    <div class="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+        <button onclick="showTab('popular')"
+                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 whitespace-nowrap"
+                data-tab="popular">
+            Popular
+        </button>
+        {% if received_recs %}
+        <button onclick="showTab('recommended')"
+                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap relative"
+                data-tab="recommended">
+            Recommended
+            {% set unread_count = received_recs|selectattr('is_read', 'equalto', 0)|list|length %}
+            {% if unread_count > 0 %}
+            <span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-red-500 text-white rounded-full">{{ unread_count }}</span>
+            {% endif %}
+        </button>
+        {% endif %}
+        {% if jellyseer_url %}
         <button onclick="showTab('trending')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-sky-500 text-sky-600 dark:text-sky-400"
+                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="trending">
             Trending
         </button>
         <button onclick="showTab('upcoming')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="upcoming">
             Upcoming Movies
         </button>
+        {% endif %}
     </div>
 
+    <!-- Popular Tab -->
+    <div id="popular-tab" class="tab-content">
+        {% if popular_shows or popular_movies %}
+            <!-- Popular Shows -->
+            {% if popular_shows %}
+            <div class="mb-10">
+                <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"/>
+                    </svg>
+                    Popular Shows
+                    <span class="text-sm font-normal text-slate-500 dark:text-slate-400">Last 30 days</span>
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                    {% for show in popular_shows %}
+                    <div class="group relative">
+                        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
+                                     alt="{{ show.title }}"
+                                     class="w-full h-full object-cover"
+                                     loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    {{ show.play_count }}
+                                </div>
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
+                                    <p class="text-white text-xs">
+                                        {{ show.member_count }} member{{ 's' if show.member_count != 1 }}
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-2">
+                            <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
+                               class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ show.title }}
+                            </a>
+                            {% if show.year %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ show.year }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Popular Movies -->
+            {% if popular_movies %}
+            <div>
+                <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm3 2h6v4H7V5zm8 8v2h1v-2h-1zm-2-2H7v4h6v-4zm2 0h1V9h-1v2zm1-4V5h-1v2h1zM5 5v2H4V5h1zm-1 4h1v2H4V9zm0 4h1v2H4v-2z" clip-rule="evenodd"/>
+                    </svg>
+                    Popular Movies
+                    <span class="text-sm font-normal text-slate-500 dark:text-slate-400">Last 30 days</span>
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                    {% for movie in popular_movies %}
+                    <div class="group relative">
+                        <a href="{{ url_for('main.movie_detail', tmdb_id=movie.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=movie.tmdb_id) }}"
+                                     alt="{{ movie.title }}"
+                                     class="w-full h-full object-cover"
+                                     loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                                        <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    {{ movie.play_count }}
+                                </div>
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
+                                    <p class="text-white text-xs">
+                                        {{ movie.member_count }} member{{ 's' if movie.member_count != 1 }}
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-2">
+                            <a href="{{ url_for('main.movie_detail', tmdb_id=movie.tmdb_id) }}"
+                               class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ movie.title }}
+                            </a>
+                            {% if movie.year %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ movie.year }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="text-center py-12">
+                <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/>
+                </svg>
+                <p class="text-slate-500 dark:text-slate-400">No viewing activity in the last 30 days</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Start watching something on Plex to see popular content here</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Recommended Tab -->
+    {% if received_recs %}
+    <div id="recommended-tab" class="tab-content hidden">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+            {% for rec in received_recs %}
+            {% set tmdb_id = rec.show_tmdb_id if rec.media_type == 'show' else rec.movie_tmdb_id %}
+            {% set year = rec.show_year if rec.media_type == 'show' else rec.movie_year %}
+            {% set detail_url = url_for('main.show_detail', tmdb_id=tmdb_id) if rec.media_type == 'show' and tmdb_id else (url_for('main.movie_detail', tmdb_id=tmdb_id) if rec.media_type == 'movie' and tmdb_id else '#') %}
+            <div class="group relative">
+                <a href="{{ detail_url }}" class="block">
+                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                        {% if tmdb_id %}
+                        <img src="{{ url_for('main.image_proxy', type='poster', id=tmdb_id) }}"
+                             alt="{{ rec.title }}"
+                             class="w-full h-full object-cover"
+                             loading="lazy"
+                             onerror="this.src='/static/logos/placeholder_poster.png'">
+                        {% else %}
+                        <div class="w-full h-full flex items-center justify-center">
+                            <span class="text-slate-400 text-sm text-center px-2">{{ rec.title }}</span>
+                        </div>
+                        {% endif %}
+                        {% if not rec.is_read %}
+                        <div class="absolute top-2 left-2 bg-sky-500 text-white text-[10px] px-2 py-0.5 rounded uppercase font-bold">New</div>
+                        {% endif %}
+                        <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-[10px] px-2 py-1 rounded uppercase font-semibold">
+                            {{ rec.media_type }}
+                        </div>
+                        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
+                            <div class="flex items-center gap-1.5">
+                                {% if rec.from_photo %}
+                                <img src="{{ rec.from_photo }}" class="w-4 h-4 rounded-full" alt="">
+                                {% endif %}
+                                <p class="text-white text-xs">from {{ rec.from_username }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                <div class="mt-2">
+                    <a href="{{ detail_url }}"
+                       class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                        {{ rec.title }}
+                    </a>
+                    {% if rec.note %}
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 italic">"{{ rec.note }}"</p>
+                    {% endif %}
+                    {% if year %}
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ year }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Trending Tab -->
-    <div id="trending-tab" class="tab-content">
-        <div id="trending-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            <!-- Loading state -->
+    {% if jellyseer_url %}
+    <div id="trending-tab" class="tab-content hidden">
+        <div id="trending-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
             <div class="col-span-full text-center py-12">
                 <p class="text-slate-500 dark:text-slate-400">Loading trending content...</p>
             </div>
@@ -36,26 +221,26 @@
 
     <!-- Upcoming Tab -->
     <div id="upcoming-tab" class="tab-content hidden">
-        <div id="upcoming-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            <!-- Loading state -->
+        <div id="upcoming-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
             <div class="col-span-full text-center py-12">
                 <p class="text-slate-500 dark:text-slate-400">Loading upcoming movies...</p>
             </div>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Not Configured Message -->
-    {% if not jellyseer_url %}
+    <!-- Not Configured Message (only show if no popular content AND no Jellyseerr) -->
+    {% if not jellyseer_url and not popular_shows and not popular_movies %}
     <div class="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6 mt-6">
         <div class="flex items-start gap-3">
             <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
             </svg>
             <div>
-                <h3 class="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-1">Jellyseerr Not Configured</h3>
+                <h3 class="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-1">No Content Available</h3>
                 <p class="text-sm text-yellow-700 dark:text-yellow-300">
-                    The Discover feature requires Jellyseerr integration to be set up by an administrator.
-                    Contact your admin to enable trending and upcoming content discovery.
+                    Start watching content on Plex to see popular shows and movies here.
+                    For trending and upcoming content, ask your admin to configure Jellyseerr integration.
                 </p>
             </div>
         </div>
@@ -64,48 +249,40 @@
 </div>
 
 <script>
-let currentTab = 'trending';
+let currentTab = 'popular';
 let trendingData = null;
 let upcomingData = null;
-
-// Load content on page load
-document.addEventListener('DOMContentLoaded', () => {
-    {% if jellyseer_url %}
-    loadTrending();
-    {% endif %}
-});
 
 function showTab(tab) {
     currentTab = tab;
 
-    // Update tab buttons
     document.querySelectorAll('.tab-button').forEach(btn => {
         if (btn.dataset.tab === tab) {
-            btn.className = 'tab-button px-6 py-3 font-medium transition-colors border-b-2 border-sky-500 text-sky-600 dark:text-sky-400';
+            btn.className = btn.className.replace('border-transparent', 'border-sky-500').replace('text-slate-600 dark:text-slate-400', 'text-sky-600 dark:text-sky-400');
+            btn.classList.remove('hover:text-slate-900', 'dark:hover:text-slate-100');
         } else {
-            btn.className = 'tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100';
+            btn.className = btn.className.replace('border-sky-500', 'border-transparent').replace('text-sky-600 dark:text-sky-400', 'text-slate-600 dark:text-slate-400');
+            if (!btn.classList.contains('hover:text-slate-900')) {
+                btn.classList.add('hover:text-slate-900', 'dark:hover:text-slate-100');
+            }
         }
     });
 
-    // Show/hide tab content
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.add('hidden');
     });
-    document.getElementById(`${tab}-tab`).classList.remove('hidden');
+    const tabEl = document.getElementById(`${tab}-tab`);
+    if (tabEl) tabEl.classList.remove('hidden');
 
-    // Load data if not already loaded
-    if (tab === 'trending' && !trendingData) {
-        loadTrending();
-    } else if (tab === 'upcoming' && !upcomingData) {
-        loadUpcoming();
-    }
+    if (tab === 'trending' && !trendingData) loadTrending();
+    else if (tab === 'upcoming' && !upcomingData) loadUpcoming();
 }
 
+{% if jellyseer_url %}
 async function loadTrending() {
     try {
         const response = await fetch('/api/jellyseer/trending');
         const data = await response.json();
-
         if (data.success && data.trending) {
             trendingData = data.trending;
             renderContent('trending', data.trending);
@@ -113,7 +290,6 @@ async function loadTrending() {
             showError('trending', data.error || 'Failed to load trending content');
         }
     } catch (error) {
-        console.error('Error loading trending:', error);
         showError('trending', 'Error connecting to Jellyseerr');
     }
 }
@@ -122,7 +298,6 @@ async function loadUpcoming() {
     try {
         const response = await fetch('/api/jellyseer/upcoming');
         const data = await response.json();
-
         if (data.success && data.upcoming) {
             upcomingData = data.upcoming;
             renderContent('upcoming', data.upcoming);
@@ -130,7 +305,6 @@ async function loadUpcoming() {
             showError('upcoming', data.error || 'Failed to load upcoming movies');
         }
     } catch (error) {
-        console.error('Error loading upcoming:', error);
         showError('upcoming', 'Error connecting to Jellyseerr');
     }
 }
@@ -166,20 +340,14 @@ function renderContent(type, items) {
                              alt="${item.title}"
                              class="w-full h-full object-cover"
                              onerror="this.src='/static/logos/placeholder_poster.png'">
-
-                        <!-- Rating badge -->
                         ${rating ? `
                         <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                             ${rating}
                         </div>
                         ` : ''}
-
-                        <!-- Media type badge -->
                         <div class="absolute top-2 left-2 bg-sky-500 text-white text-xs px-2 py-1 rounded uppercase font-semibold">
                             ${item.media_type === 'movie' ? 'Movie' : 'TV'}
                         </div>
-
-                        <!-- Overlay on hover -->
                         <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <div class="text-white text-center px-4">
                                 <p class="font-semibold mb-2">${item.title}</p>
@@ -215,5 +383,6 @@ function showError(type, message) {
         </div>
     `;
 }
+{% endif %}
 </script>
 {% endblock %}

@@ -1292,12 +1292,67 @@ def help():
 
 @main_bp.route('/discover')
 def discover():
-    """Display trending and upcoming content from Jellyseerr"""
+    """Display trending, upcoming, popular, and recommended content"""
     db = database.get_db()
     settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
     jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
 
-    return render_template('discover.html', jellyseer_url=jellyseer_url)
+    # Popular shows (last 30 days, all users)
+    popular_shows = db.execute('''
+        SELECT
+            s.id, s.tmdb_id, s.title, s.year, s.poster_url,
+            COUNT(DISTINCT pal.plex_username) as member_count,
+            COUNT(*) as play_count
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON pal.tmdb_id = s.tmdb_id
+        WHERE pal.event_type = 'media.scrobble'
+            AND pal.media_type = 'episode'
+            AND pal.event_timestamp >= datetime('now', '-30 days')
+        GROUP BY s.id
+        ORDER BY play_count DESC
+        LIMIT 12
+    ''').fetchall()
+
+    popular_movies = db.execute('''
+        SELECT
+            m.id, m.tmdb_id, m.title, m.year, m.poster_url,
+            COUNT(DISTINCT pal.plex_username) as member_count,
+            COUNT(*) as play_count
+        FROM plex_activity_log pal
+        JOIN radarr_movies m ON pal.tmdb_id = m.tmdb_id
+        WHERE pal.event_type = 'media.scrobble'
+            AND pal.media_type = 'movie'
+            AND pal.event_timestamp >= datetime('now', '-30 days')
+        GROUP BY m.id
+        ORDER BY play_count DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Recommendations for current user
+    received_recs = []
+    user_id = session.get('user_id')
+    if user_id:
+        received_recs = db.execute('''
+            SELECT
+                rs.id, rs.media_type, rs.media_id, rs.title, rs.note,
+                rs.is_read, rs.created_at,
+                u.username as from_username, u.profile_photo_url as from_photo,
+                s.tmdb_id as show_tmdb_id, s.poster_url as show_poster_url, s.year as show_year,
+                m.tmdb_id as movie_tmdb_id, m.poster_url as movie_poster_url, m.year as movie_year
+            FROM recommendation_shares rs
+            JOIN users u ON rs.from_user_id = u.id
+            LEFT JOIN sonarr_shows s ON rs.media_type = 'show' AND rs.media_id = s.id
+            LEFT JOIN radarr_movies m ON rs.media_type = 'movie' AND rs.media_id = m.id
+            WHERE rs.to_user_id = ?
+            ORDER BY rs.created_at DESC
+            LIMIT 24
+        ''', (user_id,)).fetchall()
+
+    return render_template('discover.html',
+                           jellyseer_url=jellyseer_url,
+                           popular_shows=popular_shows,
+                           popular_movies=popular_movies,
+                           received_recs=received_recs)
 
 @main_bp.route('/api/summary/feedback', methods=['POST'])
 @login_required
