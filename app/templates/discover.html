@@ -7,86 +7,82 @@
     <!-- Header -->
     <div class="mb-8">
         <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-2">Discover</h1>
-        <p class="text-lg text-slate-600 dark:text-slate-400">Popular content, recommendations, and trending picks</p>
+        <p class="text-lg text-slate-600 dark:text-slate-400">See what members are watching</p>
     </div>
 
     <!-- Tab Navigation -->
-    <div class="flex gap-2 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+    <div class="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
         <button onclick="showTab('popular')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 whitespace-nowrap"
+                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 whitespace-nowrap"
                 data-tab="popular">
             Popular
         </button>
         {% if received_recs %}
         <button onclick="showTab('recommended')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap relative"
+                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="recommended">
             Recommended
             {% set unread_count = received_recs|selectattr('is_read', 'equalto', 0)|list|length %}
             {% if unread_count > 0 %}
-            <span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-red-500 text-white rounded-full">{{ unread_count }}</span>
+            <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-red-500 text-white rounded-full">{{ unread_count }}</span>
             {% endif %}
         </button>
         {% endif %}
         {% if jellyseer_url %}
         <button onclick="showTab('trending')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
+                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="trending">
             Trending
         </button>
         <button onclick="showTab('upcoming')"
-                class="tab-button px-6 py-3 font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
+                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="upcoming">
-            Upcoming Movies
+            Upcoming
         </button>
         {% endif %}
     </div>
 
     <!-- Popular Tab -->
-    <div id="popular-tab" class="tab-content">
-        {% if popular_shows or popular_movies %}
+    <div id="popular-tab" class="tab-content space-y-10">
+        {% if popular_shows or popular_movies or binge_shows or watching_live or late_night or early_bird %}
+
             <!-- Popular Shows -->
             {% if popular_shows %}
-            <div class="mb-10">
-                <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"/>
                     </svg>
-                    Popular Shows
-                    <span class="text-sm font-normal text-slate-500 dark:text-slate-400">Last 30 days</span>
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Popular Shows</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Shows multiple members are watching this month</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
                     {% for show in popular_shows %}
-                    <div class="group relative">
+                    <div class="group">
                         <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
-                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
                                 <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
-                                     alt="{{ show.title }}"
-                                     class="w-full h-full object-cover"
-                                     loading="lazy"
+                                     alt="{{ show.title }}" class="w-full h-full object-cover" loading="lazy"
                                      onerror="this.src='/static/logos/placeholder_poster.png'">
-                                <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <div class="absolute top-1.5 right-1.5 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                                         <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
                                     </svg>
                                     {{ show.play_count }}
                                 </div>
-                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
-                                    <p class="text-white text-xs">
-                                        {{ show.member_count }} member{{ 's' if show.member_count != 1 }}
-                                    </p>
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ show.member_count }} member{{ 's' if show.member_count != 1 }}</p>
                                 </div>
                             </div>
                         </a>
-                        <div class="mt-2">
+                        <div class="mt-1.5">
                             <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
-                               class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
                                 {{ show.title }}
                             </a>
-                            {% if show.year %}
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ show.year }}</p>
-                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}
@@ -97,51 +93,195 @@
             <!-- Popular Movies -->
             {% if popular_movies %}
             <div>
-                <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                <div class="flex items-center gap-2 mb-4">
                     <svg class="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm3 2h6v4H7V5zm8 8v2h1v-2h-1zm-2-2H7v4h6v-4zm2 0h1V9h-1v2zm1-4V5h-1v2h1zM5 5v2H4V5h1zm-1 4h1v2H4V9zm0 4h1v2H4v-2z" clip-rule="evenodd"/>
                     </svg>
-                    Popular Movies
-                    <span class="text-sm font-normal text-slate-500 dark:text-slate-400">Last 30 days</span>
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Popular Movies</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Most watched movies this month</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
                     {% for movie in popular_movies %}
-                    <div class="group relative">
+                    <div class="group">
                         <a href="{{ url_for('main.movie_detail', tmdb_id=movie.tmdb_id) }}" class="block">
-                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
                                 <img src="{{ url_for('main.image_proxy', type='poster', id=movie.tmdb_id) }}"
-                                     alt="{{ movie.title }}"
-                                     class="w-full h-full object-cover"
-                                     loading="lazy"
+                                     alt="{{ movie.title }}" class="w-full h-full object-cover" loading="lazy"
                                      onerror="this.src='/static/logos/placeholder_poster.png'">
-                                <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <div class="absolute top-1.5 right-1.5 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                                    <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                                         <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
                                     </svg>
                                     {{ movie.play_count }}
                                 </div>
-                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
-                                    <p class="text-white text-xs">
-                                        {{ movie.member_count }} member{{ 's' if movie.member_count != 1 }}
-                                    </p>
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ movie.member_count }} member{{ 's' if movie.member_count != 1 }}</p>
                                 </div>
                             </div>
                         </a>
-                        <div class="mt-2">
+                        <div class="mt-1.5">
                             <a href="{{ url_for('main.movie_detail', tmdb_id=movie.tmdb_id) }}"
-                               class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
                                 {{ movie.title }}
                             </a>
-                            {% if movie.year %}
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ movie.year }}</p>
-                            {% endif %}
                         </div>
                     </div>
                     {% endfor %}
                 </div>
             </div>
             {% endif %}
+
+            <!-- Watching Live -->
+            {% if watching_live %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Watching Live</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Shows members watch within 48 hours of airing</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for show in watching_live %}
+                    <div class="group">
+                        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
+                                     alt="{{ show.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ show.live_member_count }} member{{ 's' if show.live_member_count != 1 }} keeping up</p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ show.title }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Binge Watch -->
+            {% if binge_shows %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Binge Watch</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Shows members are devouring 4+ episodes in a day</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for show in binge_shows %}
+                    <div class="group">
+                        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
+                                     alt="{{ show.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ show.binger_count }} binger{{ 's' if show.binger_count != 1 }}</p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ show.title }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Late Night -->
+            {% if late_night %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Night Owl</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">What members are watching between 10pm and 3am</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for show in late_night %}
+                    <div class="group">
+                        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
+                                     alt="{{ show.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ show.play_count }} late plays</p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ show.title }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Early Bird -->
+            {% if early_bird %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm-.707 10.607a1 1 0 011.414-1.414l-.707-.707a1 1 0 01-1.414 1.414l.707.707zM3 11a1 1 0 100-2H2a1 1 0 100 2h1z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Early Bird</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">What members are watching between 5am and 10am</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for show in early_bird %}
+                    <div class="group">
+                        <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=show.tmdb_id) }}"
+                                     alt="{{ show.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ show.play_count }} morning plays</p>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ url_for('main.show_detail', tmdb_id=show.tmdb_id) }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ show.title }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
         {% else %}
             <div class="text-center py-12">
                 <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,51 +296,43 @@
     <!-- Recommended Tab -->
     {% if received_recs %}
     <div id="recommended-tab" class="tab-content hidden">
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
             {% for rec in received_recs %}
             {% set tmdb_id = rec.show_tmdb_id if rec.media_type == 'show' else rec.movie_tmdb_id %}
             {% set year = rec.show_year if rec.media_type == 'show' else rec.movie_year %}
             {% set detail_url = url_for('main.show_detail', tmdb_id=tmdb_id) if rec.media_type == 'show' and tmdb_id else (url_for('main.movie_detail', tmdb_id=tmdb_id) if rec.media_type == 'movie' and tmdb_id else '#') %}
-            <div class="group relative">
+            <div class="group">
                 <a href="{{ detail_url }}" class="block">
-                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
+                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
                         {% if tmdb_id %}
                         <img src="{{ url_for('main.image_proxy', type='poster', id=tmdb_id) }}"
-                             alt="{{ rec.title }}"
-                             class="w-full h-full object-cover"
-                             loading="lazy"
+                             alt="{{ rec.title }}" class="w-full h-full object-cover" loading="lazy"
                              onerror="this.src='/static/logos/placeholder_poster.png'">
                         {% else %}
                         <div class="w-full h-full flex items-center justify-center">
-                            <span class="text-slate-400 text-sm text-center px-2">{{ rec.title }}</span>
+                            <span class="text-slate-400 text-xs text-center px-2">{{ rec.title }}</span>
                         </div>
                         {% endif %}
                         {% if not rec.is_read %}
-                        <div class="absolute top-2 left-2 bg-sky-500 text-white text-[10px] px-2 py-0.5 rounded uppercase font-bold">New</div>
+                        <div class="absolute top-1.5 left-1.5 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">New</div>
                         {% endif %}
-                        <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-[10px] px-2 py-1 rounded uppercase font-semibold">
-                            {{ rec.media_type }}
-                        </div>
-                        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
-                            <div class="flex items-center gap-1.5">
+                        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                            <div class="flex items-center gap-1">
                                 {% if rec.from_photo %}
-                                <img src="{{ rec.from_photo }}" class="w-4 h-4 rounded-full" alt="">
+                                <img src="{{ rec.from_photo }}" class="w-3.5 h-3.5 rounded-full" alt="">
                                 {% endif %}
-                                <p class="text-white text-xs">from {{ rec.from_username }}</p>
+                                <p class="text-white text-[10px]">{{ rec.from_username }}</p>
                             </div>
                         </div>
                     </div>
                 </a>
-                <div class="mt-2">
+                <div class="mt-1.5">
                     <a href="{{ detail_url }}"
-                       class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                       class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
                         {{ rec.title }}
                     </a>
                     {% if rec.note %}
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 italic">"{{ rec.note }}"</p>
-                    {% endif %}
-                    {% if year %}
-                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ year }}</p>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 italic">"{{ rec.note }}"</p>
                     {% endif %}
                 </div>
             </div>
@@ -212,7 +344,7 @@
     <!-- Trending Tab -->
     {% if jellyseer_url %}
     <div id="trending-tab" class="tab-content hidden">
-        <div id="trending-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+        <div id="trending-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
             <div class="col-span-full text-center py-12">
                 <p class="text-slate-500 dark:text-slate-400">Loading trending content...</p>
             </div>
@@ -221,7 +353,7 @@
 
     <!-- Upcoming Tab -->
     <div id="upcoming-tab" class="tab-content hidden">
-        <div id="upcoming-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
+        <div id="upcoming-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
             <div class="col-span-full text-center py-12">
                 <p class="text-slate-500 dark:text-slate-400">Loading upcoming movies...</p>
             </div>
@@ -229,7 +361,6 @@
     </div>
     {% endif %}
 
-    <!-- Not Configured Message (only show if no popular content AND no Jellyseerr) -->
     {% if not jellyseer_url and not popular_shows and not popular_movies %}
     <div class="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6 mt-6">
         <div class="flex items-start gap-3">
@@ -240,7 +371,6 @@
                 <h3 class="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-1">No Content Available</h3>
                 <p class="text-sm text-yellow-700 dark:text-yellow-300">
                     Start watching content on Plex to see popular shows and movies here.
-                    For trending and upcoming content, ask your admin to configure Jellyseerr integration.
                 </p>
             </div>
         </div>
@@ -315,9 +445,6 @@ function renderContent(type, items) {
     if (!items || items.length === 0) {
         container.innerHTML = `
             <div class="col-span-full text-center py-12">
-                <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"></path>
-                </svg>
                 <p class="text-slate-500 dark:text-slate-400">No ${type} content available</p>
             </div>
         `;
@@ -333,38 +460,22 @@ function renderContent(type, items) {
         const jellyseerLink = '{{ jellyseer_url }}' + (item.media_type === 'movie' ? `/movie/${item.tmdb_id}` : `/tv/${item.tmdb_id}`);
 
         return `
-            <div class="group relative">
+            <div class="group">
                 <a href="${jellyseerLink}" target="_blank" rel="noopener noreferrer" class="block">
-                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-md hover:shadow-xl transition-all transform group-hover:scale-105">
-                        <img src="${posterUrl}"
-                             alt="${item.title}"
-                             class="w-full h-full object-cover"
+                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                        <img src="${posterUrl}" alt="${item.title}" class="w-full h-full object-cover"
                              onerror="this.src='/static/logos/placeholder_poster.png'">
-                        ${rating ? `
-                        <div class="absolute top-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-                            ${rating}
-                        </div>
-                        ` : ''}
-                        <div class="absolute top-2 left-2 bg-sky-500 text-white text-xs px-2 py-1 rounded uppercase font-semibold">
+                        ${rating ? `<div class="absolute top-1.5 right-1.5 bg-black/75 text-white text-[10px] px-1.5 py-0.5 rounded">${rating}</div>` : ''}
+                        <div class="absolute top-1.5 left-1.5 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase font-semibold">
                             ${item.media_type === 'movie' ? 'Movie' : 'TV'}
-                        </div>
-                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                            <div class="text-white text-center px-4">
-                                <p class="font-semibold mb-2">${item.title}</p>
-                                ${item.year ? `<p class="text-sm text-slate-300">${item.year}</p>` : ''}
-                                <div class="mt-3 text-sm bg-sky-500 hover:bg-sky-600 px-3 py-1 rounded inline-block">
-                                    View on Jellyseerr →
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </a>
-                <div class="mt-2">
+                <div class="mt-1.5">
                     <a href="${jellyseerLink}" target="_blank" rel="noopener noreferrer"
-                       class="text-sm font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                       class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
                         ${item.title}
                     </a>
-                    ${item.year ? `<p class="text-xs text-slate-500 dark:text-slate-400">${item.year}</p>` : ''}
                 </div>
             </div>
         `;
@@ -375,9 +486,6 @@ function showError(type, message) {
     const container = document.getElementById(`${type}-container`);
     container.innerHTML = `
         <div class="col-span-full text-center py-12">
-            <svg class="w-16 h-16 mx-auto text-red-300 dark:text-red-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
             <p class="text-red-600 dark:text-red-400 mb-2 font-medium">Error Loading Content</p>
             <p class="text-sm text-slate-500 dark:text-slate-400">${message}</p>
         </div>

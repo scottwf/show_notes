@@ -1297,7 +1297,7 @@ def discover():
     settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
     jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
 
-    # Popular shows (last 30 days, all users)
+    # Popular shows — ranked by unique member count, then play count
     popular_shows = db.execute('''
         SELECT
             s.id, s.tmdb_id, s.title, s.year, s.poster_url,
@@ -1309,7 +1309,8 @@ def discover():
             AND pal.media_type = 'episode'
             AND pal.event_timestamp >= datetime('now', '-30 days')
         GROUP BY s.id
-        ORDER BY play_count DESC
+        HAVING member_count >= 2
+        ORDER BY member_count DESC, play_count DESC
         LIMIT 12
     ''').fetchall()
 
@@ -1324,6 +1325,88 @@ def discover():
             AND pal.media_type = 'movie'
             AND pal.event_timestamp >= datetime('now', '-30 days')
         GROUP BY m.id
+        ORDER BY member_count DESC, play_count DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Binge Watch — shows where someone watched 4+ episodes in a 24h window
+    binge_shows = db.execute('''
+        SELECT
+            s.id, s.tmdb_id, s.title, s.year, s.poster_url,
+            COUNT(DISTINCT pal.plex_username) as binger_count,
+            MAX(ep_count) as max_episodes_binged
+        FROM sonarr_shows s
+        JOIN (
+            SELECT tmdb_id, plex_username,
+                   COUNT(*) as ep_count,
+                   DATE(event_timestamp) as watch_date
+            FROM plex_activity_log
+            WHERE event_type = 'media.scrobble'
+                AND media_type = 'episode'
+                AND event_timestamp >= datetime('now', '-30 days')
+            GROUP BY tmdb_id, plex_username, DATE(event_timestamp)
+            HAVING ep_count >= 4
+        ) pal ON s.tmdb_id = pal.tmdb_id
+        GROUP BY s.id
+        ORDER BY binger_count DESC, max_episodes_binged DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Watching Live — episodes watched within 48h of air date by 2+ members
+    watching_live = db.execute('''
+        SELECT
+            s.id, s.tmdb_id, s.title, s.year, s.poster_url,
+            COUNT(DISTINCT pal.plex_username) as live_member_count,
+            COUNT(DISTINCT ep.id) as live_episode_count
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON pal.tmdb_id = s.tmdb_id
+        JOIN sonarr_episodes ep ON ep.show_id = s.id
+            AND ep.season_number = CAST(SUBSTR(pal.season_episode, 2, INSTR(pal.season_episode, 'E') - 2) AS INTEGER)
+            AND ep.episode_number = CAST(SUBSTR(pal.season_episode, INSTR(pal.season_episode, 'E') + 1) AS INTEGER)
+        WHERE pal.event_type = 'media.scrobble'
+            AND pal.media_type = 'episode'
+            AND pal.event_timestamp >= datetime('now', '-30 days')
+            AND ep.air_date_utc IS NOT NULL
+            AND JULIANDAY(pal.event_timestamp) - JULIANDAY(ep.air_date_utc) BETWEEN 0 AND 2
+        GROUP BY s.id
+        HAVING live_member_count >= 2
+        ORDER BY live_member_count DESC, live_episode_count DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Late Night — shows predominantly watched between 10pm-3am (server time)
+    late_night = db.execute('''
+        SELECT
+            s.id, s.tmdb_id, s.title, s.year, s.poster_url,
+            COUNT(*) as play_count,
+            COUNT(DISTINCT pal.plex_username) as member_count
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON pal.tmdb_id = s.tmdb_id
+        WHERE pal.event_type = 'media.scrobble'
+            AND pal.media_type = 'episode'
+            AND pal.event_timestamp >= datetime('now', '-30 days')
+            AND (CAST(strftime('%H', pal.event_timestamp) AS INTEGER) >= 22
+                 OR CAST(strftime('%H', pal.event_timestamp) AS INTEGER) < 3)
+        GROUP BY s.id
+        HAVING play_count >= 3
+        ORDER BY play_count DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Early Bird — shows predominantly watched between 5am-10am
+    early_bird = db.execute('''
+        SELECT
+            s.id, s.tmdb_id, s.title, s.year, s.poster_url,
+            COUNT(*) as play_count,
+            COUNT(DISTINCT pal.plex_username) as member_count
+        FROM plex_activity_log pal
+        JOIN sonarr_shows s ON pal.tmdb_id = s.tmdb_id
+        WHERE pal.event_type = 'media.scrobble'
+            AND pal.media_type = 'episode'
+            AND pal.event_timestamp >= datetime('now', '-30 days')
+            AND CAST(strftime('%H', pal.event_timestamp) AS INTEGER) BETWEEN 5 AND 9
+        GROUP BY s.id
+        HAVING play_count >= 3
         ORDER BY play_count DESC
         LIMIT 12
     ''').fetchall()
@@ -1352,6 +1435,10 @@ def discover():
                            jellyseer_url=jellyseer_url,
                            popular_shows=popular_shows,
                            popular_movies=popular_movies,
+                           binge_shows=binge_shows,
+                           watching_live=watching_live,
+                           late_night=late_night,
+                           early_bird=early_bird,
                            received_recs=received_recs)
 
 @main_bp.route('/api/summary/feedback', methods=['POST'])
