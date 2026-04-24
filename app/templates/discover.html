@@ -17,7 +17,7 @@
                 data-tab="popular">
             Popular
         </button>
-        {% if received_recs %}
+        {% if received_recs or community_picks %}
         <button onclick="showTab('recommended')"
                 class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="recommended">
@@ -29,15 +29,10 @@
         </button>
         {% endif %}
         {% if jellyseer_url %}
-        <button onclick="showTab('trending')"
-                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
-                data-tab="trending">
-            Trending
-        </button>
         <button onclick="showTab('upcoming')"
                 class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="upcoming">
-            Upcoming
+            Upcoming Movies
         </button>
         {% endif %}
     </div>
@@ -294,63 +289,119 @@
     </div>
 
     <!-- Recommended Tab -->
-    {% if received_recs %}
+    {% if received_recs or community_picks %}
     <div id="recommended-tab" class="tab-content hidden">
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
-            {% for rec in received_recs %}
-            {% set tmdb_id = rec.show_tmdb_id if rec.media_type == 'show' else rec.movie_tmdb_id %}
-            {% set year = rec.show_year if rec.media_type == 'show' else rec.movie_year %}
-            {% set detail_url = url_for('main.show_detail', tmdb_id=tmdb_id) if rec.media_type == 'show' and tmdb_id else (url_for('main.movie_detail', tmdb_id=tmdb_id) if rec.media_type == 'movie' and tmdb_id else '#') %}
-            <div class="group">
-                <a href="{{ detail_url }}" class="block">
-                    <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
-                        {% if tmdb_id %}
-                        <img src="{{ url_for('main.image_proxy', type='poster', id=tmdb_id) }}"
-                             alt="{{ rec.title }}" class="w-full h-full object-cover" loading="lazy"
-                             onerror="this.src='/static/logos/placeholder_poster.png'">
-                        {% else %}
-                        <div class="w-full h-full flex items-center justify-center">
-                            <span class="text-slate-400 text-xs text-center px-2">{{ rec.title }}</span>
-                        </div>
-                        {% endif %}
-                        {% if not rec.is_read %}
-                        <div class="absolute top-1.5 left-1.5 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">New</div>
-                        {% endif %}
-                        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
-                            <div class="flex items-center gap-1">
-                                {% if rec.from_photo %}
-                                <img src="{{ rec.from_photo }}" class="w-3.5 h-3.5 rounded-full" alt="">
+        <div class="space-y-10">
+            {% if community_picks %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.515a1 1 0 10-1.714-1.03L9.697 11.53 7.78 9.613a1 1 0 10-1.414 1.414l2.75 2.75a1 1 0 001.564-.192l3.177-5.1z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Community Picks</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">The most recommended titles across everyone's lists and shares</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for pick in community_picks %}
+                    {% set detail_url = url_for('main.show_detail', tmdb_id=pick.tmdb_id) if pick.media_type == 'show' and pick.tmdb_id else (url_for('main.movie_detail', tmdb_id=pick.tmdb_id) if pick.media_type == 'movie' and pick.tmdb_id else '#') %}
+                    <div class="group">
+                        <a href="{{ detail_url }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                {% if pick.tmdb_id %}
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=pick.tmdb_id) }}"
+                                     alt="{{ pick.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                {% else %}
+                                <div class="w-full h-full flex items-center justify-center">
+                                    <span class="text-slate-400 text-xs text-center px-2">{{ pick.title }}</span>
+                                </div>
                                 {% endif %}
-                                <p class="text-white text-[10px]">{{ rec.from_username }}</p>
+                                <div class="absolute top-1.5 left-1.5 bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">
+                                    {{ pick.media_type }}
+                                </div>
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <p class="text-white text-[10px]">{{ pick.recommendation_count }} rec{{ 's' if pick.recommendation_count != 1 }}</p>
+                                    <p class="text-white/80 text-[10px]">{{ pick.recommender_count }} member{{ 's' if pick.recommender_count != 1 }} backing it</p>
+                                </div>
                             </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ detail_url }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ pick.title }}
+                            </a>
+                            {% if pick.year %}
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{{ pick.year }}</p>
+                            {% endif %}
                         </div>
                     </div>
-                </a>
-                <div class="mt-1.5">
-                    <a href="{{ detail_url }}"
-                       class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
-                        {{ rec.title }}
-                    </a>
-                    {% if rec.note %}
-                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 italic">"{{ rec.note }}"</p>
-                    {% endif %}
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
+            {% endif %}
+
+            {% if received_recs %}
+            <div>
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-5 h-5 text-sky-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2.94 6.34A2 2 0 014.67 5h10.66a2 2 0 011.73 1.34L10 10.5 2.94 6.34z"/>
+                        <path d="M18 8.12l-7.45 4.4a1 1 0 01-1.1 0L2 8.12V13a2 2 0 002 2h12a2 2 0 002-2V8.12z"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Shared With You</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Recommendations other members sent directly to you</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
+                    {% for rec in received_recs %}
+                    {% set tmdb_id = rec.show_tmdb_id if rec.media_type == 'show' else rec.movie_tmdb_id %}
+                    {% set detail_url = url_for('main.show_detail', tmdb_id=tmdb_id) if rec.media_type == 'show' and tmdb_id else (url_for('main.movie_detail', tmdb_id=tmdb_id) if rec.media_type == 'movie' and tmdb_id else '#') %}
+                    <div class="group">
+                        <a href="{{ detail_url }}" class="block">
+                            <div class="relative aspect-[2/3] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 shadow-sm hover:shadow-lg transition-all transform group-hover:scale-105">
+                                {% if tmdb_id %}
+                                <img src="{{ url_for('main.image_proxy', type='poster', id=tmdb_id) }}"
+                                     alt="{{ rec.title }}" class="w-full h-full object-cover" loading="lazy"
+                                     onerror="this.src='/static/logos/placeholder_poster.png'">
+                                {% else %}
+                                <div class="w-full h-full flex items-center justify-center">
+                                    <span class="text-slate-400 text-xs text-center px-2">{{ rec.title }}</span>
+                                </div>
+                                {% endif %}
+                                {% if not rec.is_read %}
+                                <div class="absolute top-1.5 left-1.5 bg-sky-500 text-white text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">New</div>
+                                {% endif %}
+                                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6">
+                                    <div class="flex items-center gap-1">
+                                        {% if rec.from_photo %}
+                                        <img src="{{ rec.from_photo }}" class="w-3.5 h-3.5 rounded-full" alt="">
+                                        {% endif %}
+                                        <p class="text-white text-[10px]">{{ rec.from_username }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="mt-1.5">
+                            <a href="{{ detail_url }}"
+                               class="text-xs font-medium text-slate-800 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400 line-clamp-2">
+                                {{ rec.title }}
+                            </a>
+                            {% if rec.note %}
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 italic">"{{ rec.note }}"</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
 
-    <!-- Trending Tab -->
     {% if jellyseer_url %}
-    <div id="trending-tab" class="tab-content hidden">
-        <div id="trending-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
-            <div class="col-span-full text-center py-12">
-                <p class="text-slate-500 dark:text-slate-400">Loading trending content...</p>
-            </div>
-        </div>
-    </div>
-
     <!-- Upcoming Tab -->
     <div id="upcoming-tab" class="tab-content hidden">
         <div id="upcoming-container" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 sm:gap-4">
@@ -380,7 +431,6 @@
 
 <script>
 let currentTab = 'popular';
-let trendingData = null;
 let upcomingData = null;
 
 function showTab(tab) {
@@ -404,26 +454,10 @@ function showTab(tab) {
     const tabEl = document.getElementById(`${tab}-tab`);
     if (tabEl) tabEl.classList.remove('hidden');
 
-    if (tab === 'trending' && !trendingData) loadTrending();
-    else if (tab === 'upcoming' && !upcomingData) loadUpcoming();
+    if (tab === 'upcoming' && !upcomingData) loadUpcoming();
 }
 
 {% if jellyseer_url %}
-async function loadTrending() {
-    try {
-        const response = await fetch('/api/jellyseer/trending');
-        const data = await response.json();
-        if (data.success && data.trending) {
-            trendingData = data.trending;
-            renderContent('trending', data.trending);
-        } else {
-            showError('trending', data.error || 'Failed to load trending content');
-        }
-    } catch (error) {
-        showError('trending', 'Error connecting to Jellyseerr');
-    }
-}
-
 async function loadUpcoming() {
     try {
         const response = await fetch('/api/jellyseer/upcoming');

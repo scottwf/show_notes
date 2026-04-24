@@ -1292,7 +1292,7 @@ def help():
 
 @main_bp.route('/discover')
 def discover():
-    """Display trending, upcoming, popular, and recommended content"""
+    """Display upcoming, popular, and recommended content"""
     db = database.get_db()
     settings = db.execute('SELECT jellyseer_url FROM settings LIMIT 1').fetchone()
     jellyseer_url = settings['jellyseer_url'] if settings and settings['jellyseer_url'] else None
@@ -1411,7 +1411,45 @@ def discover():
         LIMIT 12
     ''').fetchall()
 
-    # Recommendations for current user
+    community_picks = db.execute('''
+        WITH all_recommendations AS (
+            SELECT
+                ur.user_id AS recommender_user_id,
+                ur.media_type,
+                ur.media_id,
+                ur.title,
+                ur.created_at
+            FROM user_recommendations ur
+
+            UNION ALL
+
+            SELECT
+                rs.from_user_id AS recommender_user_id,
+                rs.media_type,
+                rs.media_id,
+                rs.title,
+                rs.created_at
+            FROM recommendation_shares rs
+        )
+        SELECT
+            ar.media_type,
+            ar.media_id,
+            COALESCE(s.title, m.title, MAX(ar.title)) AS title,
+            COALESCE(s.tmdb_id, m.tmdb_id) AS tmdb_id,
+            COALESCE(s.poster_url, m.poster_url) AS poster_url,
+            COALESCE(s.year, m.year) AS year,
+            COUNT(*) AS recommendation_count,
+            COUNT(DISTINCT ar.recommender_user_id) AS recommender_count,
+            MAX(ar.created_at) AS latest_recommended_at
+        FROM all_recommendations ar
+        LEFT JOIN sonarr_shows s ON ar.media_type = 'show' AND ar.media_id = s.id
+        LEFT JOIN radarr_movies m ON ar.media_type = 'movie' AND ar.media_id = m.id
+        GROUP BY ar.media_type, ar.media_id
+        ORDER BY recommendation_count DESC, recommender_count DESC, latest_recommended_at DESC
+        LIMIT 12
+    ''').fetchall()
+
+    # Recommendations sent to the current user
     received_recs = []
     user_id = session.get('user_id')
     if user_id:
@@ -1439,6 +1477,7 @@ def discover():
                            watching_live=watching_live,
                            late_night=late_night,
                            early_bird=early_bird,
+                           community_picks=community_picks,
                            received_recs=received_recs)
 
 @main_bp.route('/api/summary/feedback', methods=['POST'])
