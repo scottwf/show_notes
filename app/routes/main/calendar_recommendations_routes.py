@@ -226,7 +226,8 @@ def calendar_ical_feed(token):
                                                 alarm=alarm)
 
     resp = Response(ical_content, mimetype='text/calendar')
-    resp.headers['Content-Disposition'] = f'attachment; filename="shownotes-{feed_filter}.ics"'
+    resp.headers['Content-Type'] = 'text/calendar; charset=utf-8'
+    resp.headers['Content-Disposition'] = f'inline; filename="shownotes-{feed_filter}.ics"'
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     # Explicitly clear Vary so iOS Calendar doesn't reject the feed
     resp.headers['Vary'] = 'Accept-Encoding'
@@ -955,5 +956,4 @@ def create_problem_report():
             'success': False,
             'error': str(e)
         }), 500
-
 
