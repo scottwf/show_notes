@@ -602,7 +602,68 @@ def movie_detail(tmdb_id):
     else:
         movie_dict['cached_poster_url'] = url_for('static', filename='logos/placeholder_poster.png')
         movie_dict['cached_fanart_url'] = url_for('static', filename='logos/placeholder_background.png')
-    return render_template('movie_detail.html', movie=movie_dict)
+    admin_service_links = _build_admin_service_links(db, 'movie', movie_dict)
+    return render_template('movie_detail.html', movie=movie_dict, admin_service_links=admin_service_links)
+
+
+def _get_tautulli_rating_key_for_media(db, media_type, tmdb_id):
+    """Look up a Plex rating key from activity history for Tautulli deep-links."""
+    if media_type == 'show':
+        row = db.execute(
+            """
+            SELECT grandparent_rating_key
+            FROM plex_activity_log
+            WHERE tmdb_id = ?
+              AND media_type = 'episode'
+              AND grandparent_rating_key IS NOT NULL
+            ORDER BY event_timestamp DESC
+            LIMIT 1
+            """,
+            (tmdb_id,)
+        ).fetchone()
+        return row['grandparent_rating_key'] if row else None
+
+    row = db.execute(
+        """
+        SELECT rating_key
+        FROM plex_activity_log
+        WHERE tmdb_id = ?
+          AND media_type = ?
+          AND rating_key IS NOT NULL
+        ORDER BY event_timestamp DESC
+        LIMIT 1
+        """,
+        (tmdb_id, media_type)
+    ).fetchone()
+    return row['rating_key'] if row else None
+
+
+def _build_admin_service_links(db, media_type, media_dict):
+    """Build admin-only external service links for detail pages."""
+    settings = db.execute(
+        'SELECT tautulli_url, sonarr_url, radarr_url FROM settings LIMIT 1'
+    ).fetchone()
+
+    if not settings:
+        return {}
+
+    links = {}
+    tautulli_url = settings['tautulli_url'].rstrip('/') if settings['tautulli_url'] else None
+    sonarr_url = settings['sonarr_url'].rstrip('/') if settings['sonarr_url'] else None
+    radarr_url = settings['radarr_url'].rstrip('/') if settings['radarr_url'] else None
+
+    if media_type == 'show' and sonarr_url and media_dict.get('sonarr_id'):
+        links['sonarr'] = f"{sonarr_url}/series/{media_dict['sonarr_id']}"
+
+    if media_type == 'movie' and radarr_url and media_dict.get('radarr_id'):
+        links['radarr'] = f"{radarr_url}/movie/{media_dict['radarr_id']}"
+
+    if tautulli_url and media_dict.get('tmdb_id'):
+        rating_key = _get_tautulli_rating_key_for_media(db, media_type, media_dict['tmdb_id'])
+        if rating_key:
+            links['tautulli'] = f"{tautulli_url}/info?rating_key={rating_key}"
+
+    return links
 
 def _calculate_year_display(show_dict: dict) -> str:
     """Calculate year display string (2016-2019 or 2016-Present)"""
@@ -840,6 +901,7 @@ def show_detail(tmdb_id):
     jellyseer_url = None
     if settings:
         jellyseer_url = settings['jellyseer_remote_url'] or settings['jellyseer_url'] or None
+    admin_service_links = _build_admin_service_links(db, 'show', show_dict)
 
     # Fetch season summaries
     show_summary = None
@@ -873,6 +935,7 @@ def show_detail(tmdb_id):
                            cast_members=cast_members,
                            crew_members=crew_members,
                            jellyseer_url=jellyseer_url,
+                           admin_service_links=admin_service_links,
                            season_recaps=season_recaps,
                            show_summary=show_summary,
                            cutoff_disclaimer=cutoff_disclaimer

@@ -39,6 +39,27 @@
                     </p>
                     {% endif %}
 
+                    {% if session.is_admin and admin_service_links %}
+                    <div class="flex flex-wrap items-center gap-2 mb-4">
+                        {% if admin_service_links.tautulli %}
+                        <a href="{{ admin_service_links.tautulli }}" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300/70 dark:border-slate-600 bg-slate-100/80 dark:bg-slate-900/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                            title="Open in Tautulli">
+                            <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli" class="w-5 h-5 dark:hidden">
+                            <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli" class="hidden w-5 h-5 dark:block">
+                        </a>
+                        {% endif %}
+                        {% if admin_service_links.sonarr %}
+                        <a href="{{ admin_service_links.sonarr }}" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300/70 dark:border-slate-600 bg-slate-100/80 dark:bg-slate-900/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                            title="Open in Sonarr">
+                            <img src="{{ url_for('static', filename='logos/sonarr-light.png') }}" alt="Sonarr" class="w-5 h-5 dark:hidden">
+                            <img src="{{ url_for('static', filename='logos/sonarr-dark.png') }}" alt="Sonarr" class="hidden w-5 h-5 dark:block">
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     <!-- Action Bar -->
                     {% if session.user_id %}
                     <div class="flex flex-wrap gap-2 mb-6">

@@ -86,6 +86,27 @@
                     {% if movie.year %}
                     <p class="text-xl sm:text-2xl text-gray-300 mb-6 font-light">{{ movie.year }}</p>
                     {% endif %}
+
+                    {% if session.is_admin and admin_service_links %}
+                    <div class="flex flex-wrap items-center gap-2 mb-4 justify-center md:justify-start">
+                        {% if admin_service_links.tautulli %}
+                        <a href="{{ admin_service_links.tautulli }}" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-500/70 bg-slate-900/40 hover:bg-slate-800/70 transition-colors shadow-md"
+                            title="Open in Tautulli">
+                            <img src="{{ url_for('static', filename='logos/tautulli-light.png') }}" alt="Tautulli" class="w-5 h-5 dark:hidden">
+                            <img src="{{ url_for('static', filename='logos/tautulli-dark.png') }}" alt="Tautulli" class="hidden w-5 h-5 dark:block">
+                        </a>
+                        {% endif %}
+                        {% if admin_service_links.radarr %}
+                        <a href="{{ admin_service_links.radarr }}" target="_blank" rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-slate-500/70 bg-slate-900/40 hover:bg-slate-800/70 transition-colors shadow-md"
+                            title="Open in Radarr">
+                            <img src="{{ url_for('static', filename='logos/radarr-light.png') }}" alt="Radarr" class="w-5 h-5 dark:hidden">
+                            <img src="{{ url_for('static', filename='logos/radarr-dark.png') }}" alt="Radarr" class="hidden w-5 h-5 dark:block">
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     
                     <p class="text-gray-200 leading-relaxed max-w-none line-clamp-6 sm:line-clamp-none pt-4 sm:pt-6">
                         {{ movie.overview | default('No overview available.') }}
