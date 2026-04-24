@@ -41,6 +41,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from ... import database
 
 main_bp = Blueprint('main', __name__)
+_SESSION_FREE_ENDPOINTS = {'main.calendar_ical_feed'}
 
 from ._shared import get_current_member, get_user_members, is_onboarding_complete
 
@@ -91,6 +92,9 @@ def check_onboarding():
     if request.endpoint in _IMAGE_ROUTE_ENDPOINTS:
         return
 
+    if request.endpoint in _SESSION_FREE_ENDPOINTS:
+        return
+
     if request.endpoint and 'static' not in request.endpoint:
         # Allow access to specific endpoints even if onboarding is not complete
         exempt_endpoints = [
@@ -117,6 +121,9 @@ def update_session_profile_photo():
     """
     # Skip for static file requests to improve performance
     if request.endpoint in _IMAGE_ROUTE_ENDPOINTS:
+        return
+
+    if request.endpoint in _SESSION_FREE_ENDPOINTS:
         return
 
     if request.endpoint and ('static' in request.endpoint or request.endpoint.startswith('_')):

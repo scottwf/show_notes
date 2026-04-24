@@ -118,12 +118,17 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
     else:
         movie_events = []
 
+    def end_date_str(date_str):
+        """RFC 5545 all-day DTEND is exclusive, so use the next day."""
+        parsed = dt.datetime.strptime(date_str, '%Y%m%d').date()
+        return (parsed + dt.timedelta(days=1)).strftime('%Y%m%d')
+
     lines = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
         'PRODID:-//ShowNotes//ShowNotes Calendar//EN',
         f'X-WR-CALNAME:{ical_escape(cal_name)}',
-        'X-WR-CALDESC:Upcoming TV events from your ShowNotes favorites',
+        f'X-WR-CALDESC:{ical_escape("Upcoming TV events from your ShowNotes favorites")}',
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
     ]
@@ -174,7 +179,7 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
         lines.append('BEGIN:VEVENT')
         lines.append(f'UID:shownotes-ep-{ev["id"]}-{feed_filter}@shownotes')
         lines.append(f'DTSTART;VALUE=DATE:{date_str}')
-        lines.append(f'DTEND;VALUE=DATE:{date_str}')
+        lines.append(f'DTEND;VALUE=DATE:{end_date_str(date_str)}')
         lines.append(f'SUMMARY:{ical_escape(summary)}')
         if ev.get('overview'):
             lines.append(f'DESCRIPTION:{ical_escape(ev["overview"])}')
@@ -200,7 +205,7 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
         lines.append('BEGIN:VEVENT')
         lines.append(f'UID:shownotes-movie-{mv["id"]}@shownotes')
         lines.append(f'DTSTART;VALUE=DATE:{date_str}')
-        lines.append(f'DTEND;VALUE=DATE:{date_str}')
+        lines.append(f'DTEND;VALUE=DATE:{end_date_str(date_str)}')
         lines.append(f'SUMMARY:{ical_escape(summary)}')
         if mv.get('overview'):
             lines.append(f'DESCRIPTION:{ical_escape(mv["overview"])}')

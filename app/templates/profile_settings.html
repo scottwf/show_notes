@@ -305,11 +305,11 @@
                 return origin + path;
             }
 
-            // webcals:// is the HTTPS variant of webcal://.
-            // webcal:// causes iOS to make an HTTP request → insecure warning.
-            // webcals:// forces HTTPS from the start → no warning.
+            // Apple Calendar and Safari recognize the standard webcal:// scheme.
+            // Preserve https:// for copied URLs and only rewrite the scheme for
+            // one-click subscription links.
             function subscribeUrl(key) {
-                return feedUrl(key).replace(/^https?:\/\//, 'webcals://');
+                return feedUrl(key).replace(/^https?:\/\//, 'webcal://');
             }
 
             function render() {
