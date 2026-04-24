@@ -1643,50 +1643,185 @@ def generate_season_summary_route():
 @main_bp.route('/members')
 @login_required
 def members():
-    """Community page — lists all users with public profiles, including sub-profiles."""
+    """Community page showing all Plex members and whether they have ShowNotes accounts."""
     db = database.get_db()
-    users = db.execute('''
-        SELECT u.id, u.username, u.bio, u.profile_photo_url,
-               u.profile_show_profile, u.profile_show_favorites,
-               u.profile_show_stats, u.profile_show_activity,
-               u.is_active,
-               MAX(pal.event_timestamp) as last_seen
-        FROM users u
-        LEFT JOIN plex_activity_log pal ON pal.plex_username = u.plex_username
-        WHERE u.is_active = 1 AND u.profile_show_profile = 1
-        GROUP BY u.id
-        ORDER BY last_seen DESC NULLS LAST, u.username
-    ''').fetchall()
+    member_filter = request.args.get('filter', 'all')
+    sort_key = request.args.get('sort', 'recently_active')
+
+    valid_filters = {'all', 'shownotes', 'plex_only'}
+    valid_sorts = {'alphabetical', 'most_active', 'recently_active'}
+    if member_filter not in valid_filters:
+        member_filter = 'all'
+    if sort_key not in valid_sorts:
+        sort_key = 'recently_active'
+
+    rows = db.execute(
+        '''
+        WITH plex_members AS (
+            SELECT
+                pal.plex_username,
+                COUNT(*) AS event_count,
+                SUM(CASE
+                    WHEN pal.event_type IN ('media.play', 'media.scrobble', 'watched') THEN 1
+                    ELSE 0
+                END) AS play_count,
+                COUNT(DISTINCT CASE
+                    WHEN pal.media_type = 'episode' THEN pal.show_title
+                    ELSE pal.title
+                END) AS title_count,
+                MAX(pal.event_timestamp) AS last_seen
+            FROM plex_activity_log pal
+            WHERE COALESCE(TRIM(pal.plex_username), '') <> ''
+            GROUP BY pal.plex_username
+        )
+        SELECT
+            pm.plex_username,
+            pm.event_count,
+            pm.play_count,
+            pm.title_count,
+            pm.last_seen,
+            u.id AS user_id,
+            u.username,
+            u.bio,
+            u.profile_photo_url,
+            u.profile_show_profile,
+            hm.id AS member_id,
+            hm.display_name AS member_display_name,
+            hm.avatar_url AS member_avatar_url,
+            hm.avatar_color AS member_avatar_color
+        FROM plex_members pm
+        LEFT JOIN users u
+            ON u.plex_username = pm.plex_username
+           AND u.is_active = 1
+        LEFT JOIN household_members hm
+            ON hm.user_id = u.id
+           AND hm.is_default = 1
+        '''
+    ).fetchall()
+    row_dicts = [dict(row) for row in rows]
+
+    def _member_avatar_color(name):
+        if not name:
+            return MEMBER_AVATAR_COLORS[0]
+        total = sum(ord(ch) for ch in name.lower())
+        return MEMBER_AVATAR_COLORS[total % len(MEMBER_AVATAR_COLORS)]
 
     members_data = []
-    for u in users:
-        u = dict(u)
-        uid = u['id']
-        # Fetch all members for this user (default first, then sub-profiles)
-        hm_rows = db.execute(
-            '''SELECT id, display_name, avatar_url, avatar_color, is_default,
-                      (SELECT COUNT(*) FROM user_favorites WHERE user_id=? AND member_id=household_members.id AND is_dropped=0) as favorite_count
-               FROM household_members WHERE user_id=? ORDER BY is_default DESC, display_name''',
-            (uid, uid)
-        ).fetchall()
+    for row in row_dicts:
+        has_shownotes_account = bool(row['user_id'])
+        has_public_profile = bool(has_shownotes_account and row['profile_show_profile'])
+        display_name = (
+            row['member_display_name']
+            or row['username']
+            or row['plex_username']
+        )
+        avatar_url = row['member_avatar_url'] or row['profile_photo_url']
 
-        for hm in hm_rows:
-            entry = dict(u)  # inherit privacy flags from parent user
-            entry['member_id'] = hm['id']
-            entry['display_name'] = hm['display_name']
-            entry['avatar_url'] = hm['avatar_url']
-            entry['avatar_color'] = hm['avatar_color'] or '#0ea5e9'
-            entry['is_default'] = hm['is_default']
-            entry['favorite_count'] = hm['favorite_count']
-            # URL: default member → /members/<username>, sub-profile → /members/<username>/<member_id>
-            if hm['is_default']:
-                entry['profile_url'] = url_for('main.public_profile', username=u['username'])
-            else:
-                entry['profile_url'] = url_for('main.public_subprofile', username=u['username'], member_id=hm['id'])
-            members_data.append(entry)
+        members_data.append({
+            'plex_username': row['plex_username'],
+            'display_name': display_name,
+            'avatar_url': avatar_url,
+            'avatar_color': row['member_avatar_color'] or _member_avatar_color(display_name),
+            'bio': row['bio'],
+            'username': row['username'],
+            'event_count': row['event_count'] or 0,
+            'play_count': row['play_count'] or 0,
+            'title_count': row['title_count'] or 0,
+            'last_seen': row['last_seen'],
+            'has_shownotes_account': has_shownotes_account,
+            'has_public_profile': has_public_profile,
+            'profile_url': (
+                url_for('main.public_profile', username=row['username'])
+                if has_public_profile else None
+            ),
+        })
 
-    stats = _get_profile_stats(db)
-    return render_template('members.html', members=members_data, **stats)
+    if member_filter == 'shownotes':
+        members_data = [m for m in members_data if m['has_shownotes_account']]
+    elif member_filter == 'plex_only':
+        members_data = [m for m in members_data if not m['has_shownotes_account']]
+
+    if sort_key == 'alphabetical':
+        members_data.sort(key=lambda m: (m['display_name'].lower(), m['plex_username'].lower()))
+    elif sort_key == 'most_active':
+        members_data.sort(
+            key=lambda m: (-m['play_count'], -(m['event_count']), m['display_name'].lower())
+        )
+    else:
+        members_data.sort(
+            key=lambda m: (
+                m['last_seen'] is not None,
+                m['last_seen'] or '',
+                m['play_count'],
+                m['display_name'].lower(),
+            ),
+            reverse=True
+        )
+
+    totals = {
+        'all': len(row_dicts),
+        'shownotes': sum(1 for row in row_dicts if row['user_id']),
+        'plex_only': sum(1 for row in row_dicts if not row['user_id']),
+        'plays': sum((row['play_count'] or 0) for row in row_dicts),
+    }
+
+    filter_options = [
+        {
+            'label': 'All',
+            'value': 'all',
+            'count': totals['all'],
+            'active': member_filter == 'all',
+            'url': url_for('main.members', filter='all', sort=sort_key),
+        },
+        {
+            'label': 'ShowNotes users',
+            'value': 'shownotes',
+            'count': totals['shownotes'],
+            'active': member_filter == 'shownotes',
+            'url': url_for('main.members', filter='shownotes', sort=sort_key),
+        },
+        {
+            'label': 'Plex only',
+            'value': 'plex_only',
+            'count': totals['plex_only'],
+            'active': member_filter == 'plex_only',
+            'url': url_for('main.members', filter='plex_only', sort=sort_key),
+        },
+    ]
+
+    sort_options = [
+        {
+            'label': 'Recently active',
+            'value': 'recently_active',
+            'active': sort_key == 'recently_active',
+            'url': url_for('main.members', filter=member_filter, sort='recently_active'),
+        },
+        {
+            'label': 'Most active',
+            'value': 'most_active',
+            'active': sort_key == 'most_active',
+            'url': url_for('main.members', filter=member_filter, sort='most_active'),
+        },
+        {
+            'label': 'Alphabetical',
+            'value': 'alphabetical',
+            'active': sort_key == 'alphabetical',
+            'url': url_for('main.members', filter=member_filter, sort='alphabetical'),
+        },
+    ]
+
+    return render_template(
+        'members.html',
+        members=members_data,
+        filter_options=filter_options,
+        sort_options=sort_options,
+        member_filter=member_filter,
+        sort_key=sort_key,
+        total_member_count=totals['all'],
+        shownotes_member_count=totals['shownotes'],
+        plex_only_member_count=totals['plex_only'],
+        total_play_count=totals['plays'],
+    )
 
 
 def _build_public_profile_context(db, viewed_user, member_id=None):
