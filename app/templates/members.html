@@ -2,62 +2,161 @@
 {% block page_title %}Members{% endblock %}
 
 {% block page_content %}
-<div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
+<div class="max-w-6xl mx-auto space-y-6">
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Members</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ members|length }} profile{{ 's' if members|length != 1 }}</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        {{ total_member_count }} Plex member{{ 's' if total_member_count != 1 }} tracked from viewing activity
+      </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div class="rounded-xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+        <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">All members</div>
+        <div class="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{{ total_member_count }}</div>
+      </div>
+      <div class="rounded-xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+        <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">ShowNotes users</div>
+        <div class="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{{ shownotes_member_count }}</div>
+      </div>
+      <div class="rounded-xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+        <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Plex only</div>
+        <div class="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{{ plex_only_member_count }}</div>
+      </div>
+      <div class="rounded-xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+        <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Total plays</div>
+        <div class="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{{ total_play_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/90">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Filter</div>
+        <div class="mt-2 flex flex-wrap gap-2">
+          {% for option in filter_options %}
+          <a href="{{ option.url }}"
+             class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors {% if option.active %}border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300{% else %}border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100{% endif %}">
+            <span>{{ option.label }}</span>
+            <span class="rounded-full bg-black/5 px-2 py-0.5 text-xs dark:bg-white/10">{{ option.count }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Sort</div>
+        <div class="mt-2 flex flex-wrap gap-2 lg:justify-end">
+          {% for option in sort_options %}
+          <a href="{{ option.url }}"
+             class="inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition-colors {% if option.active %}border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900{% else %}border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100{% endif %}">
+            {{ option.label }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
     </div>
   </div>
 
   {% if not members %}
-  <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-12 text-center text-slate-500 dark:text-slate-400">
-    No public profiles yet.
+  <div class="rounded-2xl border border-dashed border-slate-300 bg-white/80 p-12 text-center text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-400">
+    No members match the current filter.
   </div>
   {% else %}
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+  <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
     {% for m in members %}
-    <a href="{{ m.profile_url }}"
-       class="bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex items-start gap-4 group relative">
-
-      <!-- Sub-profile badge -->
-      {% if not m.is_default %}
-      <span class="absolute top-3 right-3 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-        sub-profile
-      </span>
+      {% if m.profile_url %}
+      <a href="{{ m.profile_url }}"
+         class="group rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-800/95">
+      {% else %}
+      <div class="rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800/95">
       {% endif %}
+        <div class="flex items-start gap-4">
+          <div class="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full shadow ring-2 ring-white/70 dark:ring-slate-700/70"
+               style="background-color: {{ m.avatar_color }};">
+            {% if m.avatar_url %}
+            <img src="{{ m.avatar_url }}" alt="{{ m.display_name }}" class="h-full w-full object-cover">
+            {% else %}
+            <div class="flex h-full w-full items-center justify-center text-lg font-bold text-white">
+              {{ m.display_name[0].upper() }}
+            </div>
+            {% endif %}
+          </div>
 
-      <!-- Avatar -->
-      <div class="w-14 h-14 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xl font-bold overflow-hidden shadow"
-           style="background-color: {{ m.avatar_color }};">
-        {% if m.avatar_url %}
-          <img src="{{ m.avatar_url }}" alt="{{ m.display_name }}" class="w-full h-full object-cover">
-        {% else %}
-          {{ m.display_name[0].upper() }}
-        {% endif %}
-      </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="truncate text-lg font-semibold text-slate-900 transition-colors dark:text-slate-100 {% if m.profile_url %}group-hover:text-sky-600 dark:group-hover:text-sky-400{% endif %}">
+                {{ m.display_name }}
+              </h2>
+              {% if m.has_shownotes_account %}
+              <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                ShowNotes account
+              </span>
+              {% else %}
+              <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-700/80 dark:text-slate-300">
+                Plex only
+              </span>
+              {% endif %}
+            </div>
 
-      <!-- Info -->
-      <div class="min-w-0 flex-1">
-        <div class="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-sky-400 truncate transition-colors pr-16">
-          {{ m.display_name }}
+            <div class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {% if m.has_shownotes_account %}
+                @{{ m.username }}
+                {% if m.username != m.plex_username %}
+                  <span class="mx-1">·</span>
+                  Plex: {{ m.plex_username }}
+                {% endif %}
+              {% else %}
+                Plex username: {{ m.plex_username }}
+              {% endif %}
+            </div>
+
+            {% if m.bio %}
+            <p class="mt-3 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">{{ m.bio }}</p>
+            {% endif %}
+          </div>
         </div>
-        <div class="text-xs text-slate-500 dark:text-slate-400 truncate mb-2">
-          @{{ m.username }}{% if not m.is_default %} · profile{% endif %}
+
+        <div class="mt-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50">
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Plays</div>
+            <div class="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{{ m.play_count }}</div>
+          </div>
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Titles</div>
+            <div class="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{{ m.title_count }}</div>
+          </div>
+          <div>
+            <div class="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Events</div>
+            <div class="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{{ m.event_count }}</div>
+          </div>
         </div>
-        {% if m.is_default and m.bio %}
-        <p class="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ m.bio }}</p>
-        {% endif %}
-        <div class="flex items-center gap-3 mt-2 text-xs text-slate-400 dark:text-slate-500">
-          {% if m.profile_show_favorites and m.favorite_count %}
-          <span>{{ m.favorite_count }} favorite{{ 's' if m.favorite_count != 1 }}</span>
-          {% endif %}
-          {% if m.is_default and m.last_seen %}
-          <span>Active {{ m.last_seen | format_datetime('%b %d') }}</span>
-          {% endif %}
+
+        <div class="mt-4 flex items-center justify-between gap-3 text-sm">
+          <div class="text-slate-500 dark:text-slate-400">
+            {% if m.last_seen %}
+            Active {{ m.last_seen | format_datetime('%b %d, %Y') }}
+            {% else %}
+            No recent activity
+            {% endif %}
+          </div>
+          <div class="font-medium {% if m.profile_url %}text-sky-600 dark:text-sky-400{% else %}text-slate-400 dark:text-slate-500{% endif %}">
+            {% if m.profile_url %}
+            View profile
+            {% elif m.has_shownotes_account %}
+            Profile private
+            {% else %}
+            No ShowNotes profile
+            {% endif %}
+          </div>
         </div>
+      {% if m.profile_url %}
+      </a>
+      {% else %}
       </div>
-    </a>
+      {% endif %}
     {% endfor %}
   </div>
   {% endif %}
