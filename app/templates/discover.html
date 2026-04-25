@@ -17,6 +17,11 @@
                 data-tab="popular">
             Popular
         </button>
+        <button onclick="showTab('trending')"
+                class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
+                data-tab="trending">
+            Trending
+        </button>
         {% if received_recs or community_picks %}
         <button onclick="showTab('recommended')"
                 class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
@@ -32,14 +37,14 @@
         <button onclick="showTab('upcoming')"
                 class="tab-button px-4 py-3 text-sm font-medium transition-colors border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 whitespace-nowrap"
                 data-tab="upcoming">
-            Upcoming Movies
+            Upcoming
         </button>
         {% endif %}
     </div>
 
     <!-- Popular Tab -->
     <div id="popular-tab" class="tab-content space-y-10">
-        {% if popular_shows or popular_movies or binge_shows or watching_live or late_night or early_bird %}
+        {% if popular_shows or popular_movies %}
 
             <!-- Popular Shows -->
             {% if popular_shows %}
@@ -129,6 +134,21 @@
             </div>
             {% endif %}
 
+        {% else %}
+            <div class="text-center py-12">
+                <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/>
+                </svg>
+                <p class="text-slate-500 dark:text-slate-400">No viewing activity in the last 30 days</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Start watching something on Plex to see popular content here</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Trending Tab -->
+    <div id="trending-tab" class="tab-content hidden space-y-10">
+        {% if watching_live or binge_shows or late_night or early_bird %}
+
             <!-- Watching Live -->
             {% if watching_live %}
             <div>
@@ -203,7 +223,7 @@
             </div>
             {% endif %}
 
-            <!-- Late Night -->
+            <!-- Night Owl -->
             {% if late_night %}
             <div>
                 <div class="flex items-center gap-2 mb-4">
@@ -282,8 +302,8 @@
                 <svg class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/>
                 </svg>
-                <p class="text-slate-500 dark:text-slate-400">No viewing activity in the last 30 days</p>
-                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Start watching something on Plex to see popular content here</p>
+                <p class="text-slate-500 dark:text-slate-400">No trending activity in the last 30 days</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Live watching, binge, and time-of-day data will appear here</p>
             </div>
         {% endif %}
     </div>
