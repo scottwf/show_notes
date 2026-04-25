@@ -1,0 +1,298 @@
+<h2>Calendar Page — Full Design</h2>
+<p class="subtitle">Week grid + navigable weeks + existing lists below. Does this look right?</p>
+
+<style>
+  .preview {
+    background: #0f172a;
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+    color: #cbd5e1;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  .preview-topbar {
+    background: #020617;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #1e293b;
+  }
+  .preview-title { font-size: 18px; font-weight: 800; color: #f1f5f9; }
+  .preview-sub { font-size: 11px; color: #475569; margin-top: 1px; }
+  .preview-ical {
+    font-size: 10px; color: #38bdf8; border: 1px solid #0369a1;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .preview-body { padding: 14px 16px; }
+
+  /* Filter tabs */
+  .ftabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ftab {
+    padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .ftab-active { background: #0284c7; color: #fff; }
+  .ftab-inactive { background: #1e293b; color: #64748b; }
+
+  /* Week grid section */
+  .week-section { margin-bottom: 20px; }
+  .week-nav {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  .week-label { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+  .week-sub { font-size: 10px; color: #475569; }
+  .nav-btns { display: flex; align-items: center; gap: 6px; }
+  .nav-btn {
+    width: 26px; height: 26px; border-radius: 6px; background: #1e293b;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #94a3b8; cursor: pointer;
+  }
+  .nav-today {
+    padding: 4px 10px; border-radius: 6px; background: #1e293b;
+    font-size: 10px; font-weight: 600; color: #38bdf8; cursor: pointer;
+  }
+
+  .week-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px;
+  }
+  .day-col {
+    background: #1e293b; border-radius: 8px; overflow: hidden; min-height: 90px;
+  }
+  .day-col.today-col { background: #1e293b; outline: 2px solid #0284c7; outline-offset: -2px; }
+  .day-col.past-col { opacity: 0.55; }
+  .day-header {
+    padding: 5px 7px; font-size: 9px; font-weight: 700; text-align: center;
+    border-bottom: 1px solid #0f172a; line-height: 1.4;
+  }
+  .day-header .day-name { color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-size: 8px; }
+  .day-header .day-num { font-size: 13px; font-weight: 800; color: #e2e8f0; }
+  .day-col.today-col .day-num { color: #38bdf8; }
+  .day-col.past-col .day-num { color: #475569; }
+  .day-events { padding: 5px; display: flex; flex-direction: column; gap: 3px; }
+  .event-chip {
+    padding: 3px 5px; border-radius: 4px; font-size: 8px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .event-chip:hover { opacity: 0.8; }
+  .chip-ep { background: #1e40af; color: #93c5fd; border-left: 2px solid #3b82f6; }
+  .chip-pre { background: #4c1d95; color: #c4b5fd; border-left: 2px solid #8b5cf6; }
+  .chip-fin { background: #7f1d1d; color: #fca5a5; border-left: 2px solid #ef4444; }
+  .empty-day { font-size: 8px; color: #334155; text-align: center; padding: 10px 4px; }
+
+  .divider { border-top: 1px solid #1e293b; margin: 16px 0; }
+
+  /* List sections */
+  .list-section { margin-bottom: 20px; }
+  .list-section-header {
+    font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 10px;
+    display: flex; align-items: center; gap-6px;
+  }
+  .list-section-header span { margin-right: 6px; }
+  .list-items { display: flex; flex-direction: column; gap: 6px; }
+  .list-card {
+    background: #1e293b; border-radius: 8px; padding: 10px 12px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .list-poster {
+    width: 36px; height: 54px; background: #334155; border-radius: 4px; flex-shrink: 0;
+  }
+  .list-info { flex: 1; min-width: 0; }
+  .list-show { font-size: 12px; font-weight: 700; color: #38bdf8; }
+  .list-ep { font-size: 11px; color: #cbd5e1; margin-top: 1px; }
+  .list-meta { font-size: 10px; color: #475569; margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+  .badge {
+    font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  }
+  .badge-pre { background: #4c1d95; color: #c4b5fd; }
+  .badge-fav { background: #78350f; color: #fde68a; }
+  .badge-avail { background: #14532d; color: #86efac; }
+</style>
+
+<div class="mockup">
+  <div class="mockup-header">Calendar Page — Option A with navigation</div>
+  <div class="mockup-body" style="padding:0">
+    <div class="preview">
+      <div class="preview-topbar">
+        <div>
+          <div class="preview-title">TV Calendar</div>
+          <div class="preview-sub">Upcoming episodes, premieres &amp; finales</div>
+        </div>
+        <div class="preview-ical">📅 Manage Subscriptions</div>
+      </div>
+
+      <div class="preview-body">
+        <!-- Filter tabs -->
+        <div class="ftabs">
+          <div class="ftab ftab-active">All</div>
+          <div class="ftab ftab-inactive">Favorites</div>
+          <div class="ftab ftab-inactive">Premieres</div>
+          <div class="ftab ftab-inactive">Finales</div>
+          <div class="ftab ftab-inactive">My Requests</div>
+        </div>
+
+        <!-- Week grid -->
+        <div class="week-section">
+          <div class="week-nav">
+            <div>
+              <div class="week-label">Apr 14 – Apr 20</div>
+              <div class="week-sub">Current week</div>
+            </div>
+            <div class="nav-btns">
+              <div class="nav-btn">‹</div>
+              <div class="nav-today">Today</div>
+              <div class="nav-btn">›</div>
+            </div>
+          </div>
+
+          <div class="week-grid">
+            <!-- Mon past -->
+            <div class="day-col past-col">
+              <div class="day-header">
+                <div class="day-name">Mon</div>
+                <div class="day-num">14</div>
+              </div>
+              <div class="day-events">
+                <div class="event-chip chip-ep">Severance</div>
+              </div>
+            </div>
+            <!-- Tue past -->
+            <div class="day-col past-col">
+              <div class="day-header">
+                <div class="day-name">Tue</div>
+                <div class="day-num">15</div>
+              </div>
+              <div class="day-events">
+                <div class="event-chip chip-ep">The Bear</div>
+                <div class="event-chip chip-pre">Andor S2</div>
+              </div>
+            </div>
+            <!-- Wed today -->
+            <div class="day-col today-col">
+              <div class="day-header">
+                <div class="day-name">Wed</div>
+                <div class="day-num">16</div>
+              </div>
+              <div class="day-events">
+                <div class="empty-day">Nothing today</div>
+              </div>
+            </div>
+            <!-- Thu -->
+            <div class="day-col">
+              <div class="day-header">
+                <div class="day-name">Thu</div>
+                <div class="day-num">17</div>
+              </div>
+              <div class="day-events">
+                <div class="event-chip chip-fin">Shōgun S2</div>
+              </div>
+            </div>
+            <!-- Fri -->
+            <div class="day-col">
+              <div class="day-header">
+                <div class="day-name">Fri</div>
+                <div class="day-num">18</div>
+              </div>
+              <div class="day-events">
+                <div class="event-chip chip-ep">Reacher</div>
+                <div class="event-chip chip-ep">Fallout</div>
+              </div>
+            </div>
+            <!-- Sat -->
+            <div class="day-col">
+              <div class="day-header">
+                <div class="day-name">Sat</div>
+                <div class="day-num">19</div>
+              </div>
+              <div class="day-events">
+                <div class="empty-day">—</div>
+              </div>
+            </div>
+            <!-- Sun -->
+            <div class="day-col">
+              <div class="day-header">
+                <div class="day-name">Sun</div>
+                <div class="day-num">20</div>
+              </div>
+              <div class="day-events">
+                <div class="event-chip chip-ep">White Lotus</div>
+                <div class="event-chip chip-pre">Last of Us S3</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- TV Countdown list -->
+        <div class="list-section">
+          <div class="list-section-header">
+            <span>⏱</span> TV Countdown
+          </div>
+          <div class="list-items">
+            <div class="list-card">
+              <div class="list-poster"></div>
+              <div class="list-info">
+                <div class="list-show">The Bear</div>
+                <div class="list-ep">S03E01: Forks</div>
+                <div class="list-meta">
+                  <span>Tue Apr 15</span>
+                  <span class="badge badge-pre">Season Premiere</span>
+                  <span class="badge badge-avail">Available</span>
+                </div>
+              </div>
+            </div>
+            <div class="list-card">
+              <div class="list-poster"></div>
+              <div class="list-info">
+                <div class="list-show">Reacher</div>
+                <div class="list-ep">S04E05: Blue Light Special</div>
+                <div class="list-meta">
+                  <span>Fri Apr 18</span>
+                  <span class="badge badge-fav">★ Favorite</span>
+                </div>
+              </div>
+            </div>
+            <div class="list-card">
+              <div class="list-poster"></div>
+              <div class="list-info">
+                <div class="list-show">White Lotus</div>
+                <div class="list-ep">S03E06: The Lotus Eaters</div>
+                <div class="list-meta"><span>Sun Apr 20</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Finales list (abbreviated) -->
+        <div class="list-section">
+          <div class="list-section-header">
+            <span>❤️</span> Season Finales
+          </div>
+          <div class="list-items">
+            <div class="list-card">
+              <div class="list-poster"></div>
+              <div class="list-info">
+                <div class="list-show">Shōgun</div>
+                <div class="list-ep">S02E10: Season Finale</div>
+                <div class="list-meta"><span>Thu Apr 17</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px; padding:14px; background:#0f172a; border-radius:10px; font-size:11px; color:#64748b; line-height:1.7;">
+  <strong style="color:#94a3b8; display:block; margin-bottom:6px;">Design notes:</strong>
+  • <strong style="color:#cbd5e1;">Week grid</strong> — Mon–Sun, today highlighted in blue, past days dimmed. ‹ / › navigate weeks, Today resets.<br>
+  • <strong style="color:#cbd5e1;">Event chips</strong> — click navigates directly to episode detail page.<br>
+  • <strong style="color:#cbd5e1;">Color coding</strong> — blue = episode, purple = premiere, red = finale.<br>
+  • <strong style="color:#cbd5e1;">Lists below</strong> — existing TV Countdown, Season Finales, and Premieres sections unchanged.<br>
+  • <strong style="color:#cbd5e1;">Data</strong> — events bucketed by date in Python, passed as JSON to Alpine.js for client-side week navigation (no extra requests).<br>
+  • <strong style="color:#cbd5e1;">Filters</strong> — the existing filter tabs apply to both the grid and the lists.
+</div>

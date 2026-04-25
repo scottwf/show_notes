@@ -1,0 +1,271 @@
+<h2>Mobile View + Multi-Episode Chips</h2>
+<p class="subtitle">Phone shows one day at a time. How should multiple episodes from the same show look?</p>
+
+<style>
+  * { box-sizing: border-box; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; }
+
+  /* Shared phone frame */
+  .phone-frame {
+    width: 200px;
+    background: #0f172a;
+    border-radius: 16px;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+    color: #cbd5e1;
+    border: 2px solid #1e293b;
+    flex-shrink: 0;
+  }
+  .phone-topbar {
+    background: #020617;
+    padding: 8px 10px;
+    border-bottom: 1px solid #1e293b;
+  }
+  .phone-title { font-size: 13px; font-weight: 800; color: #f1f5f9; }
+  .phone-sub { font-size: 9px; color: #475569; }
+  .phone-body { padding: 10px; }
+
+  /* Day nav */
+  .day-nav {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  .day-nav-btn {
+    width: 24px; height: 24px; background: #1e293b; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: #94a3b8; cursor: pointer;
+  }
+  .day-nav-label { text-align: center; }
+  .day-nav-label .dname { font-size: 10px; font-weight: 700; color: #38bdf8; }
+  .day-nav-label .ddate { font-size: 15px; font-weight: 800; color: #e2e8f0; }
+  .day-nav-label .dmonth { font-size: 9px; color: #64748b; }
+
+  /* Day dots strip */
+  .day-dots {
+    display: flex; justify-content: center; gap: 5px; margin-bottom: 10px;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #1e293b;
+  }
+  .dot.has-events { background: #3b82f6; }
+  .dot.today-dot { background: #38bdf8; width: 8px; height: 8px; }
+
+  /* Event cards on mobile */
+  .mobile-events { display: flex; flex-direction: column; gap: 5px; }
+  .mobile-chip {
+    padding: 5px 7px; border-radius: 6px; font-size: 10px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+  }
+  .mobile-chip .show-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-chip .ep-info { font-size: 8px; opacity: 0.75; margin-top: 1px; }
+  .mobile-chip .count-badge {
+    flex-shrink: 0; margin-left: 6px;
+    background: rgba(255,255,255,0.15); border-radius: 10px;
+    padding: 1px 5px; font-size: 9px; font-weight: 800;
+  }
+  .chip-ep { background: #1e3a8a; color: #93c5fd; border-left: 3px solid #3b82f6; }
+  .chip-pre { background: #3b0764; color: #d8b4fe; border-left: 3px solid #a855f7; }
+  .chip-fin { background: #7f1d1d; color: #fca5a5; border-left: 3px solid #ef4444; }
+
+  /* Desktop week grid for comparison */
+  .desktop-frame {
+    flex: 1; min-width: 300px;
+    background: #0f172a; border-radius: 12px; overflow: hidden;
+    font-family: system-ui, sans-serif; color: #cbd5e1;
+    border: 2px solid #1e293b;
+  }
+  .desktop-topbar {
+    background: #020617; padding: 8px 12px; border-bottom: 1px solid #1e293b;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .desktop-title { font-size: 13px; font-weight: 800; color: #f1f5f9; }
+  .desktop-nav { display: flex; gap: 5px; align-items: center; }
+  .desktop-nav-btn {
+    width: 22px; height: 22px; background: #1e293b; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #94a3b8;
+  }
+  .desktop-today-btn {
+    padding: 3px 8px; border-radius: 4px; background: #1e293b;
+    font-size: 9px; font-weight: 600; color: #38bdf8;
+  }
+  .desktop-body { padding: 10px 12px; }
+  .week-label { font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 6px; }
+
+  .week-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+  }
+  .day-col {
+    background: #1e293b; border-radius: 6px; overflow: hidden; min-height: 80px;
+  }
+  .day-col.today-col { outline: 2px solid #0284c7; outline-offset: -2px; }
+  .day-col.past-col { opacity: 0.5; }
+  .day-header {
+    padding: 4px; text-align: center; border-bottom: 1px solid #0f172a;
+  }
+  .day-name { font-size: 7px; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+  .day-num { font-size: 12px; font-weight: 800; color: #e2e8f0; }
+  .today-col .day-num { color: #38bdf8; }
+  .past-col .day-num { color: #334155; }
+  .day-events { padding: 3px; display: flex; flex-direction: column; gap: 2px; }
+  .desktop-chip {
+    padding: 2px 4px; border-radius: 3px; font-size: 7.5px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dchip-ep { background: #1e3a8a; color: #93c5fd; border-left: 2px solid #3b82f6; }
+  .dchip-pre { background: #3b0764; color: #d8b4fe; border-left: 2px solid #a855f7; }
+  .dchip-fin { background: #7f1d1d; color: #fca5a5; border-left: 2px solid #ef4444; }
+  .chip-count {
+    flex-shrink: 0; margin-left: 3px; background: rgba(255,255,255,0.15);
+    border-radius: 8px; padding: 0 3px; font-size: 7px; font-weight: 800;
+  }
+  .empty-day { font-size: 7px; color: #334155; text-align: center; padding: 8px 2px; }
+
+  /* Labels */
+  .section-head { font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 8px; }
+  .note {
+    font-size: 10px; color: #475569; background: #020617;
+    padding: 6px 10px; border-radius: 6px; margin-top: 6px; line-height: 1.6;
+  }
+  .note strong { color: #94a3b8; }
+</style>
+
+<!-- Top row: mobile + desktop side by side -->
+<div class="row" style="align-items: flex-start;">
+
+  <!-- Mobile: single day -->
+  <div>
+    <div class="section-head">📱 Mobile — single day view</div>
+    <div class="phone-frame">
+      <div class="phone-topbar">
+        <div class="phone-title">TV Calendar</div>
+        <div class="phone-sub">Tap ‹ › to change day</div>
+      </div>
+      <div class="phone-body">
+        <!-- Day navigator -->
+        <div class="day-nav">
+          <div class="day-nav-btn">‹</div>
+          <div class="day-nav-label">
+            <div class="dname">WEDNESDAY</div>
+            <div class="ddate">16</div>
+            <div class="dmonth">April 2026</div>
+          </div>
+          <div class="day-nav-btn">›</div>
+        </div>
+
+        <!-- Week dots: shows which days have events -->
+        <div class="day-dots">
+          <div class="dot has-events" title="Mon"></div>
+          <div class="dot has-events" title="Tue"></div>
+          <div class="dot today-dot" title="Today"></div>
+          <div class="dot has-events" title="Thu"></div>
+          <div class="dot has-events" title="Fri"></div>
+          <div class="dot" title="Sat"></div>
+          <div class="dot has-events" title="Sun"></div>
+        </div>
+
+        <!-- Events for this day -->
+        <div class="mobile-events">
+          <div class="mobile-chip chip-ep">
+            <div>
+              <div class="show-name">The Bear</div>
+              <div class="ep-info">S03E01 · New episode</div>
+            </div>
+          </div>
+          <div class="mobile-chip chip-pre">
+            <div>
+              <div class="show-name">Andor</div>
+              <div class="ep-info">S02E01 · Season Premiere</div>
+            </div>
+          </div>
+          <div class="mobile-chip chip-ep">
+            <div>
+              <div class="show-name">Fallout</div>
+              <div class="ep-info">S02E03 · New episode</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top:8px;">
+          Dots above show which days this week have events — tap ‹ › to jump to any day.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop: week grid with collapsed multi-episode chips -->
+  <div style="flex:1; min-width:320px;">
+    <div class="section-head">🖥 Desktop — week grid with collapsed multi-episode chips</div>
+    <div class="desktop-frame">
+      <div class="desktop-topbar">
+        <div class="desktop-title">Apr 14 – Apr 20, 2026</div>
+        <div class="desktop-nav">
+          <div class="desktop-nav-btn">‹</div>
+          <div class="desktop-today-btn">Today</div>
+          <div class="desktop-nav-btn">›</div>
+        </div>
+      </div>
+      <div class="desktop-body">
+        <div class="week-grid">
+          <div class="day-col past-col">
+            <div class="day-header"><div class="day-name">Mon</div><div class="day-num">14</div></div>
+            <div class="day-events">
+              <!-- Single ep: shows normally -->
+              <div class="desktop-chip dchip-ep">Severance</div>
+            </div>
+          </div>
+          <div class="day-col past-col">
+            <div class="day-header"><div class="day-name">Tue</div><div class="day-num">15</div></div>
+            <div class="day-events">
+              <!-- 3 eps of same show → collapsed with count -->
+              <div class="desktop-chip dchip-ep">
+                <span>The Bear</span>
+                <span class="chip-count">×3</span>
+              </div>
+              <div class="desktop-chip dchip-pre">Andor S2</div>
+            </div>
+          </div>
+          <div class="day-col today-col">
+            <div class="day-header"><div class="day-name">Wed</div><div class="day-num">16</div></div>
+            <div class="day-events">
+              <div class="empty-day">Nothing</div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-header"><div class="day-name">Thu</div><div class="day-num">17</div></div>
+            <div class="day-events">
+              <div class="desktop-chip dchip-fin">Shōgun S2</div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-header"><div class="day-name">Fri</div><div class="day-num">18</div></div>
+            <div class="day-events">
+              <!-- 2 eps same show -->
+              <div class="desktop-chip dchip-ep">
+                <span>Reacher</span>
+                <span class="chip-count">×2</span>
+              </div>
+              <div class="desktop-chip dchip-ep">Fallout</div>
+            </div>
+          </div>
+          <div class="day-col">
+            <div class="day-header"><div class="day-name">Sat</div><div class="day-num">19</div></div>
+            <div class="day-events"><div class="empty-day">—</div></div>
+          </div>
+          <div class="day-col">
+            <div class="day-header"><div class="day-name">Sun</div><div class="day-num">20</div></div>
+            <div class="day-events">
+              <div class="desktop-chip dchip-ep">White Lotus</div>
+              <div class="desktop-chip dchip-pre">Last of Us S3</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top:10px;">
+          <strong>×3</strong> means 3 episodes of that show air today — click the chip to go to the show page. Single episodes go straight to the episode detail page.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

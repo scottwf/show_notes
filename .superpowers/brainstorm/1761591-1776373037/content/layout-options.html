@@ -1,0 +1,416 @@
+<h2>Calendar Week View — Layout Approach</h2>
+<p class="subtitle">How should the week grid sit alongside the existing lists?</p>
+
+<style>
+  .mock-page {
+    background: #1e293b;
+    border-radius: 10px;
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+    font-size: 12px;
+    color: #cbd5e1;
+  }
+  .mock-topbar {
+    background: #0f172a;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #334155;
+  }
+  .mock-topbar-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .mock-topbar-sub {
+    font-size: 10px;
+    color: #64748b;
+  }
+  .mock-body { padding: 10px 12px; }
+
+  /* Week grid */
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .day-col {
+    background: #0f172a;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 80px;
+  }
+  .day-header {
+    padding: 4px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    border-bottom: 1px solid #1e293b;
+  }
+  .day-header.today { background: #0369a1; color: #fff; }
+  .day-header.past { color: #475569; }
+  .day-header.future { color: #94a3b8; }
+  .day-events { padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+  .event-chip {
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .chip-episode { background: #1d4ed8; color: #bfdbfe; }
+  .chip-premiere { background: #7c3aed; color: #ede9fe; }
+  .chip-finale { background: #b91c1c; color: #fee2e2; }
+
+  /* List section */
+  .list-section {
+    margin-top: 8px;
+  }
+  .list-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .list-item {
+    background: #0f172a;
+    border-radius: 5px;
+    padding: 6px 8px;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .list-thumb {
+    width: 24px;
+    height: 36px;
+    background: #334155;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .list-info { flex: 1; min-width: 0; }
+  .list-title { font-size: 10px; font-weight: 600; color: #e2e8f0; }
+  .list-meta { font-size: 9px; color: #64748b; }
+
+  /* Toggle bar */
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .toggle-btn {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .toggle-active { background: #0284c7; color: #fff; }
+  .toggle-inactive { background: #1e293b; color: #64748b; }
+
+  /* Filter tabs */
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-tab {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  .filter-active { background: #0284c7; color: #fff; }
+  .filter-inactive { background: #1e293b; color: #64748b; }
+
+  .divider { border-top: 1px solid #334155; margin: 8px 0; }
+  .section-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .cards { grid-template-columns: 1fr 1fr 1fr !important; gap: 16px !important; }
+  .card { padding: 0 !important; }
+  .card-image { padding: 12px 12px 0; }
+  .card-body { padding: 10px 12px 12px; }
+  .card-body h3 { margin: 0 0 4px; font-size: 13px; }
+  .card-body p { margin: 0 0 8px; font-size: 12px; }
+</style>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-page">
+        <div class="mock-topbar">
+          <div>
+            <div class="mock-topbar-title">TV Calendar</div>
+            <div class="mock-topbar-sub">Upcoming episodes, premieres &amp; finales</div>
+          </div>
+        </div>
+        <div class="mock-body">
+          <div class="filter-tabs">
+            <div class="filter-tab filter-active">All</div>
+            <div class="filter-tab filter-inactive">Favorites</div>
+            <div class="filter-tab filter-inactive">Premieres</div>
+            <div class="filter-tab filter-inactive">Finales</div>
+          </div>
+
+          <!-- Week grid always visible -->
+          <div class="section-label">This Week</div>
+          <div class="week-grid">
+            <div class="day-col">
+              <div class="day-header past">Mon<br>14</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Severance</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header today">Tue<br>15</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">The Bear</div>
+                <div class="event-chip chip-premiere">Andor S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Wed<br>16</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Thu<br>17</div>
+              <div class="day-events">
+                <div class="event-chip chip-finale">Shogun S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Fri<br>18</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Reacher</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sat<br>19</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sun<br>20</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">White Lotus</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <div class="section-label">Upcoming Episodes</div>
+          <div class="list-item">
+            <div class="list-thumb"></div>
+            <div class="list-info">
+              <div class="list-title">The Bear</div>
+              <div class="list-meta">S03E01 · Tue Apr 15</div>
+            </div>
+          </div>
+          <div class="list-item">
+            <div class="list-thumb"></div>
+            <div class="list-info">
+              <div class="list-title">Reacher</div>
+              <div class="list-meta">S04E05 · Fri Apr 18</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Always On</h3>
+      <p>Week grid pinned at the top, existing lists scroll below. Both visible at all times. The grid gives a quick glance; lists give detail.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-page">
+        <div class="mock-topbar">
+          <div>
+            <div class="mock-topbar-title">TV Calendar</div>
+            <div class="mock-topbar-sub">Upcoming episodes, premieres &amp; finales</div>
+          </div>
+        </div>
+        <div class="mock-body">
+          <!-- View toggle -->
+          <div class="view-toggle">
+            <div class="toggle-btn toggle-inactive">≡ List</div>
+            <div class="toggle-btn toggle-active">⊞ Week</div>
+          </div>
+          <div class="filter-tabs">
+            <div class="filter-tab filter-active">All</div>
+            <div class="filter-tab filter-inactive">Favorites</div>
+            <div class="filter-tab filter-inactive">Premieres</div>
+          </div>
+
+          <!-- Week view active -->
+          <div class="week-grid">
+            <div class="day-col">
+              <div class="day-header past">Mon<br>14</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Severance</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header today">Tue<br>15</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">The Bear</div>
+                <div class="event-chip chip-premiere">Andor S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Wed<br>16</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Thu<br>17</div>
+              <div class="day-events">
+                <div class="event-chip chip-finale">Shogun S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Fri<br>18</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Reacher</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sat<br>19</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sun<br>20</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">White Lotus</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:8px; padding:8px; background:#0f172a; border-radius:6px; text-align:center;">
+            <div style="font-size:9px; color:#475569;">Click any event to see details</div>
+            <div style="font-size:8px; color:#334155; margin-top:2px;">(lists hidden in this view)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Toggle Views</h3>
+      <p>List / Week toggle buttons. Switching to Week hides the lists entirely. Clean, focused — one mode at a time. Saves vertical space.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mock-page">
+        <div class="mock-topbar">
+          <div>
+            <div class="mock-topbar-title">TV Calendar</div>
+            <div class="mock-topbar-sub">Upcoming episodes, premieres &amp; finales</div>
+          </div>
+        </div>
+        <div class="mock-body">
+          <div class="filter-tabs">
+            <div class="filter-tab filter-active">All</div>
+            <div class="filter-tab filter-inactive">Favorites</div>
+            <div class="filter-tab filter-inactive">Premieres</div>
+          </div>
+
+          <!-- Week grid collapsible -->
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <div class="section-label" style="margin:0">This Week</div>
+            <div style="font-size:9px; color:#0284c7; cursor:pointer;">▲ Collapse</div>
+          </div>
+          <div class="week-grid">
+            <div class="day-col">
+              <div class="day-header past">Mon<br>14</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Severance</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header today">Tue<br>15</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">The Bear</div>
+                <div class="event-chip chip-premiere">Andor S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Wed<br>16</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Thu<br>17</div>
+              <div class="day-events">
+                <div class="event-chip chip-finale">Shogun S2</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Fri<br>18</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">Reacher</div>
+              </div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sat<br>19</div>
+              <div class="day-events"></div>
+            </div>
+            <div class="day-col">
+              <div class="day-header future">Sun<br>20</div>
+              <div class="day-events">
+                <div class="event-chip chip-episode">White Lotus</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <div class="section-label">Upcoming Episodes</div>
+          <div class="list-item">
+            <div class="list-thumb"></div>
+            <div class="list-info">
+              <div class="list-title">The Bear</div>
+              <div class="list-meta">S03E01 · Tue Apr 15</div>
+            </div>
+          </div>
+          <div class="list-item" style="opacity:0.4">
+            <div class="list-thumb"></div>
+            <div class="list-info">
+              <div class="list-title">White Lotus</div>
+              <div class="list-meta">S03E06 · Sun Apr 20</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Grid + Collapsible</h3>
+      <p>Week grid at the top with a collapse toggle. Lists always below. Users who want more list space can hide the grid; it expands again on next visit.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px; padding:12px; background:#0f172a; border-radius:8px; font-size:11px; color:#64748b;">
+  <strong style="color:#94a3b8;">Color key:</strong>
+  &nbsp;<span style="background:#1d4ed8;color:#bfdbfe;padding:1px 6px;border-radius:3px;font-size:10px;">■ Episode</span>
+  &nbsp;<span style="background:#7c3aed;color:#ede9fe;padding:1px 6px;border-radius:3px;font-size:10px;">■ Premiere</span>
+  &nbsp;<span style="background:#b91c1c;color:#fee2e2;padding:1px 6px;border-radius:3px;font-size:10px;">■ Finale</span>
+</div>

@@ -1657,7 +1657,64 @@ def members():
 
     rows = db.execute(
         '''
-        WITH plex_members AS (
+        WITH household_activity AS (
+            SELECT
+                hm.id AS member_id,
+                hm.user_id,
+                hm.display_name AS member_display_name,
+                hm.avatar_url AS member_avatar_url,
+                hm.avatar_color AS member_avatar_color,
+                u.username,
+                u.plex_username,
+                u.bio,
+                u.profile_photo_url,
+                u.profile_show_profile,
+                COUNT(pal.id) AS event_count,
+                SUM(CASE
+                    WHEN pal.event_type IN ('media.play', 'media.scrobble', 'watched') THEN 1
+                    ELSE 0
+                END) AS play_count,
+                COUNT(DISTINCT CASE
+                    WHEN pal.media_type = 'episode' THEN pal.show_title
+                    ELSE pal.title
+                END) AS title_count,
+                MAX(pal.event_timestamp) AS last_seen
+            FROM household_members hm
+            JOIN users u ON hm.user_id = u.id AND u.is_active = 1
+            LEFT JOIN plex_activity_log pal
+                ON u.plex_username = pal.plex_username
+            GROUP BY hm.id
+        ),
+        user_without_household AS (
+            SELECT
+                NULL AS member_id,
+                u.id AS user_id,
+                u.username,
+                u.plex_username,
+                u.bio,
+                u.profile_photo_url,
+                u.profile_show_profile,
+                NULL AS member_display_name,
+                NULL AS member_avatar_url,
+                NULL AS member_avatar_color,
+                COUNT(pal.id) AS event_count,
+                SUM(CASE
+                    WHEN pal.event_type IN ('media.play', 'media.scrobble', 'watched') THEN 1
+                    ELSE 0
+                END) AS play_count,
+                COUNT(DISTINCT CASE
+                    WHEN pal.media_type = 'episode' THEN pal.show_title
+                    ELSE pal.title
+                END) AS title_count,
+                MAX(pal.event_timestamp) AS last_seen
+            FROM users u
+            LEFT JOIN plex_activity_log pal
+                ON u.plex_username = pal.plex_username
+            WHERE u.is_active = 1
+              AND u.id NOT IN (SELECT DISTINCT user_id FROM household_members)
+            GROUP BY u.id
+        ),
+        plex_only_activity AS (
             SELECT
                 pal.plex_username,
                 COUNT(*) AS event_count,
@@ -1672,30 +1729,59 @@ def members():
                 MAX(pal.event_timestamp) AS last_seen
             FROM plex_activity_log pal
             WHERE COALESCE(TRIM(pal.plex_username), '') <> ''
+              AND pal.plex_username NOT IN (SELECT DISTINCT plex_username FROM users WHERE is_active = 1 AND plex_username IS NOT NULL)
             GROUP BY pal.plex_username
         )
         SELECT
-            pm.plex_username,
-            pm.event_count,
-            pm.play_count,
-            pm.title_count,
-            pm.last_seen,
-            u.id AS user_id,
-            u.username,
-            u.bio,
-            u.profile_photo_url,
-            u.profile_show_profile,
-            hm.id AS member_id,
-            hm.display_name AS member_display_name,
-            hm.avatar_url AS member_avatar_url,
-            hm.avatar_color AS member_avatar_color
-        FROM plex_members pm
-        LEFT JOIN users u
-            ON u.plex_username = pm.plex_username
-           AND u.is_active = 1
-        LEFT JOIN household_members hm
-            ON hm.user_id = u.id
-           AND hm.is_default = 1
+            ha.member_id,
+            ha.user_id,
+            ha.username,
+            ha.plex_username,
+            ha.bio,
+            ha.profile_photo_url,
+            ha.profile_show_profile,
+            ha.member_display_name,
+            ha.member_avatar_url,
+            ha.member_avatar_color,
+            ha.event_count,
+            ha.play_count,
+            ha.title_count,
+            ha.last_seen
+        FROM household_activity ha
+        UNION ALL
+        SELECT
+            uwh.member_id,
+            uwh.user_id,
+            uwh.username,
+            uwh.plex_username,
+            uwh.bio,
+            uwh.profile_photo_url,
+            uwh.profile_show_profile,
+            uwh.member_display_name,
+            uwh.member_avatar_url,
+            uwh.member_avatar_color,
+            uwh.event_count,
+            uwh.play_count,
+            uwh.title_count,
+            uwh.last_seen
+        FROM user_without_household uwh
+        UNION ALL
+        SELECT
+            NULL AS member_id,
+            NULL AS user_id,
+            NULL AS username,
+            poa.plex_username,
+            NULL AS bio,
+            NULL AS profile_photo_url,
+            NULL AS profile_show_profile,
+            NULL AS member_display_name,
+            NULL AS member_avatar_url,
+            NULL AS member_avatar_color,
+            poa.event_count,
+            poa.play_count,
+            poa.title_count,
+            poa.last_seen
+        FROM plex_only_activity poa
         '''
     ).fetchall()
     row_dicts = [dict(row) for row in rows]
@@ -1751,7 +1837,7 @@ def members():
         members_data.sort(
             key=lambda m: (
                 m['last_seen'] is not None,
-                m['last_seen'] or '',
+                str(m['last_seen']) if m['last_seen'] else '',
                 m['play_count'],
                 m['display_name'].lower(),
             ),
