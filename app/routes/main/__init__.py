@@ -157,7 +157,9 @@ def update_session_profile_photo():
 # ---------------------------------------------------------------------------
 from . import auth_routes             # noqa: F401, E402
 from . import home_routes             # noqa: F401, E402
-from . import media_routes            # noqa: F401, E402
+from . import movie_routes            # noqa: F401, E402
+from . import search_routes           # noqa: F401, E402
+from . import members_routes          # noqa: F401, E402
 from . import show_routes             # noqa: F401, E402
 from . import webhook_routes          # noqa: F401, E402
 from . import profile_routes          # noqa: F401, E402
