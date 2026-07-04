@@ -156,6 +156,7 @@ def update_session_profile_photo():
 # Register route sub-modules (all share main_bp)
 # ---------------------------------------------------------------------------
 from . import auth_routes             # noqa: F401, E402
+from . import home_routes             # noqa: F401, E402
 from . import media_routes            # noqa: F401, E402
 from . import webhook_routes          # noqa: F401, E402
 from . import profile_routes          # noqa: F401, E402
