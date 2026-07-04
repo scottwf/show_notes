@@ -365,3 +365,82 @@ def _calculate_show_completion(user_id, show_id):
 # ============================================================================
 # Watch Progress API Endpoints
 # ============================================================================
+
+
+# ============================================================================
+# Detail-page helpers (shared by media_routes and show_routes)
+# ============================================================================
+
+
+def _get_tautulli_rating_key_for_media(db, media_type, tmdb_id):
+    """Look up a Plex rating key from activity history for Tautulli deep-links."""
+    if media_type == 'show':
+        row = db.execute(
+            """
+            SELECT grandparent_rating_key
+            FROM plex_activity_log
+            WHERE tmdb_id = ?
+              AND media_type = 'episode'
+              AND grandparent_rating_key IS NOT NULL
+            ORDER BY event_timestamp DESC
+            LIMIT 1
+            """,
+            (tmdb_id,)
+        ).fetchone()
+        return row['grandparent_rating_key'] if row else None
+
+    row = db.execute(
+        """
+        SELECT rating_key
+        FROM plex_activity_log
+        WHERE tmdb_id = ?
+          AND media_type = ?
+          AND rating_key IS NOT NULL
+        ORDER BY event_timestamp DESC
+        LIMIT 1
+        """,
+        (tmdb_id, media_type)
+    ).fetchone()
+    return row['rating_key'] if row else None
+
+
+def _build_admin_service_links(db, media_type, media_dict):
+    """Build admin-only external service links for detail pages."""
+    settings = db.execute(
+        'SELECT tautulli_url, sonarr_url, radarr_url FROM settings LIMIT 1'
+    ).fetchone()
+
+    if not settings:
+        return {}
+
+    links = {}
+    tautulli_url = settings['tautulli_url'].rstrip('/') if settings['tautulli_url'] else None
+    sonarr_url = settings['sonarr_url'].rstrip('/') if settings['sonarr_url'] else None
+    radarr_url = settings['radarr_url'].rstrip('/') if settings['radarr_url'] else None
+
+    if media_type == 'show' and sonarr_url and media_dict.get('sonarr_id'):
+        links['sonarr'] = f"{sonarr_url}/series/{media_dict['sonarr_id']}"
+
+    if media_type == 'movie' and radarr_url and media_dict.get('radarr_id'):
+        links['radarr'] = f"{radarr_url}/movie/{media_dict['radarr_id']}"
+
+    if tautulli_url and media_dict.get('tmdb_id'):
+        rating_key = _get_tautulli_rating_key_for_media(db, media_type, media_dict['tmdb_id'])
+        if rating_key:
+            links['tautulli'] = f"{tautulli_url}/info?rating_key={rating_key}"
+
+    return links
+
+def _calculate_year_display(show_dict: dict) -> str:
+    """Calculate year display string (2016-2019 or 2016-Present)"""
+    premiered = show_dict.get('premiered')
+    end_date = show_dict.get('end_date')
+
+    if premiered:
+        start_year = premiered[:4]
+        if end_date:
+            end_year = end_date[:4]
+            return f"{start_year}-{end_year}" if start_year != end_year else start_year
+        return f"{start_year}-Present"
+
+    return str(show_dict['year']) if show_dict.get('year') else "Unknown"
