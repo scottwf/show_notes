@@ -60,8 +60,6 @@ from ...utils import (
     get_ollama_models,
     convert_utc_to_user_timezone, get_user_timezone
 )
-from ...parse_subtitles import process_all_subtitles
-
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 # ============================================================================
@@ -97,7 +95,6 @@ ADMIN_SEARCHABLE_ROUTES = [
 
     {'title': 'Issue Reports', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.issue_reports')},
     {'title': 'AI / LLM Settings', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.ai_settings')},
-    {'title': 'Recap Pipeline (Subtitle-First)', 'category': 'Admin Page', 'url_func': lambda: url_for('admin.recap_pipeline')},
 ]
 
 

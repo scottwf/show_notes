@@ -30,7 +30,6 @@ from ...utils import (
     convert_utc_to_user_timezone, get_user_timezone,
     get_jellyseer_user_requests,
 )
-from ...parse_subtitles import process_all_subtitles
 from . import admin_bp, admin_required, ADMIN_SEARCHABLE_ROUTES
 
 @admin_bp.route('/ai-summaries')
