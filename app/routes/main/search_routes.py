@@ -104,7 +104,8 @@ def report_issue(media_type, media_id):
             if comment:
                 push_message += f"\n\nComment: {comment[:200]}"
 
-            # Send with Sonarr/Radarr link if available
+            # Send with Sonarr/Radarr link if available (not yet implemented)
+            service_link = None
             url_title = "View in Sonarr" if media_type == 'episode' else "View in Radarr" if service_link else None
             success, error = send_pushover_notification(
                 title=push_title,
