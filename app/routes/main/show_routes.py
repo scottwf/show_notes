@@ -515,19 +515,12 @@ def episode_detail(tmdb_id, season_number, episode_number):
             ).fetchall()
             episode_characters = [dict(row) for row in episode_characters]
 
-    # Format air date
+    # Format air date — convert UTC to configured local timezone before formatting
     if episode_dict.get('air_date_utc'):
-        try:
-            # Ensure Z is handled for UTC parsing if present
-            air_date_str = episode_dict['air_date_utc']
-            if 'Z' in air_date_str.upper() and not '+' in air_date_str and not '-' in air_date_str[10:]: # Simple check for Zulu time
-                 air_date_str = air_date_str.upper().replace('Z', '+00:00')
-
-            air_dt = datetime.datetime.fromisoformat(air_date_str)
-            episode_dict['formatted_air_date'] = air_dt.strftime('%B %d, %Y')
-        except ValueError as e:
-            current_app.logger.warning(f"Could not parse air_date_utc '{episode_dict['air_date_utc']}' for episode: {e}")
-            episode_dict['formatted_air_date'] = episode_dict['air_date_utc'] # Fallback
+        from ...data_transforms import convert_utc_to_user_timezone
+        episode_dict['formatted_air_date'] = convert_utc_to_user_timezone(
+            episode_dict['air_date_utc'], '%B %d, %Y'
+        )
     else:
         episode_dict['formatted_air_date'] = 'N/A'
 

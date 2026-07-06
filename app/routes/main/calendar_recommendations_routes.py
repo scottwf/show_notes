@@ -47,13 +47,14 @@ def _build_events_by_date(upcoming, premieres, finales):
     events_by_date = {}
 
     def _date_key(date_str):
-        """Extract YYYY-MM-DD from an ISO datetime string or return None."""
+        """Convert UTC ISO datetime to local YYYY-MM-DD date key using configured timezone."""
         if not date_str:
             return None
         try:
-            return str(date_str)[:10]
+            from ...data_transforms import convert_utc_to_user_timezone
+            return convert_utc_to_user_timezone(str(date_str), '%Y-%m-%d')
         except Exception:
-            return None
+            return str(date_str)[:10]
 
     def _add(date_key, event):
         if date_key:

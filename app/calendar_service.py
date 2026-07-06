@@ -153,8 +153,8 @@ def generate_ical_for_user(db, user_id, feed_filter='all', alarm='1d'):
         if not air_date:
             continue
         try:
-            air_dt = dt.datetime.fromisoformat(str(air_date).replace('Z', '+00:00'))
-            date_str = air_dt.strftime('%Y%m%d')
+            from .data_transforms import convert_utc_to_user_timezone
+            date_str = convert_utc_to_user_timezone(str(air_date), '%Y%m%d')
         except Exception:
             continue
 
