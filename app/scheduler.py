@@ -13,10 +13,41 @@ at runtime via reschedule_jobs().
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
+import fcntl
 import logging
+import os
 
 # Module-level scheduler instance
 scheduler = None
+
+# Held for the lifetime of the process so the flock() below stays acquired.
+_scheduler_lock_file = None
+
+
+def _acquire_scheduler_lock(app):
+    """
+    Ensure only one worker process runs the scheduler.
+
+    Gunicorn (and similar multi-process servers) fork multiple worker
+    processes, each importing this module independently. Without a
+    cross-process lock, every worker starts its own BackgroundScheduler,
+    so every job fires once per worker instead of once total. An flock on
+    a file in the instance directory is held for the life of the winning
+    process, so only that worker proceeds past init_scheduler().
+    """
+    global _scheduler_lock_file
+
+    lock_path = os.path.join(app.instance_path, 'scheduler.lock')
+    lock_file = open(lock_path, 'w')
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock_file.close()
+        return False
+
+    # Keep a reference so the fd isn't garbage-collected (which would release the lock).
+    _scheduler_lock_file = lock_file
+    return True
 
 
 def scheduled_tautulli_sync():
@@ -313,6 +344,10 @@ def init_scheduler(app):
 
     if scheduler is not None:
         app.logger.warning("Scheduler already initialized, skipping")
+        return
+
+    if not _acquire_scheduler_lock(app):
+        app.logger.info("Another worker already holds the scheduler lock, skipping scheduler init")
         return
 
     scheduler = BackgroundScheduler(daemon=True)
