@@ -23,6 +23,23 @@ def get_db_connection():
     return conn
 
 
+def create_index_if_columns_exist(cursor, index_name, table, *columns):
+    """
+    Create an index only if the table/columns still exist.
+
+    Later migrations (e.g. 043) can replace season_summaries/show_summaries
+    with a different schema, so this migration may run against a database
+    where these columns no longer exist. Skip instead of erroring.
+    """
+    existing_cols = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+    missing = [c for c in columns if c not in existing_cols]
+    if missing:
+        print(f"  . Skipped {index_name} ({table}.{missing[0]} does not exist)")
+        return
+    cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({', '.join(columns)})")
+    print(f"  + {index_name} ready")
+
+
 def add_column_if_missing(cursor, table, column, col_type, default=None):
     """Safely add a column, ignoring if it already exists."""
     default_clause = f" DEFAULT {default}" if default is not None else ""
@@ -106,11 +123,10 @@ def upgrade():
 
     # --- Indexes ---
     print("\nCreating indexes...")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_season_summaries_tmdb_season ON season_summaries(tmdb_id, season_number)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_season_summaries_status ON season_summaries(status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_tmdb ON show_summaries(tmdb_id)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status)")
-    print("  + Indexes created")
+    create_index_if_columns_exist(cursor, 'idx_season_summaries_tmdb_season', 'season_summaries', 'tmdb_id', 'season_number')
+    create_index_if_columns_exist(cursor, 'idx_season_summaries_status', 'season_summaries', 'status')
+    create_index_if_columns_exist(cursor, 'idx_show_summaries_tmdb', 'show_summaries', 'tmdb_id')
+    create_index_if_columns_exist(cursor, 'idx_show_summaries_status', 'show_summaries', 'status')
 
     # --- Update schema version ---
     cursor.execute("SELECT version FROM schema_version WHERE id = 1")

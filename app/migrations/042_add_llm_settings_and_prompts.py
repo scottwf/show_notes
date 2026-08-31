@@ -18,7 +18,7 @@ import sqlite3
 import os
 import sys
 
-DB_PATH = os.environ.get('DB_PATH', '/app/instance/shownotes.sqlite3')
+DB_PATH = os.environ.get('SHOWNOTES_DB', os.environ.get('DB_PATH', '/app/instance/shownotes.sqlite3'))
 
 
 def run(db_path=DB_PATH):

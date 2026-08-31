@@ -130,7 +130,7 @@ if __name__ == '__main__':
     )
 
     # Default database path
-    db_path = os.environ.get('DATABASE_PATH', 'data/shownotes.db')
+    db_path = os.environ.get('SHOWNOTES_DB', os.environ.get('DATABASE_PATH', 'data/shownotes.db'))
 
     if len(sys.argv) > 1:
         if sys.argv[1] == 'down':
