@@ -34,7 +34,10 @@ def _column_names(cursor, table_name):
 
 def upgrade(db_path=None):
     if db_path is None:
-        db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'instance', 'shownotes.sqlite3')
+        db_path = os.environ.get(
+            'SHOWNOTES_DB',
+            os.path.join(os.path.dirname(__file__), '..', '..', 'instance', 'shownotes.sqlite3'),
+        )
 
     print(f"Running migration 043 on: {db_path}")
     conn = sqlite3.connect(db_path)
@@ -73,75 +76,107 @@ def upgrade(db_path=None):
         """)
         print("  Created unified show_summaries table")
 
+    show_summaries_cols = _column_names(cursor, 'show_summaries')
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_show ON show_summaries(show_id)")
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_show_summaries_lookup ON show_summaries(show_id, season_number, episode_number)"
     )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_api_usage ON show_summaries(api_usage_id)")
-    cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_show_summaries_identity
-        ON show_summaries(
-            show_id,
-            COALESCE(season_number, -1),
-            COALESCE(episode_number, -1),
-            COALESCE(provider, ''),
-            COALESCE(model, '')
-        )
-    """)
+    if 'status' in show_summaries_cols:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_status ON show_summaries(status)")
+    else:
+        print("  . Skipped idx_show_summaries_status (show_summaries.status does not exist)")
+    if 'api_usage_id' in show_summaries_cols:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_show_summaries_api_usage ON show_summaries(api_usage_id)")
+    else:
+        print("  . Skipped idx_show_summaries_api_usage (show_summaries.api_usage_id does not exist)")
+    try:
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_show_summaries_identity
+            ON show_summaries(
+                show_id,
+                COALESCE(season_number, -1),
+                COALESCE(episode_number, -1),
+                COALESCE(provider, ''),
+                COALESCE(model, '')
+            )
+        """)
+    except sqlite3.IntegrityError as e:
+        # Existing duplicate rows (e.g. summaries regenerated without
+        # cleanup) can violate this constraint. Don't fail the whole
+        # migration/deploy over stale duplicate data -- leave it for a
+        # dedicated cleanup pass and skip the index for now.
+        print(f"  . Skipped idx_show_summaries_identity (duplicate rows exist: {e})")
+
+    # The unified INSERTs below write to columns (raw_llm_response, status,
+    # error_message, created_at, updated_at) that only exist in the full
+    # "unified" show_summaries schema. `already_upgraded` above only checks
+    # a handful of shared column names, so it can be true for older/minimal
+    # show_summaries variants (e.g. init_db()'s schema) that lack these.
+    # Re-check the actual target columns before attempting either migration.
+    show_summaries_cols = _column_names(cursor, 'show_summaries')
+    can_migrate_legacy_data = {
+        'raw_llm_response', 'status', 'error_message', 'created_at', 'updated_at'
+    }.issubset(show_summaries_cols)
 
     if _table_exists(cursor, 'show_summaries_legacy'):
-        cursor.execute("""
-            INSERT INTO show_summaries (
-                show_id, season_number, episode_number, summary_text, raw_llm_response,
-                provider, model, prompt_text, status, error_message, created_at, updated_at
-            )
-            SELECT
-                s.id,
-                NULL,
-                NULL,
-                l.summary_text,
-                l.raw_llm_response,
-                l.llm_provider,
-                l.llm_model,
-                l.prompt_text,
-                l.status,
-                l.error_message,
-                l.created_at,
-                l.updated_at
-            FROM show_summaries_legacy l
-            JOIN sonarr_shows s ON s.tmdb_id = l.tmdb_id
-        """)
-        print("  Migrated legacy show-level summaries")
-        cursor.execute("DROP TABLE show_summaries_legacy")
-        print("  Dropped show_summaries_legacy")
+        if can_migrate_legacy_data:
+            cursor.execute("""
+                INSERT INTO show_summaries (
+                    show_id, season_number, episode_number, summary_text, raw_llm_response,
+                    provider, model, prompt_text, status, error_message, created_at, updated_at
+                )
+                SELECT
+                    s.id,
+                    NULL,
+                    NULL,
+                    l.summary_text,
+                    l.raw_llm_response,
+                    l.llm_provider,
+                    l.llm_model,
+                    l.prompt_text,
+                    l.status,
+                    l.error_message,
+                    l.created_at,
+                    l.updated_at
+                FROM show_summaries_legacy l
+                JOIN sonarr_shows s ON s.tmdb_id = l.tmdb_id
+            """)
+            print("  Migrated legacy show-level summaries")
+            cursor.execute("DROP TABLE show_summaries_legacy")
+            print("  Dropped show_summaries_legacy")
+        else:
+            print("  . Skipped legacy show-level summary migration (show_summaries missing unified columns); leaving show_summaries_legacy in place")
 
     season_columns = _column_names(cursor, 'season_summaries')
     if {'tmdb_id', 'season_number', 'llm_provider', 'llm_model'}.issubset(season_columns):
-        cursor.execute("""
-            INSERT INTO show_summaries (
-                show_id, season_number, episode_number, summary_text, raw_llm_response,
-                provider, model, prompt_text, status, error_message, created_at, updated_at
-            )
-            SELECT
-                s.id,
-                ss.season_number,
-                NULL,
-                ss.summary_text,
-                ss.raw_llm_response,
-                ss.llm_provider,
-                ss.llm_model,
-                ss.prompt_text,
-                ss.status,
-                ss.error_message,
-                ss.created_at,
-                ss.updated_at
-            FROM season_summaries ss
-            JOIN sonarr_shows s ON s.tmdb_id = ss.tmdb_id
-        """)
-        print("  Migrated legacy season summaries")
-        cursor.execute("DROP TABLE season_summaries")
-        print("  Dropped season_summaries")
+        if can_migrate_legacy_data:
+            cursor.execute("""
+                INSERT INTO show_summaries (
+                    show_id, season_number, episode_number, summary_text, raw_llm_response,
+                    provider, model, prompt_text, status, error_message, created_at, updated_at
+                )
+                SELECT
+                    s.id,
+                    ss.season_number,
+                    NULL,
+                    ss.summary_text,
+                    ss.raw_llm_response,
+                    ss.llm_provider,
+                    ss.llm_model,
+                    ss.prompt_text,
+                    ss.status,
+                    ss.error_message,
+                    ss.created_at,
+                    ss.updated_at
+                FROM season_summaries ss
+                JOIN sonarr_shows s ON s.tmdb_id = ss.tmdb_id
+            """)
+            print("  Migrated legacy season summaries")
+            cursor.execute("DROP TABLE season_summaries")
+            print("  Dropped season_summaries")
+        else:
+            print("  . Skipped legacy season summary migration (show_summaries missing unified columns); leaving season_summaries in place")
 
     conn.commit()
     conn.close()

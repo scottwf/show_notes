@@ -118,6 +118,12 @@ if [ -f "$APPDATA_DIR/shownotes.sqlite3" ]; then
             migration_name=$(basename "$migration")
             info "  Running $migration_name..."
             SHOWNOTES_DB="$APPDATA_DIR/shownotes.sqlite3" python3 "$migration" 2>&1 | sed 's/^/    /'
+            # Check the migration's exit code, not sed's (piping masks it otherwise).
+            migration_status="${PIPESTATUS[0]}"
+            if [ "$migration_status" -ne 0 ]; then
+                error "Migration $migration_name failed (exit $migration_status)"
+                exit 1
+            fi
         fi
     done
 else
