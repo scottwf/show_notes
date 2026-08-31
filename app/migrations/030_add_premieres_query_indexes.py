@@ -9,10 +9,12 @@ import os, sqlite3
 
 
 def upgrade():
-    db_path = os.path.join(
+    default_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         'instance', 'shownotes.sqlite3',
     )
+    db_path = os.environ.get('SHOWNOTES_DB', default_path)
+    print(f"Connecting to database at: {db_path}")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     indexes = [

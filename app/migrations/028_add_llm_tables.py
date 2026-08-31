@@ -18,7 +18,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 def upgrade(db_path=None):
     if db_path is None:
-        db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'instance', 'shownotes.sqlite3')
+        db_path = os.environ.get(
+            'SHOWNOTES_DB',
+            os.path.join(os.path.dirname(__file__), '..', '..', 'instance', 'shownotes.sqlite3'),
+        )
 
     print(f"Running migration 028 on: {db_path}")
     conn = sqlite3.connect(db_path)
